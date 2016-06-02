@@ -51,6 +51,9 @@ namespace LinqPadless
             if (verbose)
                 log.WriteLine(query);
 
+            if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
+                throw new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
+
             var nrs =
                 from nr in query.Elements("NuGetReference")
                 select new
