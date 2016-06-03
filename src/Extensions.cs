@@ -62,7 +62,7 @@ namespace LinqPadless
             using (var timer = new Timer(delegate
             {
                 bc.Add(Tuple.Create(default(T), default(ExceptionDispatchInfo), Signal.Singleton));
-            }, dueTime: Timeout.Infinite, period: Timeout.Infinite, state: null))
+            },  dueTime: Timeout.Infinite, period: Timeout.Infinite, state: null))
             {
                 Task.Run(() =>
                 {
@@ -79,6 +79,11 @@ namespace LinqPadless
                     catch (Exception e)
                     {
                         bc.Add(Tuple.Create(default(T), ExceptionDispatchInfo.Capture(e), default(Signal)));
+                    }
+                    finally
+                    {
+                        // ReSharper disable once AccessToDisposedClosure
+                        timer.Dispose();
                     }
 
                     bc.CompleteAdding();
