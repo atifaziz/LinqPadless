@@ -19,13 +19,17 @@ namespace LinqPadless
     #region Imports
 
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
+    using System.Runtime.ExceptionServices;
     using System.Runtime.Versioning;
     using System.Text;
     using System.Text.RegularExpressions;
+    using System.Threading;
+    using System.Threading.Tasks;
     using System.Xml.Linq;
     using Mannex.IO;
     using NDesk.Options;
@@ -35,20 +39,22 @@ namespace LinqPadless
 
     static partial class Program
     {
-        static void Wain(string[] args)
+        static partial void Wain(IEnumerable<string> args)
         {
             var verbose = false;
             var help = false;
-            var dirSearchOption = SearchOption.TopDirectoryOnly;
+            var recurse = false;
             var force = false;
+            var watching = false;
 
             var options = new OptionSet
             {
                 { "?|help|h" , "prints out the options", _ => help = true },
                 { "verbose|v", "enable additional output", _ => verbose = true },
                 { "d|debug"  , "debug break", _ => Debugger.Launch() },
-                { "r|recurse", "include sub-directories", _ => dirSearchOption = SearchOption.AllDirectories },
+                { "r|recurse", "include sub-directories", _ => recurse = true },
                 { "f|force"  , "force continue on errors", _ => force = true },
+                { "w|watch"  , "watch for changes and re-compile", _ => watching = true },
             };
 
             var tail = options.Parse(args);
@@ -62,40 +68,131 @@ namespace LinqPadless
                 return;
             }
 
-            var wildchars = new[] { '*', '?' };
-            var pathSeparators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
+            var queries = GetQueries(tail, recurse);
 
-            var queriez =
+            const string packagesDirName = "packages";
+
+            if (watching)
+            {
+                if (tail.Count > 1)
+                {
+                    throw new NotSupportedException(
+                        "Watch mode does not support multiple file specifications. " +
+                        "Use a single wildcard specification instead instead to watch and re-compile several queries.");
+                }
+
+                var tokens = SplitDirFileSpec(tail.First(), (dp, fs) => new
+                {
+                    DirPath  = dp ?? Environment.CurrentDirectory,
+                    FileSpec = fs
+                });
+
+                using (var cts = new CancellationTokenSource())
+                {
+                    Console.CancelKeyPress += (_, e) =>
+                    {
+                        Console.WriteLine("Aborting...");
+                        // ReSharper disable once AccessToDisposedClosure
+                        cts.Cancel();
+                        e.Cancel = true;
+                    };
+
+                    var changes =
+                        FileMonitor.GetFolderChanges(
+                            tokens.DirPath, tokens.FileSpec,
+                            recurse,
+                            NotifyFilters.FileName
+                                | NotifyFilters.LastWrite,
+                            WatcherChangeTypes.Created
+                                | WatcherChangeTypes.Changed
+                                | WatcherChangeTypes.Renamed,
+                            cts.Token);
+
+                    foreach (var e in from cs in changes.Buffer(TimeSpan.FromSeconds(2))
+                                      select cs.Length)
+                    {
+                        Console.WriteLine($"{e} change(s) detected. Re-compiling...");
+
+                        var outdatedQueries =
+                            // ReSharper disable once PossibleMultipleEnumeration
+                            from q in queries
+                            let csx = new FileInfo(Path.ChangeExtension(q, ".csx"))
+                            where !csx.Exists
+                                  || File.GetLastWriteTime(q) > csx.LastWriteTime
+                            select q;
+
+                        var count = 0;
+                        var compiledCount = 0;
+                        // ReSharper disable once LoopCanBeConvertedToQuery
+                        // ReSharper disable once LoopCanBePartlyConvertedToQuery
+                        foreach (var query in outdatedQueries)
+                        {
+                            var compiled = Compile(query, repo, packagesDirName, force, verbose);
+                            count++;
+                            compiledCount += compiled ? 1 : 0;
+                        }
+
+                        if (count > 1)
+                            Console.WriteLine($"Re-compiled {compiledCount:N0} of {count:N0} queries.");
+                    }
+                }
+            }
+            else
+            {
+                using (var query = queries.GetEnumerator())
+                {
+                    if (!query.MoveNext())
+                        throw new Exception("Missing LINQPad file path specification.");
+
+                    do
+                    {
+                        Compile(query.Current, repo, packagesDirName, force, verbose);
+                    }
+                    while (query.MoveNext());
+                }
+            }
+        }
+
+        static readonly char[] Wildchars = { '*', '?' };
+        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+
+        static T SplitDirFileSpec<T>(string spec, Func<string, string, T> selector)
+        {
+            var i = spec.LastIndexOfAny(PathSeparators);
+            // TODO handle rooted cases
+            return i >= 0
+                 ? selector(spec.Substring(0, i + 1), spec.Substring(i + 1))
+                 : selector(null, spec);
+        }
+
+        static IEnumerable<string> GetQueries(IEnumerable<string> tail, bool includeSubdirs)
+        {
+            var dirSearchOption = includeSubdirs
+                                ? SearchOption.AllDirectories
+                                : SearchOption.TopDirectoryOnly;
+            return
                 from spec in tail
-                let i = spec.LastIndexOfAny(pathSeparators)
-                let tokens = i >= 0
-                           ? new { DirPath = spec.Substring(0, i + 1), FileName = spec.Substring(i + 1) }
-                           : new { DirPath = Environment.CurrentDirectory, FileName = spec }
+                let tokens = SplitDirFileSpec(spec, (dp, fs) => new
+                {
+                    DirPath  = dp ?? Environment.CurrentDirectory,
+                    FileSpec = fs,
+                })
                 from e in
-                    tokens.FileName.IndexOfAny(wildchars) >= 0
-                    ? from fi in new DirectoryInfo(tokens.DirPath).EnumerateFiles(tokens.FileName, dirSearchOption)
+                    tokens.FileSpec.IndexOfAny(Wildchars) >= 0
+                    ? from fi in new DirectoryInfo(tokens.DirPath).EnumerateFiles(tokens.FileSpec, dirSearchOption)
                       select new { File = fi, Searched = true }
                     : Directory.Exists(spec)
                     ? from fi in new DirectoryInfo(spec).EnumerateFiles("*.linq", dirSearchOption)
                       select new { File = fi, Searched = true }
                     : new[] { new { File = new FileInfo(spec), Searched = false } }
                 where !e.Searched
-                   || (!e.File.Name.StartsWith(".", StringComparison.Ordinal)
-                       && 0 == (e.File.Attributes & (FileAttributes.Hidden | FileAttributes.System)))
+                      || (!e.File.Name.StartsWith(".", StringComparison.Ordinal)
+                          && 0 == (e.File.Attributes & (FileAttributes.Hidden | FileAttributes.System)))
                 select e.File.FullName;
-
-            var queries = queriez.ToArray();
-
-            if (!queries.Any())
-                throw new Exception("Missing LINQPad file path specification.");
-
-            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
-
-            foreach (var query in queries)
-                Compile(query, repo, "packages", force, verbose);
         }
 
-        static void Compile(string queryFilePath,
+        static bool Compile(string queryFilePath,
                             IPackageRepository repo,
                             string packagesDirName,
                             bool force = false,
@@ -121,7 +218,7 @@ namespace LinqPadless
                 if (force)
                 {
                     Console.Out.WriteLineIndented(1, $"WARNING! {error.Message}");
-                    return;
+                    return false;
                 }
                 throw error;
             }
@@ -243,6 +340,8 @@ namespace LinqPadless
                                 | RegexOptions.Multiline);
 
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
+
+            return true;
         }
 
         static void Help(OptionSet options)

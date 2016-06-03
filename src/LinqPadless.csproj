@@ -60,9 +60,13 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>AssemblyInfo.g.tt</DependentUpon>
     </Compile>
+    <Compile Include="DelegatingDisposable.cs" />
     <Compile Include="Extensions.cs" />
+    <Compile Include="Fun.cs" />
     <Compile Include="Lazy.cs" />
     <Compile Include="LinqPad.cs" />
+    <Compile Include="FileMonitor.cs" />
+    <Compile Include="Observer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Program.Main.cs">
