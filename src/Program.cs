@@ -19,17 +19,14 @@ namespace LinqPadless
     #region Imports
 
     using System;
-    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
-    using System.Runtime.ExceptionServices;
     using System.Runtime.Versioning;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
-    using System.Threading.Tasks;
     using System.Xml.Linq;
     using Mannex.IO;
     using NDesk.Options;
