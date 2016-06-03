@@ -11,9 +11,6 @@ creates a Windows batch file alongside that does the following:
 - Installs missing NuGet packages.
 - Invoke the C# script using `csi.exe` and passes any remaining arguments.
 
-LINQPadless currently only supports C#.
-
-
 ## Usage Examples
 
 Compile a single LINQPad query file in the current directory:
@@ -44,6 +41,16 @@ Watch particular files in a directory and re-compile them on changes:
 For more information, see help:
 
     lpless -h
+
+## Limitations
+
+LINQPad Query files must be C# statements.
+
+Extension methods are not supported in C# scripts.
+
+LINQPad-specified methods like `Dump` and those on its `Util` class will
+cause compilation errors when the compiled C# script is executed. This issue
+may be addressed in the future via some sort of a bridge library.
 
 
 [linqpad]: http://www.linqpad.net/
