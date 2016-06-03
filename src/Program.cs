@@ -62,7 +62,7 @@ namespace LinqPadless
             if (verbose)
                 Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
 
-            if (help)
+            if (help || tail.Count == 0)
             {
                 Help(options);
                 return;
@@ -140,17 +140,8 @@ namespace LinqPadless
             }
             else
             {
-                using (var query = queries.GetEnumerator())
-                {
-                    if (!query.MoveNext())
-                        throw new Exception("Missing LINQPad file path specification.");
-
-                    do
-                    {
-                        Compile(query.Current, repo, packagesDirName, force, verbose);
-                    }
-                    while (query.MoveNext());
-                }
+                foreach (var query in queries)
+                    Compile(query, repo, packagesDirName, force, verbose);
             }
         }
 
