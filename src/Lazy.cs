@@ -16,31 +16,10 @@
 
 namespace LinqPadless
 {
-    #region Imports
-
     using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
 
-    #endregion
-
-    partial class Program
+    static class Lazy
     {
-        static int Main(string[] args)
-        {
-            try
-            {
-                Wain(args);
-                return 0;
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.GetBaseException().Message);
-                Trace.TraceError(e.ToString());
-                return 0xbad;
-            }
-        }
-
-        static partial void Wain(IEnumerable<string> args);
+        public static Lazy<T> Create<T>(Func<T> factory) => new Lazy<T>(factory);
     }
 }

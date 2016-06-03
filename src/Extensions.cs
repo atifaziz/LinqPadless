@@ -16,31 +16,16 @@
 
 namespace LinqPadless
 {
-    #region Imports
+    using System.IO;
+    using NDesk.Options;
 
-    using System;
-    using System.Collections.Generic;
-    using System.Diagnostics;
-
-    #endregion
-
-    partial class Program
+    static class OptionSetExtensions
     {
-        static int Main(string[] args)
+        public static T WriteOptionDescriptionsReturningWriter<T>(this OptionSet options, T writer)
+            where T : TextWriter
         {
-            try
-            {
-                Wain(args);
-                return 0;
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.GetBaseException().Message);
-                Trace.TraceError(e.ToString());
-                return 0xbad;
-            }
+            options.WriteOptionDescriptions(writer);
+            return writer;
         }
-
-        static partial void Wain(IEnumerable<string> args);
     }
 }

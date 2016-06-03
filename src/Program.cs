@@ -27,18 +27,42 @@ namespace LinqPadless
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Xml.Linq;
+    using Mannex.IO;
+    using NDesk.Options;
     using NuGet;
 
     #endregion
 
     static partial class Program
     {
-        static void Wain(IList<string> args, bool verbose, TextWriter log)
+        static void Wain(string[] args)
         {
-            if (!args.Any())
+            var verbose = false;
+            var help = false;
+            var log = Console.Error;
+
+            var options = new OptionSet
+            {
+                { "?|help|h" , "prints out the options", _ => help = true },
+                { "verbose|v", "enable additional output", _ => verbose = true },
+                { "d|debug"  , "debug break", _ => Debugger.Launch() },
+            };
+
+            var tail = options.Parse(args);
+
+            if (verbose)
+                Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
+
+            if (help)
+            {
+                Help(options);
+                return;
+            }
+
+            if (!tail.Any())
                 throw new Exception("Missing LINQPad file path specification.");
 
-            var queryFilePath = args.First();
+            var queryFilePath = tail.First();
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
 
@@ -164,7 +188,7 @@ namespace LinqPadless
             // ReSharper disable once PossibleMultipleEnumeration
             File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"), outputs);
 
-            var cmd = LoadTextResource(typeof(Program), "csi.cmd");
+            var cmd = LoadTextResource("csi.cmd");
 
             var installs =
                 from pkgdir in new[]
@@ -184,9 +208,45 @@ namespace LinqPadless
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
         }
 
+        static void Help(OptionSet options)
+        {
+            var verinfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
+            var name    = Lazy.Create(() => Path.GetFileName(verinfo.Value.FileName));
+            var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
+            var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{verinfo.Value.ProductName} (version {verinfo.Value.FileVersion})")
+                                                               .AppendLine(verinfo.Value.LegalCopyright.Replace("\u00a9", "(C)"))
+                                                               .ToString());
+
+            using (var stream = GetManifestResourceStream("help.txt"))
+            using (var reader = new StreamReader(stream))
+            using (var e = reader.ReadLines())
+            while (e.MoveNext())
+            {
+                var line = e.Current;
+                line = Regex.Replace(line, @"\$([A-Z][A-Z_]*)\$", m =>
+                {
+                    switch (m.Groups[1].Value)
+                    {
+                        case "NAME": return name.Value;
+                        case "LOGO": return logo.Value;
+                        case "OPTIONS": return opts.Value;
+                        default: return string.Empty;
+                    }
+                });
+
+                if (line.Length > 0 && line[line.Length - 1] == '\n')
+                    Console.Write(line);
+                else
+                    Console.WriteLine(line);
+            }
+        }
+
+        static string LoadTextResource(string name, Encoding encoding = null) =>
+            LoadTextResource(typeof(Program), name, encoding);
+
         static string LoadTextResource(Type type, string name, Encoding encoding = null)
         {
-            using (var stream = type.Assembly.GetManifestResourceStream(type, name))
+            using (var stream = GetManifestResourceStream(type, name))
             {
                 Debug.Assert(stream != null);
                 using (var reader = new StreamReader(stream, encoding ?? Encoding.UTF8))
@@ -194,23 +254,11 @@ namespace LinqPadless
             }
         }
 
-        static partial void OnProcessingArgs(IList<string> args)
-        {
-            var commentIndex = args.IndexOf("--");
-            if (commentIndex < 0)
-                return;
-            for (var i = args.Count - 1; i >= commentIndex; i--)
-                args.RemoveAt(i);
-        }
+        static Stream GetManifestResourceStream(string name) =>
+            GetManifestResourceStream(typeof(Program), name);
 
-        static bool _verbose;
-
-        static partial void OnVerboseFlagged() => _verbose = true;
-        static partial void OnDebugFlagged() => Debugger.Launch();
-
-        static partial void Wain(IEnumerable<string> args) =>
-            Wain(args.ToList(), _verbose, _verbose ? Console.Error : TextWriter.Null);
-
+        static Stream GetManifestResourceStream(Type type, string name) =>
+            type.Assembly.GetManifestResourceStream(type, name);
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
             IPackage package, FrameworkName targetFrameworkName, TextWriter log, int level,

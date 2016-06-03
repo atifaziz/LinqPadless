@@ -37,6 +37,10 @@
       <HintPath>..\packages\Microsoft.Web.Xdt.2.1.1\lib\net40\Microsoft.Web.XmlTransform.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="NDesk.Options, Version=0.2.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\NDesk.Options.0.2.1\lib\NDesk.Options.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="NuGet.Core, Version=2.11.1.812, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\NuGet.Core.2.11.1\lib\net40-Client\NuGet.Core.dll</HintPath>
       <Private>True</Private>
@@ -56,14 +60,18 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>AssemblyInfo.g.tt</DependentUpon>
     </Compile>
+    <Compile Include="Extensions.cs" />
+    <Compile Include="Lazy.cs" />
     <Compile Include="LinqPad.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="Program.Main.cs">
       <DependentUpon>Program.cs</DependentUpon>
     </Compile>
+    <Compile Include="Mannex.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="help.txt" />
     <None Include="AL.licenseheader" />
     <None Include="App.config" />
     <EmbeddedResource Include="csi.cmd" />
