@@ -28,4 +28,10 @@ namespace LinqPadless
             return writer;
         }
     }
+
+    static class TextWriteExtensions
+    {
+        public static void WriteLineIndented(this TextWriter writer, int level, string text) =>
+            writer.WriteLine(new string(' ', level * 2) + text);
+    }
 }

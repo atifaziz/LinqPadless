@@ -39,12 +39,16 @@ namespace LinqPadless
         {
             var verbose = false;
             var help = false;
+            var dirSearchOption = SearchOption.TopDirectoryOnly;
+            var force = false;
 
             var options = new OptionSet
             {
                 { "?|help|h" , "prints out the options", _ => help = true },
                 { "verbose|v", "enable additional output", _ => verbose = true },
                 { "d|debug"  , "debug break", _ => Debugger.Launch() },
+                { "r|recurse", "include sub-directories", _ => dirSearchOption = SearchOption.AllDirectories },
+                { "f|force"  , "force continue on errors", _ => force = true },
             };
 
             var tail = options.Parse(args);
@@ -58,10 +62,47 @@ namespace LinqPadless
                 return;
             }
 
-            if (!tail.Any())
+            var wildchars = new[] { '*', '?' };
+            var pathSeparators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
+
+            var queriez =
+                from spec in tail
+                let i = spec.LastIndexOfAny(pathSeparators)
+                let tokens = i >= 0
+                           ? new { DirPath = spec.Substring(0, i + 1), FileName = spec.Substring(i + 1) }
+                           : new { DirPath = Environment.CurrentDirectory, FileName = spec }
+                from e in
+                    tokens.FileName.IndexOfAny(wildchars) >= 0
+                    ? from fi in new DirectoryInfo(tokens.DirPath).EnumerateFiles(tokens.FileName, dirSearchOption)
+                      select new { File = fi, Searched = true }
+                    : Directory.Exists(spec)
+                    ? from fi in new DirectoryInfo(spec).EnumerateFiles("*.linq", dirSearchOption)
+                      select new { File = fi, Searched = true }
+                    : new[] { new { File = new FileInfo(spec), Searched = false } }
+                where !e.Searched
+                   || (!e.File.Name.StartsWith(".", StringComparison.Ordinal)
+                       && 0 == (e.File.Attributes & (FileAttributes.Hidden | FileAttributes.System)))
+                select e.File.FullName;
+
+            var queries = queriez.ToArray();
+
+            if (!queries.Any())
                 throw new Exception("Missing LINQPad file path specification.");
 
-            var queryFilePath = tail.First();
+            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
+
+            foreach (var query in queries)
+                Compile(query, repo, "packages", force, verbose);
+        }
+
+        static void Compile(string queryFilePath,
+                            IPackageRepository repo,
+                            string packagesDirName,
+                            bool force = false,
+                            bool verbose = false)
+        {
+            Console.WriteLine($"Compiling {queryFilePath}");
+
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
 
@@ -75,7 +116,15 @@ namespace LinqPadless
                 Console.WriteLine(query);
 
             if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
-                throw new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
+            {
+                var error = new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
+                if (force)
+                {
+                    Console.Out.WriteLineIndented(1, $"WARNING! {error.Message}");
+                    return;
+                }
+                throw error;
+            }
 
             var nrs =
                 from nr in query.Elements("NuGetReference")
@@ -87,23 +136,20 @@ namespace LinqPadless
 
             nrs = nrs.ToArray();
 
-            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
-
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
 
-            const string packagesDirName = "packages";
             var packagesPath = Path.Combine(queryDirPath, packagesDirName);
-            Console.WriteLine($"Packages directory: {packagesPath}");
+            Console.Out.WriteLineIndented(1, $"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                Console.WriteLine($"Installing {ea.Package}...");
+                Console.Out.WriteLineIndented(1, $"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                Console.WriteLine($"Installed {ea.Package} at: {ea.InstallPath}");
+                Console.Out.WriteLineIndented(1, $"Installed {ea.Package} at: {ea.InstallPath}");
 
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            Console.WriteLine($"Packages target: {targetFrameworkName}");
+            Console.Out.WriteLineIndented(1, $"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -119,7 +165,7 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, Console.Out, 0,
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, Console.Out, 1,
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -140,7 +186,7 @@ namespace LinqPadless
                            .ToList();
 
             foreach (var r in references)
-                Console.WriteLine(r.AssemblyPath);
+                Console.Out.WriteLineIndented(1, r.AssemblyPath);
 
             var outputs =
                 from ls in new[]
@@ -177,14 +223,6 @@ namespace LinqPadless
                 from line in ls.Concat(new[] { string.Empty })
                 select line;
 
-            if (verbose)
-            {
-                outputs = outputs.ToArray();
-                foreach (var line in outputs)
-                    Console.WriteLine(line);
-            }
-
-            // ReSharper disable once PossibleMultipleEnumeration
             File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"), outputs);
 
             var cmd = LoadTextResource("csi.cmd");
