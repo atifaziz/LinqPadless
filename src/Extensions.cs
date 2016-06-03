@@ -61,7 +61,7 @@ namespace LinqPadless
 
             using (var timer = new Timer(delegate
             {
-                bc.Add(Tuple.Create(default(T), default(ExceptionDispatchInfo), Signal.Singleton));
+                bc.TryAdd(Tuple.Create(default(T), default(ExceptionDispatchInfo), Signal.Singleton));
             },  dueTime: Timeout.Infinite, period: Timeout.Infinite, state: null))
             {
                 Task.Run(() =>
