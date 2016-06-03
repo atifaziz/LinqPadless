@@ -39,7 +39,6 @@ namespace LinqPadless
         {
             var verbose = false;
             var help = false;
-            var log = Console.Error;
 
             var options = new OptionSet
             {
@@ -73,7 +72,7 @@ namespace LinqPadless
             var query = XElement.Parse(xml);
 
             if (verbose)
-                log.WriteLine(query);
+                Console.WriteLine(query);
 
             if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
                 throw new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
@@ -95,17 +94,16 @@ namespace LinqPadless
 
             const string packagesDirName = "packages";
             var packagesPath = Path.Combine(queryDirPath, packagesDirName);
-            log.WriteLine($"Packages directory = {packagesPath}");
+            Console.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                log.WriteLine($"Installing {ea.Package}...");
+                Console.WriteLine($"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                log.WriteLine($"Installed {ea.Package} at: {ea.InstallPath}");
+                Console.WriteLine($"Installed {ea.Package} at: {ea.InstallPath}");
 
-            // log.WriteLine(VersionUtility.DefaultTargetFramework);
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            log.WriteLine($"Packages target: {targetFrameworkName}");
+            Console.WriteLine($"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -121,7 +119,7 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, log, 0,
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, Console.Out, 0,
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -141,7 +139,8 @@ namespace LinqPadless
                            })
                            .ToList();
 
-            references.ForEach(log.WriteLine);
+            foreach (var r in references)
+                Console.WriteLine(r.AssemblyPath);
 
             var outputs =
                 from ls in new[]
