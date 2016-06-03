@@ -5,8 +5,11 @@ LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
 
 The compiler emits a C# script file in the same directory and with the same
 file name as the original `.linq` except it bears the `.csx` extension. It also
-creates a Windows batch file alongside that can be used to invoke the C#
-script using `csi.exe`.
+creates a Windows batch file alongside that does the following:
+
+- Checks that referenced NuGet packages are installed.
+- Installs missing NuGet packages.
+- Invoke the C# script using `csi.exe` and passes any remaining arguments.
 
 LINQPadless currently only supports C#.
 
