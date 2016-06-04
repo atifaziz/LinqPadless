@@ -186,7 +186,9 @@ namespace LinqPadless
                             bool force = false,
                             bool verbose = false)
         {
-            Console.WriteLine($"Compiling {queryFilePath}");
+            var w0 = IndentingLineWriter.Create(Console.Out);
+            w0.WriteLine($"Compiling {queryFilePath}");
+            var w1 = w0.Indent();
 
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
@@ -198,14 +200,14 @@ namespace LinqPadless
             var query = XElement.Parse(xml);
 
             if (verbose)
-                Console.WriteLine(query);
+                w1.Write(query);
 
             if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
             {
                 var error = new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
                 if (force)
                 {
-                    Console.Out.WriteLineIndented(1, $"WARNING! {error.Message}");
+                    w1.WriteLine($"WARNING! {error.Message}");
                     return false;
                 }
                 throw error;
@@ -224,30 +226,27 @@ namespace LinqPadless
 
             if (verbose && nrs.Any())
             {
-                Console.Out.WriteLineIndented(1, "Packages referenced:");
-                foreach (var nr in nrs)
-                {
-                    Console.Out.WriteLineIndented(2,
-                        "- " + nr.Id
-                             + (nr.Version != null ? " " + nr.Version : null)
-                             + (nr.IsPrerelease ? " (pre-release)" : null));
-                }
+                w1.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                w1.Indent().WriteLines(
+                    from nr in nrs
+                    select nr.Id + (nr.Version != null ? " " + nr.Version : null)
+                                 + (nr.IsPrerelease ? " (pre-release)" : null));
             }
 
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
 
             var packagesPath = Path.Combine(queryDirPath, packagesDirName);
-            Console.Out.WriteLineIndented(1, $"Packages directory: {packagesPath}");
+            w1.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                Console.Out.WriteLineIndented(1, $"Installing {ea.Package}...");
+                w1.WriteLine($"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                Console.Out.WriteLineIndented(1, $"Installed {ea.Package} at: {ea.InstallPath}");
+                w1.Indent().WriteLine($"Installed at {ea.InstallPath}");
 
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            Console.Out.WriteLineIndented(1, $"Packages target: {targetFrameworkName}");
+            w1.WriteLine($"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -263,7 +262,8 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, Console.Out, 1,
+                w1.WriteLine("Resolving references...");
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, w1.Indent(),
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -283,8 +283,8 @@ namespace LinqPadless
                            })
                            .ToList();
 
-            foreach (var r in references)
-                Console.Out.WriteLineIndented(1, r.AssemblyPath);
+            w1.WriteLine($"Resolved references ({references.Count:N0}):");
+            w1.Indent().WriteLines(from r in references select r.AssemblyPath);
 
             var outputs =
                 from ls in new[]
@@ -398,10 +398,10 @@ namespace LinqPadless
             type.Assembly.GetManifestResourceStream(type, name);
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
-            IPackage package, FrameworkName targetFrameworkName, TextWriter log, int level,
+            IPackage package, FrameworkName targetFrameworkName, IndentingLineWriter writer,
             Func<IPackageAssemblyReference, IPackage, T> selector)
         {
-            log?.WriteLine(new string(' ', level * 2) + "- " + package.GetFullName());
+            writer?.WriteLine(package.GetFullName());
 
             IEnumerable<IPackageAssemblyReference> refs;
             if (VersionUtility.TryGetCompatibleItems(targetFrameworkName, package.AssemblyReferences, out refs))
@@ -415,7 +415,7 @@ namespace LinqPadless
                 select repo.FindPackage(d.Id) into dp
                 where dp != null
                 from r in GetReferencesTree(repo, dp, targetFrameworkName,
-                                            log, level + 1, selector)
+                                            writer?.Indent(), selector)
                 select r;
 
             foreach (var r in subrefs)

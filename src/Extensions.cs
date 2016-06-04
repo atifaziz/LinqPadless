@@ -35,12 +35,6 @@ namespace LinqPadless
         }
     }
 
-    static class TextWriteExtensions
-    {
-        public static void WriteLineIndented(this TextWriter writer, int level, string text) =>
-            writer.WriteLine(new string(' ', level * 2) + text);
-    }
-
     static class Seq
     {
         public static IEnumerable<T[]> Throttle<T>(this IEnumerable<T> source, TimeSpan timeout)

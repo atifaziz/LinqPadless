@@ -63,6 +63,7 @@
     <Compile Include="DelegatingDisposable.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Fun.cs" />
+    <Compile Include="IndentingLineWriter.cs" />
     <Compile Include="Lazy.cs" />
     <Compile Include="LinqPad.cs" />
     <Compile Include="FileMonitor.cs" />
