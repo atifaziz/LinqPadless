@@ -43,10 +43,22 @@ namespace LinqPadless
 
     static class Seq
     {
-        public static IEnumerable<T[]> Buffer<T>(this IEnumerable<T> source, TimeSpan timeout)
+        public static IEnumerable<T[]> Throttle<T>(this IEnumerable<T> source, TimeSpan timeout)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
-            return BufferIterator(source, timeout);
+            return ThrottleIterator(source, timeout,
+                                    () => new List<T>(),
+                                    (list, e) => { list.Add(e); return list; },
+                                    list => list.ToArray());
+        }
+
+        public static IEnumerable<TState> Throttle<T, TState>(
+            this IEnumerable<T> source, TimeSpan timeout,
+            Func<TState> seeder, Func<TState, T, TState> accumulator)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (accumulator == null) throw new ArgumentNullException(nameof(accumulator));
+            return ThrottleIterator(source, timeout, seeder, accumulator, s => s);
         }
 
         sealed class Signal
@@ -55,7 +67,10 @@ namespace LinqPadless
             Signal() { }
         }
 
-        static IEnumerable<T[]> BufferIterator<T>(IEnumerable<T> source, TimeSpan timeout)
+        static IEnumerable<TResult> ThrottleIterator<T, TState, TResult>(
+            IEnumerable<T> source, TimeSpan timeout,
+            Func<TState> seeder, Func<TState, T, TState> accumulator,
+            Func<TState, TResult> resultSelector)
         {
             var bc = new BlockingCollection<Tuple<T, ExceptionDispatchInfo, Signal>>();
 
@@ -89,25 +104,27 @@ namespace LinqPadless
                     bc.CompleteAdding();
                 });
 
-                var pending = new List<T>();
+                var count = 0;
+                var pending = seeder();
                 foreach (var e in bc.GetConsumingEnumerable())
                 {
                     e.Item2?.Throw();
 
                     if (e.Item3 == Signal.Singleton)
                     {
-                        var buffer = pending.ToArray();
-                        pending.Clear();
+                        var buffer = resultSelector(pending);
+                        count = 0; pending = seeder();
                         yield return buffer;
                     }
                     else
                     {
-                        pending.Add(e.Item1);
+                        count++;
+                        accumulator(pending, e.Item1);
                     }
                 }
 
-                if (pending.Count > 0)
-                    yield return pending.ToArray();
+                if (count > 0)
+                    yield return resultSelector(pending);
             }
         }
     }

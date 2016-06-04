@@ -106,7 +106,7 @@ namespace LinqPadless
                                 | WatcherChangeTypes.Renamed,
                             cts.Token);
 
-                    foreach (var e in from cs in changes.Buffer(TimeSpan.FromSeconds(2))
+                    foreach (var e in from cs in changes.Throttle(TimeSpan.FromSeconds(2))
                                       select cs.Length)
                     {
                         Console.WriteLine($"{e} change(s) detected. Re-compiling...");
