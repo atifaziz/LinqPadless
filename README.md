@@ -9,7 +9,8 @@ creates a Windows batch file alongside that does the following:
 
 - Checks that referenced NuGet packages are installed.
 - Installs missing NuGet packages.
-- Invoke the C# script using `csi.exe` and passes any remaining arguments.
+- Sets `LINQPADLESS` environment variable to the compiler version.
+- Invokes the C# script using `csi.exe` and passes any remaining arguments.
 
 ## Usage Examples
 

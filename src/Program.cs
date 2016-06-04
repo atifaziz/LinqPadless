@@ -334,11 +334,13 @@ namespace LinqPadless
                 from r in references
                 select $"if not exist \"{r.AssemblyPath}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} || goto :pkgerr";
 
-            cmd = Regex.Replace(cmd, @"^ *(::|rem) *<packages>",
+            cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
                                 RegexOptions.CultureInvariant
                                 | RegexOptions.IgnoreCase
                                 | RegexOptions.Multiline);
+
+            cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
 
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
 
@@ -370,13 +372,15 @@ namespace LinqPadless
                 yield return r;
         }
 
+        static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
+        static FileVersionInfo VersionInfo => CachedVersionInfo.Value;
+
         static void Help(OptionSet options)
         {
-            var verinfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
-            var name    = Lazy.Create(() => Path.GetFileName(verinfo.Value.FileName));
+            var name    = Lazy.Create(() => Path.GetFileName(VersionInfo.FileName));
             var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
-            var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{verinfo.Value.ProductName} (version {verinfo.Value.FileVersion})")
-                                                               .AppendLine(verinfo.Value.LegalCopyright.Replace("\u00a9", "(C)"))
+            var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{VersionInfo.ProductName} (version {VersionInfo.FileVersion})")
+                                                               .AppendLine(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"))
                                                                .ToString());
 
             using (var stream = GetManifestResourceStream("help.txt"))
