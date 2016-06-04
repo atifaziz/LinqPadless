@@ -345,6 +345,31 @@ namespace LinqPadless
             return true;
         }
 
+        static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
+            IPackage package, FrameworkName targetFrameworkName, IndentingLineWriter writer,
+            Func<IPackageAssemblyReference, IPackage, T> selector)
+        {
+            writer?.WriteLine(package.GetFullName());
+
+            IEnumerable<IPackageAssemblyReference> refs;
+            if (VersionUtility.TryGetCompatibleItems(targetFrameworkName, package.AssemblyReferences, out refs))
+            {
+                foreach (var r in refs)
+                    yield return selector(r, package);
+            }
+
+            var subrefs =
+                from d in package.GetCompatiblePackageDependencies(targetFrameworkName)
+                select repo.FindPackage(d.Id) into dp
+                where dp != null
+                from r in GetReferencesTree(repo, dp, targetFrameworkName,
+                                            writer?.Indent(), selector)
+                select r;
+
+            foreach (var r in subrefs)
+                yield return r;
+        }
+
         static void Help(OptionSet options)
         {
             var verinfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
@@ -396,31 +421,6 @@ namespace LinqPadless
 
         static Stream GetManifestResourceStream(Type type, string name) =>
             type.Assembly.GetManifestResourceStream(type, name);
-
-        static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
-            IPackage package, FrameworkName targetFrameworkName, IndentingLineWriter writer,
-            Func<IPackageAssemblyReference, IPackage, T> selector)
-        {
-            writer?.WriteLine(package.GetFullName());
-
-            IEnumerable<IPackageAssemblyReference> refs;
-            if (VersionUtility.TryGetCompatibleItems(targetFrameworkName, package.AssemblyReferences, out refs))
-            {
-                foreach (var r in refs)
-                    yield return selector(r, package);
-            }
-
-            var subrefs =
-                from d in package.GetCompatiblePackageDependencies(targetFrameworkName)
-                select repo.FindPackage(d.Id) into dp
-                where dp != null
-                from r in GetReferencesTree(repo, dp, targetFrameworkName,
-                                            writer?.Indent(), selector)
-                select r;
-
-            foreach (var r in subrefs)
-                yield return r;
-        }
 
         /// <remarks>
         /// Credit http://stackoverflow.com/a/340454/6682
