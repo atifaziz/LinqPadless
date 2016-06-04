@@ -215,11 +215,24 @@ namespace LinqPadless
                 from nr in query.Elements("NuGetReference")
                 select new
                 {
-                    Id = (string)nr,
+                    Id           = (string)nr,
+                    Version      = SemanticVersion.ParseOptionalVersion((string) nr.Attribute("Version")),
                     IsPrerelease = (bool?)nr.Attribute("Prerelease") ?? false
                 };
 
             nrs = nrs.ToArray();
+
+            if (verbose && nrs.Any())
+            {
+                Console.Out.WriteLineIndented(1, "Packages referenced:");
+                foreach (var nr in nrs)
+                {
+                    Console.Out.WriteLineIndented(2,
+                        "- " + nr.Id
+                             + (nr.Version != null ? " " + nr.Version : null)
+                             + (nr.IsPrerelease ? " (pre-release)" : null));
+                }
+            }
 
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
@@ -241,10 +254,10 @@ namespace LinqPadless
                                         .ToList();
             foreach (var nr in nrs)
             {
-                var pkg = pm.LocalRepository.FindPackage(nr.Id);
+                var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version);
                 if (pkg == null)
                 {
-                    pkg = repo.FindPackage(nr.Id, (SemanticVersion)null,
+                    pkg = repo.FindPackage(nr.Id, nr.Version,
                                            allowPrereleaseVersions: nr.IsPrerelease,
                                            allowUnlisted: false);
                     pm.InstallPackage(pkg.Id, pkg.Version);
