@@ -65,8 +65,13 @@ namespace LinqPadless
                 return;
             }
 
+            // TODO Allow package source to be specified via args
+            // TODO Use default NuGet sources configuration
+
             var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
             var queries = GetQueries(tail, recurse);
+
+            // TODO Allow packages directory to be specified via args
 
             const string packagesDirName = "packages";
 
@@ -74,6 +79,8 @@ namespace LinqPadless
             {
                 if (tail.Count > 1)
                 {
+                    // TODO Support multiple watch roots
+
                     throw new NotSupportedException(
                         "Watch mode does not support multiple file specifications. " +
                         "Use a single wildcard specification instead instead to watch and re-compile several queries.");
@@ -89,6 +96,8 @@ namespace LinqPadless
                 {
                     Console.CancelKeyPress += (_, e) =>
                     {
+                        // TODO Re-consider proper cancellation
+
                         Console.WriteLine("Aborting...");
                         // ReSharper disable once AccessToDisposedClosure
                         cts.Cancel();
@@ -125,6 +134,9 @@ namespace LinqPadless
                         // ReSharper disable once LoopCanBePartlyConvertedToQuery
                         foreach (var query in outdatedQueries)
                         {
+                            // TODO Handle errors during Compile when in force (`-f`) mode
+                            // TODO Re-try on potential file locking issues
+
                             var compiled = Compile(query, repo, packagesDirName, force, verbose);
                             count++;
                             compiledCount += compiled ? 1 : 0;
@@ -137,6 +149,9 @@ namespace LinqPadless
             }
             else
             {
+                // TODO Handle errors during Compile when in force (`-f`) mode
+                // TODO Support incremental mode like during watch
+
                 foreach (var query in queries)
                     Compile(query, repo, packagesDirName, force, verbose);
             }
@@ -204,6 +219,8 @@ namespace LinqPadless
 
             if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
             {
+                // TODO Support Program and Expression queries
+
                 var error = new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
                 if (force)
                 {
@@ -299,7 +316,6 @@ namespace LinqPadless
                              ? r.Substring(LinqPad.RuntimeDirToken.Length)
                              : r,
 
-
                         from r in references select r.AssemblyPath,
                     }
                     from r in rs
@@ -322,6 +338,8 @@ namespace LinqPadless
                 select line;
 
             File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"), outputs);
+
+            // TODO User-supplied csi.cmd
 
             var cmd = LoadTextResource("csi.cmd");
 
