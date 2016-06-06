@@ -57,7 +57,7 @@ namespace LinqPadless
                 { "i|incremental", "compile outdated scripts only", _ => incremental = true },
             };
 
-            var tail = options.Parse(args);
+            var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
 
             if (verbose)
                 Trace.Listeners.Add(new ConsoleTraceListener(useErrorStream: true));
