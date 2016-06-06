@@ -56,9 +56,9 @@ For more information, see help:
 
 ## Limitations
 
-LINQPad Query files must be eitherC# Statements,Expression or Program. In the
-case of a C# Program query, a `Main` declared to be asynchronous is not awaited
-and therefore may not execute fully.
+LINQPad Query files must be either C# Statements, Expression or Program. In
+the case of a C# Program query, a `Main` declared to be asynchronous is not
+awaited and therefore may not execute fully.
 
 Extension methods are not supported in C# scripts.
 
