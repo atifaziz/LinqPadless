@@ -20,6 +20,7 @@ namespace LinqPadless
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Runtime.ExceptionServices;
     using System.Threading;
     using System.Threading.Tasks;
@@ -37,6 +38,11 @@ namespace LinqPadless
 
     static class Seq
     {
+        public static IEnumerable<T> Return<T>(params T[] items) => items;
+
+        public static IEnumerable<T> Filter<T>(this IEnumerable<T> source) =>
+            from item in source where item != null select item;
+
         public static IEnumerable<T[]> Throttle<T>(this IEnumerable<T> source, TimeSpan timeout)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));

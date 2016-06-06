@@ -12,6 +12,7 @@ creates a Windows batch file alongside that does the following:
 - Sets `LINQPADLESS` environment variable to the compiler version.
 - Invokes the C# script using `csi.exe` and passes any remaining arguments.
 
+
 ## Usage Examples
 
 Compile a single LINQPad query file in the current directory:
@@ -43,9 +44,15 @@ Watch particular files in a directory and re-compile them on changes:
 
     lpless -w C:\LINQPad\Queries\Foo*.linq
 
+Compile `Foo.linq` using the `Bar` package and importing the `Baz` namespace
+(both in addition to package and namespaces that may be listed in `Foo.linq`):
+
+    lpless --ref Bar --imp Baz Foo.linq
+
 For more information, see help:
 
     lpless -h
+
 
 ## Limitations
 

@@ -28,6 +28,7 @@ namespace LinqPadless
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Xml.Linq;
+    using Mannex;
     using Mannex.IO;
     using MoreLinq;
     using NDesk.Options;
@@ -45,16 +46,20 @@ namespace LinqPadless
             var force = false;
             var watching = false;
             var incremental = false;
+            var extraPackageList = new List<PackageReference>();
+            var extraImportList = new List<string>();
 
             var options = new OptionSet
             {
-                { "?|help|h"     , "prints out the options", _ => help = true },
-                { "verbose|v"    , "enable additional output", _ => verbose = true },
-                { "d|debug"      , "debug break", _ => Debugger.Launch() },
-                { "r|recurse"    , "include sub-directories", _ => recurse = true },
-                { "f|force"      , "force continue on errors", _ => force = true },
-                { "w|watch"      , "watch for changes and re-compile outdated", _ => watching = true },
-                { "i|incremental", "compile outdated scripts only", _ => incremental = true },
+                { "?|help|h"      , "prints out the options", _ => help = true },
+                { "verbose|v"     , "enable additional output", _ => verbose = true },
+                { "d|debug"       , "debug break", _ => Debugger.Launch() },
+                { "r|recurse"     , "include sub-directories", _ => recurse = true },
+                { "f|force"       , "force continue on errors", _ => force = true },
+                { "w|watch"       , "watch for changes and re-compile outdated", _ => watching = true },
+                { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
+                { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
+                { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
             };
 
             var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
@@ -68,6 +73,8 @@ namespace LinqPadless
                 return;
             }
 
+            extraImportList.RemoveAll(string.IsNullOrEmpty);
+
             // TODO Allow package source to be specified via args
             // TODO Use default NuGet sources configuration
 
@@ -78,7 +85,7 @@ namespace LinqPadless
 
             const string packagesDirName = "packages";
 
-            var compiler = Compiler(repo, packagesDirName, incremental, force, verbose);
+            var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList, incremental, force, verbose);
 
             if (watching)
             {
@@ -190,18 +197,17 @@ namespace LinqPadless
                 select e.File.FullName;
         }
 
-        static Func<string, bool> Compiler(IPackageRepository repo,
-                                           string packagesDirName,
-                                           bool unlessUpToDate = false,
-                                           bool force = false,
-                                           bool verbose = false)
+        static Func<string, bool> Compiler(IPackageRepository repo, string packagesDirName,
+            IEnumerable<PackageReference> extraPackages,
+            IEnumerable<string> extraImports,
+            bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
             var writer = IndentingLineWriter.Create(Console.Out);
             return queryFilePath =>
             {
                 try
                 {
-                    Compile(queryFilePath, repo, packagesDirName, unlessUpToDate, verbose, writer);
+                    Compile(queryFilePath, repo, packagesDirName, extraPackages, extraImports, unlessUpToDate, verbose, writer);
                     return true;
                 }
                 catch (Exception e)
@@ -216,12 +222,10 @@ namespace LinqPadless
             };
         }
 
-        static void Compile(string queryFilePath,
-                            IPackageRepository repo,
-                            string packagesDirName,
-                            bool unlessUpToDate,
-                            bool verbose,
-                            IndentingLineWriter writer)
+        static void Compile(string queryFilePath, IPackageRepository repo, string packagesDirName,
+            IEnumerable<PackageReference> extraPackageReferences,
+            IEnumerable<string> extraImports,
+            bool unlessUpToDate, bool verbose, IndentingLineWriter writer)
         {
             var w1 = writer.Indent();
 
@@ -262,12 +266,24 @@ namespace LinqPadless
             }
 
             var nrs =
-                from nr in query.Elements("NuGetReference")
+                from nrsq in new[]
+                {
+                    from nr in query.Elements("NuGetReference")
+                    select new PackageReference((string)nr,
+                                                SemanticVersion.ParseOptionalVersion((string) nr.Attribute("Version")),
+                                                (bool?)nr.Attribute("Prerelease") ?? false),
+                    extraPackageReferences,
+                }
+                from nr in nrsq
                 select new
                 {
-                    Id           = (string)nr,
-                    Version      = SemanticVersion.ParseOptionalVersion((string) nr.Attribute("Version")),
-                    IsPrerelease = (bool?)nr.Attribute("Prerelease") ?? false
+                    nr.Id,
+                    nr.Version,
+                    nr.IsPrereleaseAllowed,
+                    Title = string.Join(" ", Seq.Return(nr.Id,
+                                                        nr.Version?.ToString(),
+                                                        nr.IsPrereleaseAllowed ? "(pre-release)" : null)
+                                                .Filter()),
                 };
 
             nrs = nrs.ToArray();
@@ -275,10 +291,7 @@ namespace LinqPadless
             if (verbose && nrs.Any())
             {
                 w1.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                w1.Indent().WriteLines(
-                    from nr in nrs
-                    select nr.Id + (nr.Version != null ? " " + nr.Version : null)
-                                 + (nr.IsPrerelease ? " (pre-release)" : null));
+                w1.Indent().WriteLines(from nr in nrs select nr.Title);
             }
 
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
@@ -302,19 +315,17 @@ namespace LinqPadless
             foreach (var nr in nrs)
             {
                 var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version,
-                                                         allowPrereleaseVersions: nr.IsPrerelease,
+                                                         allowPrereleaseVersions: nr.IsPrereleaseAllowed,
                                                          allowUnlisted: false);
                 if (pkg == null)
                 {
                     pkg = repo.FindPackage(nr.Id, nr.Version,
-                                           allowPrereleaseVersions: nr.IsPrerelease,
+                                           allowPrereleaseVersions: nr.IsPrereleaseAllowed,
                                            allowUnlisted: false);
 
                     if (pkg == null)
                     {
-                        throw new Exception("Package not found: "
-                                            + nr.Id + (nr.Version != null ? " " + nr.Version : null)
-                                            + (nr.IsPrerelease ? " (pre-release)" : null));
+                        throw new Exception("Package not found: " + nr.Title);
                     }
 
                     pm.InstallPackage(pkg.Id, pkg.Version);
@@ -378,6 +389,8 @@ namespace LinqPadless
 
                         from ns in query.Elements("Namespace")
                         select (string)ns,
+
+                        extraImports,
                     }
                     from ns in nss
                     select $"using {ns};",
@@ -436,6 +449,35 @@ namespace LinqPadless
 
             foreach (var r in subrefs)
                 yield return r;
+        }
+
+        static PackageReference ParseExtraPackageReference(string input)
+        {
+            // Syntax: ID [ "@" VERSION ] ["++"]
+            // Examples:
+            //   Foo                 => Latest release of Foo
+            //   Foo@2.1             => Foo release 2.1
+            //   Foo++               => Latest pre-release of Foo
+            //   Foo@3.0++           => Foo 3.0 pre-release
+
+            const string plusplus = "++";
+            var prerelease = input.EndsWith(plusplus, StringComparison.Ordinal);
+            if (prerelease)
+                input = input.Substring(0, input.Length - plusplus.Length);
+            return input.Split('@', (id, version) => new PackageReference(id, SemanticVersion.ParseOptionalVersion(version), prerelease));
+        }
+
+        sealed class PackageReference : NuGet.PackageReference
+        {
+            public bool IsPrereleaseAllowed { get; }
+
+            public PackageReference(string id, SemanticVersion version, bool isPrereleaseAllowed,
+                IVersionSpec versionConstraint = null, FrameworkName targetFramework = null,
+                bool isDevelopmentDependency = false, bool requireReinstallation = false) :
+                base(id, version, versionConstraint, targetFramework, isDevelopmentDependency, requireReinstallation)
+            {
+                IsPrereleaseAllowed = isPrereleaseAllowed;
+            }
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
