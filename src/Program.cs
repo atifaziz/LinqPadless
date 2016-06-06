@@ -310,8 +310,11 @@ namespace LinqPadless
                            })
                            .ToList();
 
-            w1.WriteLine($"Resolved references ({references.Count:N0}):");
-            w1.Indent().WriteLines(from r in references select r.AssemblyPath);
+            if (references.Any())
+            {
+                w1.WriteLine($"Resolved references ({references.Count:N0}):");
+                w1.Indent().WriteLines(from r in references select r.AssemblyPath);
+            }
 
             // ReSharper disable once PossibleMultipleEnumeration
             var body = lines.Skip(eomLineNumber - 1);
