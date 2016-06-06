@@ -253,12 +253,12 @@ namespace LinqPadless
             QueryLanguage queryKind;
             if (!Enum.TryParse((string) query.Attribute("Kind"), true, out queryKind)
                 || (queryKind != QueryLanguage.Statements
-                    && queryKind != QueryLanguage.Expression))
+                    && queryKind != QueryLanguage.Expression
+                    && queryKind != QueryLanguage.Program))
             {
-                // TODO Support Program queries
-
-                throw new NotSupportedException(
-                    "Only LINQPad C# Statements and Expression queries are supported in this version.");
+                throw new NotSupportedException("Only LINQPad " +
+                    "C# Statements and Expression queries are fully supported " +
+                    "and C# Program queries partially in this version.");
             }
 
             var nrs =
@@ -341,6 +341,8 @@ namespace LinqPadless
             var body = lines.Skip(eomLineNumber - 1);
             if (queryKind == QueryLanguage.Expression)
                 body = body.Prepend("System.Console.WriteLine(").Concat(");");
+            else if (queryKind == QueryLanguage.Program)
+                body = body.Concat("Main();");
 
             var outputs =
                 from ls in new[]
