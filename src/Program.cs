@@ -29,6 +29,7 @@ namespace LinqPadless
     using System.Threading;
     using System.Xml.Linq;
     using Mannex.IO;
+    using MoreLinq;
     using NDesk.Options;
     using NuGet;
 
@@ -217,17 +218,26 @@ namespace LinqPadless
             if (verbose)
                 w1.Write(query);
 
-            if (!"Statements".Equals((string) query.Attribute("Kind"), StringComparison.OrdinalIgnoreCase))
-            {
-                // TODO Support Program and Expression queries
 
-                var error = new NotSupportedException("Only Statements LINQPad queries are supported in this version.");
+            QueryLanguage queryKind;
+            if (!Enum.TryParse((string) query.Attribute("Kind"), true, out queryKind)
+                || (queryKind != QueryLanguage.Statements
+                    && queryKind != QueryLanguage.Expression))
+            {
+                // TODO Support Program queries
+
+                var error =
+                    new NotSupportedException(
+                        "Only LINQPad C# Statements and Expression queries are supported in this version.");
                 if (force)
                 {
                     w1.WriteLine($"WARNING! {error.Message}");
                     return false;
                 }
                 throw error;
+            }
+            else
+            {
             }
 
             var nrs =
@@ -303,6 +313,11 @@ namespace LinqPadless
             w1.WriteLine($"Resolved references ({references.Count:N0}):");
             w1.Indent().WriteLines(from r in references select r.AssemblyPath);
 
+            // ReSharper disable once PossibleMultipleEnumeration
+            var body = lines.Skip(eomLineNumber - 1);
+            if (queryKind == QueryLanguage.Expression)
+                body = body.Prepend("System.Console.WriteLine(").Concat(");");
+
             var outputs =
                 from ls in new[]
                 {
@@ -331,8 +346,7 @@ namespace LinqPadless
                     from ns in nss
                     select $"using {ns};",
 
-                    // ReSharper disable once PossibleMultipleEnumeration
-                    lines.Skip(eomLineNumber - 1),
+                    body,
                 }
                 from line in ls.Concat(new[] { string.Empty })
                 select line;
@@ -467,5 +481,21 @@ namespace LinqPadless
                  ? relativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
                  : relativePath;
         }
+
+        enum QueryLanguage  // ReSharper disable UnusedMember.Local
+        {                   // ReSharper disable InconsistentNaming
+            Expression,
+            Statements,
+            Program,
+            VBExpression,
+            VBStatements,
+            VBProgram,
+            FSharpExpression,
+            FSharpProgram,
+            SQL,
+            ESQL,
+        }
+        // ReSharper restore InconsistentNaming
+        // ReSharper restore UnusedMember.Local
     }
 }

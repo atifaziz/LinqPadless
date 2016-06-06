@@ -45,7 +45,7 @@ For more information, see help:
 
 ## Limitations
 
-LINQPad Query files must be C# statements.
+LINQPad Query files must be C# statements or an expression.
 
 Extension methods are not supported in C# scripts.
 
