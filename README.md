@@ -1,10 +1,11 @@
 # LINQPadless
 
 LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
-[C# scripts (csx)][csx] so they can run outside and independent of LINQPad.
+[C# scripts (csx)][csx] so that they can be run outside and independent of
+LINQPad.
 
 The compiler emits a C# script file in the same directory and with the same
-file name as the original `.linq` except it bears the `.csx` extension. It also
+file name as the original except it bears the `.csx` extension. It also
 creates a Windows batch file alongside that does the following:
 
 - Checks that referenced NuGet packages are installed.
@@ -45,7 +46,7 @@ Watch particular files in a directory and re-compile them on changes:
     lpless -w C:\LINQPad\Queries\Foo*.linq
 
 Compile `Foo.linq` using the `Bar` package and importing the `Baz` namespace
-(both in addition to package and namespaces that may be listed in `Foo.linq`):
+(both in addition to packages and namespaces referenced in `Foo.linq`):
 
     lpless --ref Bar --imp Baz Foo.linq
 
