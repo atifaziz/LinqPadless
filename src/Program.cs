@@ -236,9 +236,6 @@ namespace LinqPadless
                 }
                 throw error;
             }
-            else
-            {
-            }
 
             var nrs =
                 from nr in query.Elements("NuGetReference")
