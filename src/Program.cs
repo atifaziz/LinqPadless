@@ -309,6 +309,14 @@ namespace LinqPadless
                     pkg = repo.FindPackage(nr.Id, nr.Version,
                                            allowPrereleaseVersions: nr.IsPrerelease,
                                            allowUnlisted: false);
+
+                    if (pkg == null)
+                    {
+                        throw new Exception("Package not found: "
+                                            + nr.Id + (nr.Version != null ? " " + nr.Version : null)
+                                            + (nr.IsPrerelease ? " (pre-release)" : null));
+                    }
+
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
