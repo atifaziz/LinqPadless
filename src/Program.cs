@@ -44,15 +44,17 @@ namespace LinqPadless
             var recurse = false;
             var force = false;
             var watching = false;
+            var incremental = false;
 
             var options = new OptionSet
             {
-                { "?|help|h" , "prints out the options", _ => help = true },
-                { "verbose|v", "enable additional output", _ => verbose = true },
-                { "d|debug"  , "debug break", _ => Debugger.Launch() },
-                { "r|recurse", "include sub-directories", _ => recurse = true },
-                { "f|force"  , "force continue on errors", _ => force = true },
-                { "w|watch"  , "watch for changes and re-compile", _ => watching = true },
+                { "?|help|h"     , "prints out the options", _ => help = true },
+                { "verbose|v"    , "enable additional output", _ => verbose = true },
+                { "d|debug"      , "debug break", _ => Debugger.Launch() },
+                { "r|recurse"    , "include sub-directories", _ => recurse = true },
+                { "f|force"      , "force continue on errors", _ => force = true },
+                { "w|watch"      , "watch for changes and re-compile outdated", _ => watching = true },
+                { "i|incremental", "compile outdated scripts only", _ => incremental = true },
             };
 
             var tail = options.Parse(args);
@@ -75,6 +77,8 @@ namespace LinqPadless
             // TODO Allow packages directory to be specified via args
 
             const string packagesDirName = "packages";
+
+            var compiler = Compiler(repo, packagesDirName, incremental, force, verbose);
 
             if (watching)
             {
@@ -121,23 +125,16 @@ namespace LinqPadless
                     {
                         Console.WriteLine($"{e} change(s) detected. Re-compiling...");
 
-                        var outdatedQueries =
-                            // ReSharper disable once PossibleMultipleEnumeration
-                            from q in queries
-                            let csx = new FileInfo(Path.ChangeExtension(q, ".csx"))
-                            where !csx.Exists
-                                  || File.GetLastWriteTime(q) > csx.LastWriteTime
-                            select q;
-
                         var count = 0;
                         var compiledCount = 0;
                         // ReSharper disable once LoopCanBeConvertedToQuery
                         // ReSharper disable once LoopCanBePartlyConvertedToQuery
-                        foreach (var query in outdatedQueries)
+                        // ReSharper disable once PossibleMultipleEnumeration
+                        foreach (var query in queries)
                         {
                             // TODO Re-try on potential file locking issues
 
-                            var compiled = Compile(query, repo, packagesDirName, force, verbose);
+                            var compiled = compiler(query);
                             count++;
                             compiledCount += compiled ? 1 : 0;
                         }
@@ -149,10 +146,8 @@ namespace LinqPadless
             }
             else
             {
-                // TODO Support incremental mode like during watch
-
                 foreach (var query in queries)
-                    Compile(query, repo, packagesDirName, force, verbose);
+                    compiler(query);
             }
         }
 
@@ -168,7 +163,8 @@ namespace LinqPadless
                  : selector(null, spec);
         }
 
-        static IEnumerable<string> GetQueries(IEnumerable<string> tail, bool includeSubdirs)
+        static IEnumerable<string> GetQueries(IEnumerable<string> tail,
+                                              bool includeSubdirs)
         {
             var dirSearchOption = includeSubdirs
                                 ? SearchOption.AllDirectories
@@ -194,34 +190,54 @@ namespace LinqPadless
                 select e.File.FullName;
         }
 
-        static bool Compile(string queryFilePath,
-                            IPackageRepository repo,
-                            string packagesDirName,
-                            bool force = false,
-                            bool verbose = false)
+        static Func<string, bool> Compiler(IPackageRepository repo,
+                                           string packagesDirName,
+                                           bool unlessUpToDate = false,
+                                           bool force = false,
+                                           bool verbose = false)
         {
             var writer = IndentingLineWriter.Create(Console.Out);
-            writer.WriteLine($"Compiling {queryFilePath}");
-            try
+            return queryFilePath =>
             {
-                Compile(queryFilePath, repo, packagesDirName, verbose, writer.Indent());
-                return true;
-            }
-            catch (Exception e)
-            {
-                if (!force)
-                    throw;
-                writer.Indent().WriteLines($"WARNING! {e.Message}");
-                return false;
-            }
+                try
+                {
+                    Compile(queryFilePath, repo, packagesDirName, unlessUpToDate, verbose, writer);
+                    return true;
+                }
+                catch (Exception e)
+                {
+                    if (!force)
+                        throw;
+                    writer.Indent().WriteLines($"WARNING! {e.Message}");
+                    if (verbose)
+                        writer.Indent().Indent().WriteLines(e.ToString());
+                    return false;
+                }
+            };
         }
 
         static void Compile(string queryFilePath,
                             IPackageRepository repo,
                             string packagesDirName,
+                            bool unlessUpToDate,
                             bool verbose,
                             IndentingLineWriter writer)
         {
+            var w1 = writer.Indent();
+
+            var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
+            if (unlessUpToDate && scriptFile.Exists && scriptFile.LastWriteTime > File.GetLastWriteTime(queryFilePath))
+            {
+                if (verbose)
+                {
+                    writer.WriteLine($"{queryFilePath}");
+                    w1.WriteLine("Skipping compilation because target appears up to date.");
+                }
+                return;
+            }
+
+            writer.WriteLine($"{queryFilePath}");
+
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
 
@@ -232,7 +248,7 @@ namespace LinqPadless
             var query = XElement.Parse(xml);
 
             if (verbose)
-                writer.Write(query);
+                w1.Write(query);
 
             QueryLanguage queryKind;
             if (!Enum.TryParse((string) query.Attribute("Kind"), true, out queryKind)
@@ -258,8 +274,8 @@ namespace LinqPadless
 
             if (verbose && nrs.Any())
             {
-                writer.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                writer.Indent().WriteLines(
+                w1.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                w1.Indent().WriteLines(
                     from nr in nrs
                     select nr.Id + (nr.Version != null ? " " + nr.Version : null)
                                  + (nr.IsPrerelease ? " (pre-release)" : null));
@@ -269,16 +285,16 @@ namespace LinqPadless
                                                 Path.GetDirectoryName(queryFilePath));
 
             var packagesPath = Path.Combine(queryDirPath, packagesDirName);
-            writer.WriteLine($"Packages directory: {packagesPath}");
+            w1.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                writer.WriteLine($"Installing {ea.Package}...");
+                w1.WriteLine($"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
+                w1.Indent().WriteLine($"Installed at {ea.InstallPath}");
 
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            writer.WriteLine($"Packages target: {targetFrameworkName}");
+            w1.WriteLine($"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -294,8 +310,8 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                writer.WriteLine("Resolving references...");
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, writer.Indent(),
+                w1.WriteLine("Resolving references...");
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, w1.Indent(),
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -317,8 +333,8 @@ namespace LinqPadless
 
             if (references.Any())
             {
-                writer.WriteLine($"Resolved references ({references.Count:N0}):");
-                writer.Indent().WriteLines(from r in references select r.AssemblyPath);
+                w1.WriteLine($"Resolved references ({references.Count:N0}):");
+                w1.Indent().WriteLines(from r in references select r.AssemblyPath);
             }
 
             // ReSharper disable once PossibleMultipleEnumeration
@@ -359,7 +375,7 @@ namespace LinqPadless
                 from line in ls.Concat(new[] { string.Empty })
                 select line;
 
-            File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"), outputs);
+            File.WriteAllLines(scriptFile.FullName, outputs);
 
             // TODO User-supplied csi.cmd
 

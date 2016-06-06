@@ -31,9 +31,13 @@ within:
 
     lpless -r C:\LINQPad\Queries\*.linq
 
-Compile all LINQPad query files starting with `Foo`
+Compile all LINQPad query files starting with `Foo`:
 
     lpless -r C:\LINQPad\Queries\Foo*.linq
+
+Compile (incremental) outdated files only:
+
+    lpless -i C:\LINQPad\Queries\Foo*.linq
 
 Watch particular files in a directory and re-compile them on changes:
 
