@@ -301,7 +301,9 @@ namespace LinqPadless
                                         .ToList();
             foreach (var nr in nrs)
             {
-                var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version);
+                var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version,
+                                                         allowPrereleaseVersions: nr.IsPrerelease,
+                                                         allowUnlisted: false);
                 if (pkg == null)
                 {
                     pkg = repo.FindPackage(nr.Id, nr.Version,
