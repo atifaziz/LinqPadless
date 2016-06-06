@@ -135,7 +135,6 @@ namespace LinqPadless
                         // ReSharper disable once LoopCanBePartlyConvertedToQuery
                         foreach (var query in outdatedQueries)
                         {
-                            // TODO Handle errors during Compile when in force (`-f`) mode
                             // TODO Re-try on potential file locking issues
 
                             var compiled = Compile(query, repo, packagesDirName, force, verbose);
@@ -150,7 +149,6 @@ namespace LinqPadless
             }
             else
             {
-                // TODO Handle errors during Compile when in force (`-f`) mode
                 // TODO Support incremental mode like during watch
 
                 foreach (var query in queries)
@@ -202,10 +200,28 @@ namespace LinqPadless
                             bool force = false,
                             bool verbose = false)
         {
-            var w0 = IndentingLineWriter.Create(Console.Out);
-            w0.WriteLine($"Compiling {queryFilePath}");
-            var w1 = w0.Indent();
+            var writer = IndentingLineWriter.Create(Console.Out);
+            writer.WriteLine($"Compiling {queryFilePath}");
+            try
+            {
+                Compile(queryFilePath, repo, packagesDirName, verbose, writer.Indent());
+                return true;
+            }
+            catch (Exception e)
+            {
+                if (!force)
+                    throw;
+                writer.Indent().WriteLines($"WARNING! {e.Message}");
+                return false;
+            }
+        }
 
+        static void Compile(string queryFilePath,
+                            IPackageRepository repo,
+                            string packagesDirName,
+                            bool verbose,
+                            IndentingLineWriter writer)
+        {
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
 
@@ -216,8 +232,7 @@ namespace LinqPadless
             var query = XElement.Parse(xml);
 
             if (verbose)
-                w1.Write(query);
-
+                writer.Write(query);
 
             QueryLanguage queryKind;
             if (!Enum.TryParse((string) query.Attribute("Kind"), true, out queryKind)
@@ -226,15 +241,8 @@ namespace LinqPadless
             {
                 // TODO Support Program queries
 
-                var error =
-                    new NotSupportedException(
-                        "Only LINQPad C# Statements and Expression queries are supported in this version.");
-                if (force)
-                {
-                    w1.WriteLine($"WARNING! {error.Message}");
-                    return false;
-                }
-                throw error;
+                throw new NotSupportedException(
+                    "Only LINQPad C# Statements and Expression queries are supported in this version.");
             }
 
             var nrs =
@@ -250,8 +258,8 @@ namespace LinqPadless
 
             if (verbose && nrs.Any())
             {
-                w1.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                w1.Indent().WriteLines(
+                writer.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                writer.Indent().WriteLines(
                     from nr in nrs
                     select nr.Id + (nr.Version != null ? " " + nr.Version : null)
                                  + (nr.IsPrerelease ? " (pre-release)" : null));
@@ -261,16 +269,16 @@ namespace LinqPadless
                                                 Path.GetDirectoryName(queryFilePath));
 
             var packagesPath = Path.Combine(queryDirPath, packagesDirName);
-            w1.WriteLine($"Packages directory: {packagesPath}");
+            writer.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                w1.WriteLine($"Installing {ea.Package}...");
+                writer.WriteLine($"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                w1.Indent().WriteLine($"Installed at {ea.InstallPath}");
+                writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
 
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            w1.WriteLine($"Packages target: {targetFrameworkName}");
+            writer.WriteLine($"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -286,8 +294,8 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                w1.WriteLine("Resolving references...");
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, w1.Indent(),
+                writer.WriteLine("Resolving references...");
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, writer.Indent(),
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -309,8 +317,8 @@ namespace LinqPadless
 
             if (references.Any())
             {
-                w1.WriteLine($"Resolved references ({references.Count:N0}):");
-                w1.Indent().WriteLines(from r in references select r.AssemblyPath);
+                writer.WriteLine($"Resolved references ({references.Count:N0}):");
+                writer.Indent().WriteLines(from r in references select r.AssemblyPath);
             }
 
             // ReSharper disable once PossibleMultipleEnumeration
@@ -375,8 +383,6 @@ namespace LinqPadless
             cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
 
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
-
-            return true;
         }
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
