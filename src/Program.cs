@@ -85,7 +85,8 @@ namespace LinqPadless
 
             const string packagesDirName = "packages";
 
-            var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList, incremental, force, verbose);
+            var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList,
+                                    watching || incremental, force, verbose);
 
             if (watching)
             {
@@ -207,8 +208,7 @@ namespace LinqPadless
             {
                 try
                 {
-                    Compile(queryFilePath, repo, packagesDirName, extraPackages, extraImports, unlessUpToDate, verbose, writer);
-                    return true;
+                    return Compile(queryFilePath, repo, packagesDirName, extraPackages, extraImports, unlessUpToDate, verbose, writer);
                 }
                 catch (Exception e)
                 {
@@ -222,7 +222,7 @@ namespace LinqPadless
             };
         }
 
-        static void Compile(string queryFilePath, IPackageRepository repo, string packagesDirName,
+        static bool Compile(string queryFilePath, IPackageRepository repo, string packagesDirName,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
             bool unlessUpToDate, bool verbose, IndentingLineWriter writer)
@@ -237,7 +237,7 @@ namespace LinqPadless
                     writer.WriteLine($"{queryFilePath}");
                     w1.WriteLine("Skipping compilation because target appears up to date.");
                 }
-                return;
+                return false;
             }
 
             writer.WriteLine($"{queryFilePath}");
@@ -424,6 +424,7 @@ namespace LinqPadless
             cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
 
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
+            return true;
         }
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,

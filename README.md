@@ -41,7 +41,7 @@ Compile (incremental) outdated files only:
 
     lpless -i C:\LINQPad\Queries\Foo*.linq
 
-Watch particular files in a directory and re-compile them on changes:
+Watch particular files in a directory and re-compile outdated ones on changes:
 
     lpless -w C:\LINQPad\Queries\Foo*.linq
 
