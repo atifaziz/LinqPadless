@@ -19,8 +19,8 @@ popd
 exit /b %errorlevel%
 
 :nocsi
-echo Microsoft (R) Visual C# Interactive Compiler does not appear to be
-echo installed. You can download it as part of Microsoft Build Tools 2015
-echo using the URL below, install and try again:
-echo https://www.microsoft.com/en-us/download/details.aspx?id=48159
+>&2 echo Microsoft (R) Visual C# Interactive Compiler does not appear to be
+>&2 echo installed. You can download it as part of Microsoft Build Tools 2015
+>&2 echo using the URL below, install and try again:
+>&2 echo https://www.microsoft.com/en-us/download/details.aspx?id=48159
 exit /b 1

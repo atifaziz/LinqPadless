@@ -413,7 +413,7 @@ namespace LinqPadless
                                      packagesPath + Path.DirectorySeparatorChar)
                 }
                 from r in references
-                select $"if not exist \"{r.AssemblyPath}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} || goto :pkgerr";
+                select $"if not exist \"{r.AssemblyPath}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
 
             cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
