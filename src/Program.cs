@@ -224,11 +224,6 @@ namespace LinqPadless
                                                                          packagesPath));
 
                     var info = Compile(queryFilePath, repo, packagesFullPath, extraPackages, extraImports, verbose, writer,
-                        (path, pkg) => new
-                        {
-                            Path       = path,
-                            Package    = pkg,
-                        },
                         (kind, src, imps, refs) => new
                         {
                             Kind       = kind,
@@ -239,7 +234,7 @@ namespace LinqPadless
 
                     GenerateScripts(queryFilePath, packagesFullPath,
                                     info.Kind, info.Source, info.Imports,
-                                    info.References, r => r.Path, r => r.Package);
+                                    info.References);
 
                     return true;
                 }
@@ -255,12 +250,11 @@ namespace LinqPadless
             };
         }
 
-        static T Compile<T, TReference>(string queryFilePath, IPackageRepository repo, string packagesPath,
+        static T Compile<T>(string queryFilePath, IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
             bool verbose, IndentingLineWriter writer,
-            Func<string, IPackage, TReference> referenceSelector,
-            Func<QueryLanguage, string, IEnumerable<string>, IEnumerable<TReference>, T> selector)
+            Func<QueryLanguage, string, IEnumerable<string>, IEnumerable<Reference>, T> selector)
         {
             var w1 = writer.Indent();
 
@@ -387,15 +381,15 @@ namespace LinqPadless
                             .Concat(from ns in query.Elements("Namespace")
                                     select (string)ns)
                             .Concat(extraImports),
-                    LinqPad.DefaultReferences.Select(r => referenceSelector(r, null))
+                    LinqPad.DefaultReferences.Select(r => new Reference(r))
                             .Concat(from r in query.Elements("Reference")
                                     select (string)r into r
                                     select r.StartsWith(LinqPad.RuntimeDirToken, StringComparison.OrdinalIgnoreCase)
                                         ? r.Substring(LinqPad.RuntimeDirToken.Length)
                                         : r into r
-                                    select referenceSelector(r, null))
+                                    select new Reference(r))
                             .Concat(from r in references
-                                    select referenceSelector(r.AssemblyPath, r.Package)));
+                                    select new Reference(r.AssemblyPath, r.Package)));
         }
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
@@ -423,12 +417,10 @@ namespace LinqPadless
                 yield return r;
         }
 
-        static void GenerateScripts<TReference>(string queryFilePath, string packagesPath,
+        static void GenerateScripts(string queryFilePath, string packagesPath,
             QueryLanguage queryKind,
             string source, IEnumerable<string> imports,
-            IEnumerable<TReference> references,
-            Func<TReference, string> referencePathSelector,
-            Func<TReference, IPackage> referencePackageSelector)
+            IEnumerable<Reference> references)
         {
             var body = queryKind == QueryLanguage.Expression
                      ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
@@ -436,9 +428,7 @@ namespace LinqPadless
                      ? source + Environment.NewLine + "Main();"
                      : source;
 
-            var rs = references.Select(r => new { Path    = referencePathSelector(r),
-                                                  Package = referencePackageSelector(r) })
-                               .ToArray();
+            var rs = references.ToArray();
 
             File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"),
                 from lines in new[]
@@ -468,8 +458,8 @@ namespace LinqPadless
 
             var installs =
                 from r in rs
-                where r.Package != null
-                select $"if not exist \"{r.Path}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
+                where r.SourcePackage != null
+                select $"if not exist \"{r.Path}\" nuget install{(!r.SourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} {r.SourcePackage.Id} -Version {r.SourcePackage.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
 
             cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
@@ -509,6 +499,31 @@ namespace LinqPadless
             {
                 IsPrereleaseAllowed = isPrereleaseAllowed;
             }
+        }
+
+        sealed class Reference : IEquatable<Reference>
+        {
+            public string Path { get; }
+            public IPackage SourcePackage { get; }
+
+            public Reference(string path, IPackage sourcePackage = null)
+            {
+                if (path == null) throw new ArgumentNullException(nameof(path));
+                Path = path;
+                SourcePackage = sourcePackage;
+            }
+
+            public bool Equals(Reference other) =>
+                !ReferenceEquals(null, other)
+                && (ReferenceEquals(this, other)
+                    || Path == other.Path
+                    && SourcePackage == other.SourcePackage);
+
+            public override bool Equals(object obj) =>
+                Equals(obj as Reference);
+
+            public override int GetHashCode() =>
+                unchecked((Path.GetHashCode() * 397) ^ (SourcePackage?.GetHashCode() ?? 0));
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
