@@ -30,7 +30,6 @@ namespace LinqPadless
     using System.Xml.Linq;
     using Mannex;
     using Mannex.IO;
-    using MoreLinq;
     using NDesk.Options;
     using NuGet;
 
@@ -198,17 +197,51 @@ namespace LinqPadless
                 select e.File.FullName;
         }
 
-        static Func<string, bool> Compiler(IPackageRepository repo, string packagesDirName,
+        static Func<string, bool> Compiler(IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
             bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
             var writer = IndentingLineWriter.Create(Console.Out);
+
             return queryFilePath =>
             {
                 try
                 {
-                    return Compile(queryFilePath, repo, packagesDirName, extraPackages, extraImports, unlessUpToDate, verbose, writer);
+                    var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
+                    if (unlessUpToDate && scriptFile.Exists && scriptFile.LastWriteTime > File.GetLastWriteTime(queryFilePath))
+                    {
+                        if (verbose)
+                        {
+                            writer.WriteLine($"{queryFilePath}");
+                            writer.Indent().WriteLine("Skipping compilation because target appears up to date.");
+                        }
+                        return false;
+                    }
+
+                    var packagesFullPath = Path.GetFullPath(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
+                                                                         Path.GetDirectoryName(queryFilePath),
+                                                                         packagesPath));
+
+                    var info = Compile(queryFilePath, repo, packagesFullPath, extraPackages, extraImports, verbose, writer,
+                        (path, pkg) => new
+                        {
+                            Path       = path,
+                            Package    = pkg,
+                        },
+                        (kind, src, imps, refs) => new
+                        {
+                            Kind       = kind,
+                            Source     = src,
+                            Imports    = imps,
+                            References = refs,
+                        });
+
+                    GenerateScripts(queryFilePath, packagesFullPath,
+                                    info.Kind, info.Source, info.Imports,
+                                    info.References, r => r.Path, r => r.Package);
+
+                    return true;
                 }
                 catch (Exception e)
                 {
@@ -222,23 +255,14 @@ namespace LinqPadless
             };
         }
 
-        static bool Compile(string queryFilePath, IPackageRepository repo, string packagesDirName,
+        static T Compile<T, TReference>(string queryFilePath, IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
-            bool unlessUpToDate, bool verbose, IndentingLineWriter writer)
+            bool verbose, IndentingLineWriter writer,
+            Func<string, IPackage, TReference> referenceSelector,
+            Func<QueryLanguage, string, IEnumerable<string>, IEnumerable<TReference>, T> selector)
         {
             var w1 = writer.Indent();
-
-            var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
-            if (unlessUpToDate && scriptFile.Exists && scriptFile.LastWriteTime > File.GetLastWriteTime(queryFilePath))
-            {
-                if (verbose)
-                {
-                    writer.WriteLine($"{queryFilePath}");
-                    w1.WriteLine("Skipping compilation because target appears up to date.");
-                }
-                return false;
-            }
 
             writer.WriteLine($"{queryFilePath}");
 
@@ -294,10 +318,6 @@ namespace LinqPadless
                 w1.Indent().WriteLines(from nr in nrs select nr.Title);
             }
 
-            var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
-                                                Path.GetDirectoryName(queryFilePath));
-
-            var packagesPath = Path.Combine(queryDirPath, packagesDirName);
             w1.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
@@ -358,73 +378,24 @@ namespace LinqPadless
                 w1.Indent().WriteLines(from r in references select r.AssemblyPath);
             }
 
-            // ReSharper disable once PossibleMultipleEnumeration
-            var body = lines.Skip(eomLineNumber - 1);
-            if (queryKind == QueryLanguage.Expression)
-                body = body.Prepend("System.Console.WriteLine(").Concat(");");
-            else if (queryKind == QueryLanguage.Program)
-                body = body.Concat("Main();");
-
-            var outputs =
-                from ls in new[]
-                {
-                    from rs in new[]
-                    {
-                        LinqPad.DefaultReferences,
-
-                        from r in query.Elements("Reference")
-                        select (string)r into r
-                        select r.StartsWith(LinqPad.RuntimeDirToken, StringComparison.OrdinalIgnoreCase)
-                             ? r.Substring(LinqPad.RuntimeDirToken.Length)
-                             : r,
-
-                        from r in references select r.AssemblyPath,
-                    }
-                    from r in rs
-                    select $"#r \"{r}\"",
-
-                    from nss in new[]
-                    {
-                        LinqPad.DefaultNamespaces,
-
-                        from ns in query.Elements("Namespace")
-                        select (string)ns,
-
-                        extraImports,
-                    }
-                    from ns in nss
-                    select $"using {ns};",
-
-                    body,
-                }
-                from line in ls.Concat(new[] { string.Empty })
-                select line;
-
-            File.WriteAllLines(scriptFile.FullName, outputs);
-
-            // TODO User-supplied csi.cmd
-
-            var cmd = LoadTextResource("csi.cmd");
-
-            var installs =
-                from pkgdir in new[]
-                {
-                    MakeRelativePath(queryDirPath + Path.DirectorySeparatorChar,
-                                     packagesPath + Path.DirectorySeparatorChar)
-                }
-                from r in references
-                select $"if not exist \"{r.AssemblyPath}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
-
-            cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
-                                string.Join(Environment.NewLine, installs),
-                                RegexOptions.CultureInvariant
-                                | RegexOptions.IgnoreCase
-                                | RegexOptions.Multiline);
-
-            cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
-
-            File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
-            return true;
+            return
+                selector(
+                    queryKind,
+                    // ReSharper disable once PossibleMultipleEnumeration
+                    string.Join(Environment.NewLine, lines.Skip(eomLineNumber - 1)),
+                    LinqPad.DefaultNamespaces
+                            .Concat(from ns in query.Elements("Namespace")
+                                    select (string)ns)
+                            .Concat(extraImports),
+                    LinqPad.DefaultReferences.Select(r => referenceSelector(r, null))
+                            .Concat(from r in query.Elements("Reference")
+                                    select (string)r into r
+                                    select r.StartsWith(LinqPad.RuntimeDirToken, StringComparison.OrdinalIgnoreCase)
+                                        ? r.Substring(LinqPad.RuntimeDirToken.Length)
+                                        : r into r
+                                    select referenceSelector(r, null))
+                            .Concat(from r in references
+                                    select referenceSelector(r.AssemblyPath, r.Package)));
         }
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
@@ -450,6 +421,65 @@ namespace LinqPadless
 
             foreach (var r in subrefs)
                 yield return r;
+        }
+
+        static void GenerateScripts<TReference>(string queryFilePath, string packagesPath,
+            QueryLanguage queryKind,
+            string source, IEnumerable<string> imports,
+            IEnumerable<TReference> references,
+            Func<TReference, string> referencePathSelector,
+            Func<TReference, IPackage> referencePackageSelector)
+        {
+            var body = queryKind == QueryLanguage.Expression
+                     ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
+                     : queryKind == QueryLanguage.Program
+                     ? source + Environment.NewLine + "Main();"
+                     : source;
+
+            var rs = references.Select(r => new { Path    = referencePathSelector(r),
+                                                  Package = referencePackageSelector(r) })
+                               .ToArray();
+
+            File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"),
+                from lines in new[]
+                {
+                    from r in rs
+                    select $"#r \"{r.Path}\"",
+
+                    Seq.Return(string.Empty),
+
+                    from ns in imports
+                    select $"using {ns};",
+
+                    Seq.Return(body, string.Empty),
+                }
+                from line in lines
+                select line);
+
+            // TODO User-supplied csi.cmd
+
+            var cmd = LoadTextResource("csi.cmd");
+
+            var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
+                                                Path.GetDirectoryName(queryFilePath));
+
+            var pkgdir = MakeRelativePath(queryDirPath + Path.DirectorySeparatorChar,
+                                          packagesPath + Path.DirectorySeparatorChar);
+
+            var installs =
+                from r in rs
+                where r.Package != null
+                select $"if not exist \"{r.Path}\" nuget install{(!r.Package.IsReleaseVersion() ? " -Prerelease" : null)} {r.Package.Id} -Version {r.Package.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
+
+            cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
+                                string.Join(Environment.NewLine, installs),
+                                RegexOptions.CultureInvariant
+                                | RegexOptions.IgnoreCase
+                                | RegexOptions.Multiline);
+
+            cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
+
+            File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
         }
 
         static PackageReference ParseExtraPackageReference(string input)
