@@ -47,6 +47,10 @@ namespace LinqPadless
             var incremental = false;
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
+            var generator = new Generator(GenerateCsScripts);
+
+            const string csx = "csx";
+            const string exe = "exe";
 
             var options = new OptionSet
             {
@@ -59,6 +63,12 @@ namespace LinqPadless
                 { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
+                { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v =>
+                    generator = csx.Equals(v, StringComparison.OrdinalIgnoreCase)
+                              ? GenerateCsScripts
+                              : exe.Equals(v, StringComparison.OrdinalIgnoreCase)
+                              ? GenerateExecutable
+                              : default(Generator) },
             };
 
             var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
@@ -70,6 +80,12 @@ namespace LinqPadless
             {
                 Help(options);
                 return;
+            }
+
+            if (generator == null)
+            {
+                throw new Exception("Target is invalid or missing. Supported targets are: "
+                                    + string.Join(", ", csx, exe));
             }
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
@@ -86,7 +102,7 @@ namespace LinqPadless
             const string packagesDirName = "packages";
 
             var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList,
-                                    watching || incremental, force, verbose);
+                                    generator, watching || incremental, force, verbose);
 
             if (watching)
             {
@@ -225,9 +241,16 @@ namespace LinqPadless
                 select e.File.FullName;
         }
 
+        delegate void Generator(string queryFilePath,
+            // ReSharper disable once UnusedParameter.Local
+            string packagesPath, QueryLanguage queryKind, string source,
+            IEnumerable<string> imports, IEnumerable<Reference> references,
+            IndentingLineWriter writer);
+
         static Func<string, bool> Compiler(IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
+            Generator generator,
             bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
             var writer = IndentingLineWriter.Create(Console.Out);
@@ -251,18 +274,22 @@ namespace LinqPadless
                                                                          Path.GetDirectoryName(queryFilePath),
                                                                          packagesPath));
 
-                    var info = Compile(queryFilePath, repo, packagesFullPath, extraPackages, extraImports, verbose, writer,
-                        (kind, src, imps, refs) => new
-                        {
-                            Kind       = kind,
-                            Source     = src,
-                            Imports    = imps,
-                            References = refs,
-                        });
+                    writer.WriteLine($"{queryFilePath}");
 
-                    GenerateScripts(queryFilePath, packagesFullPath,
-                                    info.Kind, info.Source, info.Imports,
-                                    info.References);
+                    var info = Compile(queryFilePath, repo, packagesFullPath,
+                                       extraPackages, extraImports,
+                                       verbose, writer.Indent(),
+                                       (kind, src, imps, refs) => new
+                                       {
+                                           Kind       = kind,
+                                           Source     = src,
+                                           Imports    = imps,
+                                           References = refs,
+                                       });
+
+                    generator(queryFilePath, packagesFullPath,
+                              info.Kind, info.Source, info.Imports,
+                              info.References, writer.Indent());
 
                     return true;
                 }
@@ -284,10 +311,6 @@ namespace LinqPadless
             bool verbose, IndentingLineWriter writer,
             Func<QueryLanguage, string, IEnumerable<string>, IEnumerable<Reference>, T> selector)
         {
-            var w1 = writer.Indent();
-
-            writer.WriteLine($"{queryFilePath}");
-
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
 
@@ -298,7 +321,7 @@ namespace LinqPadless
             var query = XElement.Parse(xml);
 
             if (verbose)
-                w1.Write(query);
+                writer.Write(query);
 
             QueryLanguage queryKind;
             if (!Enum.TryParse((string) query.Attribute("Kind"), true, out queryKind)
@@ -336,20 +359,20 @@ namespace LinqPadless
 
             if (verbose && nrs.Any())
             {
-                w1.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                w1.Indent().WriteLines(from nr in nrs select nr.Title);
+                writer.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                writer.Indent().WriteLines(from nr in nrs select nr.Title);
             }
 
-            w1.WriteLine($"Packages directory: {packagesPath}");
+            writer.WriteLine($"Packages directory: {packagesPath}");
             var pm = new PackageManager(repo, packagesPath);
 
             pm.PackageInstalling += (_, ea) =>
-                w1.WriteLine($"Installing {ea.Package}...");
+                writer.WriteLine($"Installing {ea.Package}...");
             pm.PackageInstalled += (_, ea) =>
-                w1.Indent().WriteLine($"Installed at {ea.InstallPath}");
+                writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
 
             var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            w1.WriteLine($"Packages target: {targetFrameworkName}");
+            writer.WriteLine($"Packages target: {targetFrameworkName}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -373,8 +396,8 @@ namespace LinqPadless
                     pm.InstallPackage(pkg.Id, pkg.Version);
                 }
 
-                w1.WriteLine("Resolving references...");
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, w1.Indent(),
+                writer.WriteLine("Resolving references...");
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, writer.Indent(),
                                      (r, p) => new
                                      {
                                          Package      = p,
@@ -396,8 +419,8 @@ namespace LinqPadless
 
             if (references.Any())
             {
-                w1.WriteLine($"Resolved references ({references.Count:N0}):");
-                w1.Indent().WriteLines(from r in references select r.AssemblyPath);
+                writer.WriteLine($"Resolved references ({references.Count:N0}):");
+                writer.Indent().WriteLines(from r in references select r.AssemblyPath);
             }
 
             return
@@ -445,10 +468,10 @@ namespace LinqPadless
                 yield return r;
         }
 
-        static void GenerateScripts(string queryFilePath, string packagesPath,
-            QueryLanguage queryKind,
-            string source, IEnumerable<string> imports,
-            IEnumerable<Reference> references)
+        static void GenerateCsScripts(string queryFilePath,
+            string packagesPath, QueryLanguage queryKind, string source,
+            IEnumerable<string> imports, IEnumerable<Reference> references,
+            IndentingLineWriter writer)
         {
             var body = queryKind == QueryLanguage.Expression
                      ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
@@ -476,8 +499,13 @@ namespace LinqPadless
 
             // TODO User-supplied csi.cmd
 
-            var cmd = LoadTextResource("csi.cmd");
+            GenerateBatch(LoadTextResource("csi.cmd"), queryFilePath, packagesPath, rs);
+        }
 
+        static void GenerateBatch(string cmdTemplate,
+                                  string queryFilePath, string packagesPath,
+                                  IEnumerable<Reference> references)
+        {
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
 
@@ -485,20 +513,159 @@ namespace LinqPadless
                                           packagesPath + Path.DirectorySeparatorChar);
 
             var installs =
-                from r in rs
+                from r in references
                 where r.SourcePackage != null
                 select $"if not exist \"{r.Path}\" nuget install{(!r.SourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} {r.SourcePackage.Id} -Version {r.SourcePackage.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
 
-            cmd = Regex.Replace(cmd, @"^ *(::|rem) *__PACKAGES__",
+            cmdTemplate = Regex.Replace(cmdTemplate, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
                                 RegexOptions.CultureInvariant
                                 | RegexOptions.IgnoreCase
                                 | RegexOptions.Multiline);
 
-            cmd = cmd.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
+            cmdTemplate = cmdTemplate.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
 
-            File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmd);
+            File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmdTemplate);
         }
+
+        static void GenerateExecutable(string queryFilePath,
+            string packagesPath, QueryLanguage queryKind, string source,
+            IEnumerable<string> imports, IEnumerable<Reference> references,
+            IndentingLineWriter writer)
+        {
+            // TODO error handling in generated code
+
+            var body =
+                queryKind == QueryLanguage.Expression
+                ? Seq.Return(
+                        "static class UserQuery {",
+                        "    static void Main() {",
+                        "        System.Console.WriteLine(", source, ");",
+                        "    }",
+                        "}")
+                : queryKind == QueryLanguage.Program
+                ? Seq.Return(
+                        "class UserQuery {",
+                        "    static int Main(string[] args) {",
+                        "        new UserQuery().Main(); return 0;",
+                        "    }",
+                            source,
+                        "}")
+                : Seq.Return(
+                        "class UserQuery {",
+                        "    static int Main(string[] args) {",
+                        "        new UserQuery().Main(); return 0;",
+                        "    }",
+                        "    void Main() {",
+                                source,
+                        "    }",
+                        "}");
+
+            var rs = references.ToArray();
+
+            var csFilePath = Path.ChangeExtension(queryFilePath, ".cs");
+            File.WriteAllLines(csFilePath,
+                from lines in new[]
+                {
+                    from ns in imports.GroupBy(e => e, StringComparer.Ordinal)
+                    select $"using {ns.First()};",
+
+                    body,
+
+                    Seq.Return(string.Empty),
+                }
+                from line in lines
+                select line);
+
+            var quoteOpt = QuoteOpt(' ');
+            var args = Seq.Return(csFilePath).Concat(rs.Select(r => "/r:" + r.Path))
+                          .Select(quoteOpt);
+            var argsLine = string.Join(" ", args);
+
+            var workingDirPath = Path.GetDirectoryName(queryFilePath);
+            var cscPath =
+                Seq.Return("14.0", "12.0")
+                   .Select(v => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                                             "MSBuild", v, "bin", "csc.exe"))
+                   .FirstOrDefault(File.Exists);
+
+            if (cscPath == null)
+                throw new Exception("Unable to find C# compiler in the expected location(s).");
+
+            writer.WriteLine(quoteOpt(cscPath) + " " + argsLine);
+
+            using (var process = Process.Start(new ProcessStartInfo
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                FileName = cscPath,
+                Arguments = argsLine,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory = string.IsNullOrEmpty(workingDirPath)
+                                 ? Environment.CurrentDirectory
+                                 : Path.GetFullPath(workingDirPath),
+            }))
+            {
+                Debug.Assert(process != null);
+
+                process.OutputDataReceived += OnProcessStdDataReceived(writer.Indent());
+                process.ErrorDataReceived  += OnProcessStdDataReceived(writer.Indent());
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+
+                var exitCode = process.ExitCode;
+                if (exitCode != 0)
+                    throw new Exception($"C# compiler finished with a non-zero exit code of {exitCode}.");
+            }
+
+            var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
+                                                Path.GetDirectoryName(queryFilePath))
+                             + Path.DirectorySeparatorChar;
+
+            var privatePaths =
+                from r in rs
+                select Path.Combine(queryDirPath, r.Path) into r
+                where File.Exists(r)
+                select Path.GetDirectoryName(r) into d
+                where !string.IsNullOrEmpty(d)
+                select MakeRelativePath(queryDirPath, d + Path.DirectorySeparatorChar) into d
+                where !Path.IsPathRooted(d)
+                group 1 by d into g
+                select g.Key.TrimEnd(PathSeparators);
+
+            privatePaths = privatePaths.ToArray();
+
+            if (privatePaths.Any())
+            {
+                var asmv1 = XNamespace.Get("urn:schemas-microsoft-com:asm.v1");
+                var config =
+                    new XElement("configuration",
+                        new XElement("runtime",
+                            new XElement(asmv1 + "assemblyBinding",
+                                new XElement(asmv1 + "probing",
+                                    new XAttribute("privatePath", string.Join(";", privatePaths))))));
+
+                File.WriteAllText(Path.ChangeExtension(queryFilePath, ".exe.config"), config.ToString());
+            }
+
+            // TODO User-supplied csi.cmd
+
+            GenerateBatch(LoadTextResource("exe.cmd"), queryFilePath, packagesPath, rs);
+        }
+
+        static DataReceivedEventHandler OnProcessStdDataReceived(IndentingLineWriter writer) =>
+            (_, e) =>
+            {
+                if (e.Data == null)
+                    return;
+                writer?.WriteLines(e.Data);
+            };
+
+        static Func<string, string> QuoteOpt(params char[] chars) =>
+            s => s?.IndexOfAny(chars) >= 0 ? "\"" + s + "\"" : s;
 
         static PackageReference ParseExtraPackageReference(string input)
         {

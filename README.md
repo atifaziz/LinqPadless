@@ -13,6 +13,9 @@ creates a Windows batch file alongside that does the following:
 - Sets `LINQPADLESS` environment variable to the compiler version.
 - Invokes the C# script using `csi.exe` and passes any remaining arguments.
 
+**Experimental**: LINQPadless can also generate executables using the C#
+compiler when the `--target exe` option is supplied.
+
 
 ## Usage Examples
 
@@ -50,6 +53,10 @@ the `FakeLinqPad` namespace (both in addition to packages and namespaces
 referenced in `Foo.linq`):
 
     lpless --ref FakeLinqPad --imp FakeLinqPad Foo.linq
+
+**Experimental**: Compile an executable:
+
+    lpless --target exe Foo.linq
 
 For more information, see help:
 
@@ -90,6 +97,10 @@ LINQPad-specified methods like `Dump` and those on its `Util` class will
 cause compilation errors when the compiled C# script is executed. This issue
 can be addressed by using faking/emulation library of sorts, like
 [FakeLinqPad][fakelp].
+
+All limitations also apply when generating executables, but in addition,
+executables can only reference assemblies (whether from NuGet packages or
+otherwise) placed in the same directory or sub-directories below.
 
 
 [linqpad]: http://www.linqpad.net/

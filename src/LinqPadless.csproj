@@ -82,6 +82,7 @@
     <None Include="AL.licenseheader" />
     <None Include="App.config" />
     <EmbeddedResource Include="csi.cmd" />
+    <EmbeddedResource Include="exe.cmd" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
