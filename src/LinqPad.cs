@@ -26,20 +26,40 @@ namespace LinqPadless
 
         public static int GetEndOfMetaLineNumber(string path)
         {
-            using (var reader = XmlReader.Create(path))
+            using (var reader = XmlReader.Create(path, new XmlReaderSettings
             {
+                IgnoreProcessingInstructions = true,
+                IgnoreWhitespace             = true,
+                IgnoreComments               = true,
+            }))
+            {
+                // A LINQPad Query file has two parts: (1) a header in XML
+                // followed by (2) the query code content.
+
                 if (XmlNodeType.Element != reader.MoveToContent())
                     throw InvalidLinqPadFileError(path);
 
-                var depth = reader.Depth;
-                reader.ReadStartElement("Query", String.Empty);
-                while (reader.Depth > depth)
-                    reader.Read();
-
-                if ("Query" != reader.LocalName || reader.NamespaceURI.Length > 0)
+                if (!reader.IsStartElement("Query", string.Empty))
                     throw InvalidLinqPadFileError(path);
 
-                return ((IXmlLineInfo)reader).LineNumber + 1;
+                try
+                {
+                    // Skipping will throw at the point the XML header
+                    // ends and code starts because the code part will be
+                    // seen as invalid XML.
+
+                    reader.Skip();
+
+                    // On the other hand, if Skip succeeds then it means
+                    // there is not code and reader is probably sitting on
+                    // EOF, so just return the line number.
+
+                    return ((IXmlLineInfo)reader).LineNumber;
+                }
+                catch (XmlException e)
+                {
+                    return e.LineNumber - 1;
+                }
             }
         }
 

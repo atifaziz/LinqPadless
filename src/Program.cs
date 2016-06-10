@@ -376,7 +376,7 @@ namespace LinqPadless
                 selector(
                     queryKind,
                     // ReSharper disable once PossibleMultipleEnumeration
-                    string.Join(Environment.NewLine, lines.Skip(eomLineNumber - 1)),
+                    string.Join(Environment.NewLine, lines.Skip(eomLineNumber)),
                     LinqPad.DefaultNamespaces
                             .Concat(from ns in query.Elements("Namespace")
                                     select (string)ns)
