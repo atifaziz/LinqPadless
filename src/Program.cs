@@ -75,9 +75,10 @@ namespace LinqPadless
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
             // TODO Allow package source to be specified via args
-            // TODO Use default NuGet sources configuration
 
-            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
+            var psp = CreatePackageSourceProvider();
+            var repo = psp.CreateAggregateRepository(PackageRepositoryFactory.Default, ignoreFailingRepositories: true);
+
             var queries = GetQueries(tail, recurse);
 
             // TODO Allow packages directory to be specified via args
@@ -156,6 +157,33 @@ namespace LinqPadless
                 foreach (var query in queries)
                     compiler(query);
             }
+        }
+
+        static PackageSourceProvider CreatePackageSourceProvider()
+        {
+            var settings =
+                Settings.LoadDefaultSettings(new PhysicalFileSystem(Directory.GetCurrentDirectory()),
+                    configFileName: null,
+                    machineWideSettings: new MachineWideSettings(Lazy.Create(() => Settings.LoadMachineWideSettings(new PhysicalFileSystem(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData))))));
+
+            const string officialPackageSourceName = "NuGet official package source";
+            var officialPackageSource = new PackageSource(NuGetConstants.DefaultFeedUrl, officialPackageSourceName);
+
+            return new PackageSourceProvider(
+                settings,
+                new[] { new PackageSource(NuGetConstants.DefaultFeedUrl) },
+                migratePackageSources: new Dictionary<PackageSource, PackageSource>
+                {
+                    { new PackageSource(NuGetConstants.V1FeedUrl      , officialPackageSourceName), officialPackageSource },
+                    { new PackageSource(NuGetConstants.V2LegacyFeedUrl, officialPackageSourceName), officialPackageSource }
+                });
+        }
+
+        static class NuGetConstants
+        {
+            public static readonly string DefaultFeedUrl = "https://www.nuget.org/api/v2/";
+            public static readonly string V1FeedUrl = "https://go.microsoft.com/fwlink/?LinkID=206669";
+            public static readonly string V2LegacyFeedUrl = "https://go.microsoft.com/fwlink/?LinkID=230477";
         }
 
         static readonly char[] Wildchars = { '*', '?' };
@@ -619,5 +647,17 @@ namespace LinqPadless
         }
         // ReSharper restore InconsistentNaming
         // ReSharper restore UnusedMember.Local
+
+        sealed class MachineWideSettings : IMachineWideSettings
+        {
+            readonly Lazy<IEnumerable<Settings>> _settings;
+
+            public MachineWideSettings(Lazy<IEnumerable<Settings>> settings)
+            {
+                _settings = settings;
+            }
+
+            public IEnumerable<Settings> Settings => _settings.Value;
+        }
     }
 }
