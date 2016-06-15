@@ -93,3 +93,4 @@ may be addressed in the future via some sort of a bridge library.
 [linqpad]: http://www.linqpad.net/
 [csx]: https://msdn.microsoft.com/en-us/magazine/mt614271.aspx
 [lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
+[lprun]: https://www.linqpad.net/lprun.aspx
