@@ -23,9 +23,15 @@ namespace LinqPadless
     {
         public static Func<T> Return<T>(T value) => () => value;
 
-        public static Func<T> Throw<T>(Exception e) => () => { throw e; };
+        public static Func<T> Throw<T>(Exception e) => () => Error.Throw<T>(e);
 
         public static Func<T> Throw<T>(ExceptionDispatchInfo edi) =>
             () => { edi.Throw(); /* never */ return default(T); };
+    }
+
+    static class Error
+    {
+        public static T Throw<T>(Exception e) { throw e; }
+        public static T Throw<T>(string message) => Throw<T>(new Exception(message));
     }
 }

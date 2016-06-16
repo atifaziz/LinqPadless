@@ -30,6 +30,7 @@ namespace LinqPadless
     using System.Xml.Linq;
     using Mannex;
     using Mannex.IO;
+    using MoreLinq;
     using NDesk.Options;
     using NuGet;
 
@@ -39,6 +40,9 @@ namespace LinqPadless
     {
         static partial void Wain(IEnumerable<string> args)
         {
+            const string csx = "csx";
+            const string exe = "exe";
+
             var verbose = false;
             var help = false;
             var recurse = false;
@@ -47,10 +51,8 @@ namespace LinqPadless
             var incremental = false;
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
-            var generator = new Generator(GenerateCsScripts);
-
-            const string csx = "csx";
-            const string exe = "exe";
+            var cscPath = (string) null;
+            var target = csx;
 
             var options = new OptionSet
             {
@@ -63,12 +65,8 @@ namespace LinqPadless
                 { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
-                { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v =>
-                    generator = csx.Equals(v, StringComparison.OrdinalIgnoreCase)
-                              ? GenerateCsScripts
-                              : exe.Equals(v, StringComparison.OrdinalIgnoreCase)
-                              ? GenerateExecutable
-                              : default(Generator) },
+                { "csc="          , "C# compiler path", v => cscPath = v },
+                { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v => target = v },
             };
 
             var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
@@ -82,11 +80,13 @@ namespace LinqPadless
                 return;
             }
 
-            if (generator == null)
-            {
-                throw new Exception("Target is invalid or missing. Supported targets are: "
-                                    + string.Join(", ", csx, exe));
-            }
+            var generator =
+                csx.Equals(target, StringComparison.OrdinalIgnoreCase)
+                ? GenerateCsScripts
+                : exe.Equals(target, StringComparison.OrdinalIgnoreCase)
+                ? GenerateExecutable(cscPath)
+                : Error.Throw<Generator>("Target is invalid or missing. Supported targets are: "
+                                         + string.Join(", ", csx, exe));
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
@@ -528,7 +528,11 @@ namespace LinqPadless
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmdTemplate);
         }
 
-        static void GenerateExecutable(string queryFilePath,
+        static Generator GenerateExecutable(string cscPath) =>
+            (queryFilePath, packagesPath, queryKind, source, imports, references, writer) =>
+                GenerateExecutable(cscPath, queryFilePath, packagesPath, queryKind, source, imports, references, writer);
+
+        static void GenerateExecutable(string cscPath, string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<Reference> references,
             IndentingLineWriter writer)
@@ -583,14 +587,23 @@ namespace LinqPadless
             var argsLine = string.Join(" ", args);
 
             var workingDirPath = Path.GetDirectoryName(queryFilePath);
-            var cscPath =
-                Seq.Return("14.0", "12.0")
-                   .Select(v => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                                             "MSBuild", v, "bin", "csc.exe"))
-                   .FirstOrDefault(File.Exists);
 
-            if (cscPath == null)
-                throw new Exception("Unable to find C# compiler in the expected location(s).");
+            if (cscPath != null)
+            {
+                if (!File.Exists(cscPath))
+                    throw new Exception("Invalid path to C# compiler binary: " + cscPath);
+            }
+            else
+            {
+                var x86ProgramFilesPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                cscPath =
+                    Seq.Return("14.0", "12.0")
+                       .Select(v => Path.Combine(x86ProgramFilesPath, "MSBuild", v, "bin", "csc.exe"))
+                       .FirstOrDefault(File.Exists);
+
+                if (cscPath == null)
+                    throw new Exception("Unable to find C# compiler in the expected location(s).");
+            }
 
             writer.WriteLine(quoteOpt(cscPath) + " " + argsLine);
 
