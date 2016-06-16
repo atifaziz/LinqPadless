@@ -45,10 +45,11 @@ Watch particular files in a directory and re-compile outdated ones on changes:
 
     lpless -w C:\LINQPad\Queries\Foo*.linq
 
-Compile `Foo.linq` using the `Bar` package and importing the `Baz` namespace
-(both in addition to packages and namespaces referenced in `Foo.linq`):
+Compile `Foo.linq` using the [`FakeLinqPad` package][fakelp.pkg] and importing
+the `FakeLinqPad` namespace (both in addition to packages and namespaces
+referenced in `Foo.linq`):
 
-    lpless --ref Bar --imp Baz Foo.linq
+    lpless --ref FakeLinqPad --imp FakeLinqPad Foo.linq
 
 For more information, see help:
 
@@ -87,10 +88,13 @@ Extension methods are not supported in C# scripts.
 
 LINQPad-specified methods like `Dump` and those on its `Util` class will
 cause compilation errors when the compiled C# script is executed. This issue
-may be addressed in the future via some sort of a bridge library.
+can be addressed by using faking/emulation library of sorts, like
+[FakeLinqPad][fakelp].
 
 
 [linqpad]: http://www.linqpad.net/
 [csx]: https://msdn.microsoft.com/en-us/magazine/mt614271.aspx
 [lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
 [lprun]: https://www.linqpad.net/lprun.aspx
+[fakelp.pkg]: https://www.nuget.org/packages/FakeLinqPad
+[fakelp]: https://github.com/linqpadless/FakeLinqPad
