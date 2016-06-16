@@ -183,23 +183,23 @@ namespace LinqPadless
                     machineWideSettings: new MachineWideSettings(Lazy.Create(() => Settings.LoadMachineWideSettings(new PhysicalFileSystem(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData))))));
 
             const string officialPackageSourceName = "NuGet official package source";
-            var officialPackageSource = new PackageSource(NuGetConstants.DefaultFeedUrl, officialPackageSourceName);
+            var officialPackageSource = new PackageSource(NuGetFeedUrl.Default, officialPackageSourceName);
 
             return new PackageSourceProvider(
                 settings,
-                new[] { new PackageSource(NuGetConstants.DefaultFeedUrl) },
+                new[] { new PackageSource(NuGetFeedUrl.Default) },
                 migratePackageSources: new Dictionary<PackageSource, PackageSource>
                 {
-                    { new PackageSource(NuGetConstants.V1FeedUrl      , officialPackageSourceName), officialPackageSource },
-                    { new PackageSource(NuGetConstants.V2LegacyFeedUrl, officialPackageSourceName), officialPackageSource }
+                    { new PackageSource(NuGetFeedUrl.V1, officialPackageSourceName), officialPackageSource },
+                    { new PackageSource(NuGetFeedUrl.V2, officialPackageSourceName), officialPackageSource }
                 });
         }
 
-        static class NuGetConstants
+        static class NuGetFeedUrl
         {
-            public static readonly string DefaultFeedUrl = "https://www.nuget.org/api/v2/";
-            public static readonly string V1FeedUrl = "https://go.microsoft.com/fwlink/?LinkID=206669";
-            public static readonly string V2LegacyFeedUrl = "https://go.microsoft.com/fwlink/?LinkID=230477";
+            public const string Default = "https://www.nuget.org/api/v2/";
+            public const string V1      = "https://go.microsoft.com/fwlink/?LinkID=206669";
+            public const string V2      = "https://go.microsoft.com/fwlink/?LinkID=230477";
         }
 
         static readonly char[] Wildchars = { '*', '?' };
