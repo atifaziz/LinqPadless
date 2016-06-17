@@ -52,6 +52,7 @@ namespace LinqPadless
             var extraImportList = new List<string>();
             var cscPath = (string) null;
             var target = csx;
+            var targetFramework = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
 
             var options = new OptionSet
             {
@@ -66,6 +67,7 @@ namespace LinqPadless
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
                 { "csc="          , "C# compiler path", v => cscPath = v },
                 { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v => target = v },
+                { "fx="           , $"target framework; default: {targetFramework}", v => targetFramework = new FrameworkName(v) }
             };
 
             var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
@@ -101,7 +103,8 @@ namespace LinqPadless
             const string packagesDirName = "packages";
 
             var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList,
-                                    generator, watching || incremental, force, verbose);
+                                    targetFramework, generator,
+                                    watching || incremental, force, verbose);
 
             if (watching)
             {
@@ -249,6 +252,7 @@ namespace LinqPadless
         static Func<string, bool> Compiler(IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
+            FrameworkName targetFramework,
             Generator generator,
             bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
@@ -277,6 +281,7 @@ namespace LinqPadless
 
                     var info = Compile(queryFilePath, repo, packagesFullPath,
                                        extraPackages, extraImports,
+                                       targetFramework,
                                        verbose, writer.Indent(),
                                        (kind, src, imps, refs) => new
                                        {
@@ -307,6 +312,7 @@ namespace LinqPadless
         static T Compile<T>(string queryFilePath, IPackageRepository repo, string packagesPath,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
+            FrameworkName targetFramework,
             bool verbose, IndentingLineWriter writer,
             Func<QueryLanguage, string, IEnumerable<string>, IEnumerable<Reference>, T> selector)
         {
@@ -370,8 +376,7 @@ namespace LinqPadless
             pm.PackageInstalled += (_, ea) =>
                 writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
 
-            var targetFrameworkName = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
-            writer.WriteLine($"Packages target: {targetFrameworkName}");
+            writer.WriteLine($"Packages target: {targetFramework}");
 
             var references = Enumerable.Repeat(new { Package = default(IPackage),
                                                       AssemblyPath = default(string) }, 0)
@@ -396,7 +401,7 @@ namespace LinqPadless
                 }
 
                 writer.WriteLine("Resolving references...");
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFrameworkName, writer.Indent(),
+                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFramework, writer.Indent(),
                                      (r, p) => new
                                      {
                                          Package      = p,
