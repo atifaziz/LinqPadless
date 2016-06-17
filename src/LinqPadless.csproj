@@ -67,8 +67,6 @@
     <Compile Include="Lazy.cs" />
     <Compile Include="LinqPad.cs" />
     <Compile Include="FileMonitor.cs" />
-    <Compile Include="MoreLinq\MoreEnumerable.Concat.cs" />
-    <Compile Include="MoreLinq\MoreEnumerable.Prepend.cs" />
     <Compile Include="Observer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="AssemblyInfo.cs" />

@@ -30,7 +30,6 @@ namespace LinqPadless
     using System.Xml.Linq;
     using Mannex;
     using Mannex.IO;
-    using MoreLinq;
     using NDesk.Options;
     using NuGet;
 
