@@ -82,6 +82,7 @@
       <DependentUpon>Program.cs</DependentUpon>
     </Compile>
     <Compile Include="Mannex.cs" />
+    <Compile Include="Seq.Partition.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="help.txt" />

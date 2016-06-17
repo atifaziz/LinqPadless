@@ -36,7 +36,7 @@ namespace LinqPadless
         }
     }
 
-    static class Seq
+    static partial class Seq
     {
         public static IEnumerable<T> Return<T>(params T[] items) => items;
 
@@ -125,6 +125,26 @@ namespace LinqPadless
 
                 if (count > 0)
                     yield return resultSelector(pending);
+            }
+        }
+
+        public static void StartIter<T>(this IEnumerable<T> source, Action<IEnumerator<T>> action)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            using (var e = source.GetEnumerator())
+                if (e.MoveNext())
+                    action(e);
+        }
+
+        public static IEnumerator<T> ResumeFromCurrent<T>(this IEnumerator<T> remainder)
+        {
+            if (remainder == null) throw new ArgumentNullException(nameof(remainder));
+            using (remainder)
+            {
+                yield return remainder.Current;
+                while (remainder.MoveNext())
+                    yield return remainder.Current;
             }
         }
     }

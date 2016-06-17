@@ -61,6 +61,13 @@ namespace LinqPadless
                 WriteLine(line);
         }
 
+        public void WriteLines(IEnumerator<string> line)
+        {
+            using (line)
+                while (line.MoveNext())
+                    WriteLine(line.Current);
+        }
+
         public void WriteLine(string value) =>
             _writer.WriteLine(_margin + value);
 

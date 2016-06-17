@@ -383,9 +383,9 @@ namespace LinqPadless
 
             writer.WriteLine($"Packages target: {targetFramework}");
 
-            var references = Enumerable.Repeat(new { Package = default(IPackage),
-                                                      AssemblyPath = default(string) }, 0)
-                                        .ToList();
+            var resolutionList = Enumerable.Repeat(new { Package = default(IPackage),
+                                                         AssemblyPath = default(string) }, 0)
+                                          .ToList();
             foreach (var nr in nrs)
             {
                 var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version,
@@ -406,31 +406,49 @@ namespace LinqPadless
                 }
 
                 writer.WriteLine("Resolving references...");
-                references.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFramework, writer.Indent(),
-                                     (r, p) => new
-                                     {
-                                         Package      = p,
-                                         AssemblyPath = Path.Combine(pm.PathResolver.GetInstallPath(p), r.Path)
-                                     }));
+                resolutionList.AddRange(GetReferencesTree(pm.LocalRepository, pkg, targetFramework, writer.Indent(), (r, p) => new
+                {
+                    Package      = p,
+                    AssemblyPath = r != null
+                                 ? Path.Combine(pm.PathResolver.GetInstallPath(p), r.Path)
+                                 : null
+                }));
             }
 
             var packagesPathWithTrailer = packagesPath + Path.DirectorySeparatorChar;
 
-            references =
-                references.GroupBy(e => e.Package, (k, g) => g.First())
-                           .Select(r => new
-                           {
-                               r.Package,
-                               AssemblyPath = MakeRelativePath(queryFilePath, packagesPathWithTrailer)
-                                            + MakeRelativePath(packagesPathWithTrailer, r.AssemblyPath),
-                           })
-                           .ToList();
+            var resolution =
+                resolutionList
+                    .GroupBy(r => r.Package)
+                    .Select(g => g.First())
+                    .Select(r => new
+                    {
+                        r.Package,
+                        AssemblyPath = r.AssemblyPath != null
+                            ? MakeRelativePath(queryFilePath, packagesPathWithTrailer)
+                            + MakeRelativePath(packagesPathWithTrailer, r.AssemblyPath)
+                            : null,
+                    })
+                    .Partition(r => r.AssemblyPath == null, (ok, nok) => new
+                    {
+                        ResolvedReferences    = ok,
+                        ReferencelessPackages = from r in nok
+                                                select r.Package.GetFullName(),
+                    });
 
-            if (references.Any())
+            resolution.ReferencelessPackages.StartIter(e =>
             {
-                writer.WriteLine($"Resolved references ({references.Count:N0}):");
-                writer.Indent().WriteLines(from r in references select r.AssemblyPath);
-            }
+                writer.WriteLine($"Warning! Packages with no references for {targetFramework}:");
+                writer.Indent().WriteLines(e.ResumeFromCurrent());
+            });
+
+            var references = resolution.ResolvedReferences.ToArray();
+
+            references.Select(r => r.AssemblyPath).StartIter(e =>
+            {
+                writer.WriteLine($"Resolved references ({references.Length:N0}):");
+                writer.Indent().WriteLines(e.ResumeFromCurrent());
+            });
 
             return
                 selector(
@@ -463,6 +481,10 @@ namespace LinqPadless
             {
                 foreach (var r in refs)
                     yield return selector(r, package);
+            }
+            else
+            {
+                yield return selector(null, package);
             }
 
             var subrefs =
