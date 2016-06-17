@@ -32,6 +32,7 @@ namespace LinqPadless
     using Mannex.IO;
     using NDesk.Options;
     using NuGet;
+    using NuGet.Frameworks;
 
     #endregion
 
@@ -53,6 +54,7 @@ namespace LinqPadless
             var cscPath = (string) null;
             var target = csx;
             var targetFramework = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
+            var targetNuGetFramework = default(NuGetFramework);
 
             var options = new OptionSet
             {
@@ -67,7 +69,7 @@ namespace LinqPadless
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
                 { "csc="          , "C# compiler path", v => cscPath = v },
                 { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v => target = v },
-                { "fx="           , $"target framework; default: {targetFramework}", v => targetFramework = new FrameworkName(v) }
+                { "fx="           , $"target framework; default: {targetFramework}", v => targetNuGetFramework = NuGetFramework.Parse(v) },
             };
 
             var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
@@ -88,6 +90,9 @@ namespace LinqPadless
                 ? GenerateExecutable(cscPath)
                 : Error.Throw<Generator>("Target is invalid or missing. Supported targets are: "
                                          + string.Join(", ", csx, exe));
+
+            if (targetNuGetFramework != null)
+                targetFramework = new FrameworkName(targetNuGetFramework.DotNetFrameworkName);
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
