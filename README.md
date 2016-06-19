@@ -1,20 +1,19 @@
 # LINQPadless
 
 LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
-[C# scripts (csx)][csx] so that they can be run outside and independent of
-LINQPad.
+[C# scripts (csx)][csx] or executable binaries so that they can be run
+outside and independent of LINQPad.
 
-The compiler emits a C# script file in the same directory and with the same
-file name as the original except it bears the `.csx` extension. It also
-creates a Windows batch file alongside that does the following:
+The compiler emits a C# script file or an executable in the same directory
+and with the same file name as the source query except it bears either the
+`.csx` or the `.exe` extension. It also creates a Windows batch file
+alongside that does the following:
 
 - Checks that referenced NuGet packages are installed.
 - Installs missing NuGet packages.
 - Sets `LINQPADLESS` environment variable to the compiler version.
-- Invokes the C# script using `csi.exe` and passes any remaining arguments.
-
-**Experimental**: LINQPadless can also generate executables using the C#
-compiler when the `--target exe` option is supplied.
+- Depending on the target output, it either invokes the C# script using
+  `csi.exe`  or the executable and passes any remaining arguments.
 
 
 ## Usage Examples
@@ -54,7 +53,7 @@ referenced in `Foo.linq`):
 
     lpless --ref FakeLinqPad --imp FakeLinqPad Foo.linq
 
-**Experimental**: Compile an executable:
+Compile an executable:
 
     lpless --target exe Foo.linq
 
@@ -74,7 +73,7 @@ even debug through your code and all the while maintaining a single source
 file. What's there not to love about it? However, when you want to ship that
 code to someone or automate it, you are tied to LINQPad when that dependency
 is not necessary. That's where `lpless` comes in. It turns your LINQ Query
-file into a C# script that you can then run without LINQPad.
+file into a C# script or an executabe that you can then run without LINQPad.
 
 > What's different from `lprun`?
 
@@ -82,7 +81,7 @@ file into a C# script that you can then run without LINQPad.
 parity with LINQPad features at _run-time_. On the other hand, when all you
 are doing is using [LINQPad as a lightweight IDE][lpide] to script some task
 that doesn't need its bells and whistles then turning those queries into C#
-scripts (`.csx`) enables them be shipped and run without LINQPad.
+scripts or executables enables them be shipped and run without LINQPad.
 
 
 ## Limitations
@@ -91,16 +90,16 @@ LINQPad Query files must be either C# Statements, Expression or Program. In
 the case of a C# Program query, a `Main` declared to be asynchronous is not
 awaited and therefore may not execute fully.
 
-Extension methods are not supported in C# scripts.
+Extension methods are not supported at the moment.
 
 LINQPad-specified methods like `Dump` and those on its `Util` class will
 cause compilation errors when the compiled C# script is executed. This issue
 can be addressed by using faking/emulation library of sorts, like
 [FakeLinqPad][fakelp].
 
-All limitations also apply when generating executables, but in addition,
-executables can only reference assemblies (whether from NuGet packages or
-otherwise) placed in the same directory or sub-directories below.
+When generating an executable, referenced assemblies (whether from NuGet
+packages or otherwise) must be placed in the same directory or
+sub-directories below.
 
 
 [linqpad]: http://www.linqpad.net/
