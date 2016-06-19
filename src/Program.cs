@@ -52,7 +52,7 @@ namespace LinqPadless
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
             var cscPath = (string) null;
-            var target = csx;
+            var target = (string) null;
             var targetFramework = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
             var targetNuGetFramework = default(NuGetFramework);
 
@@ -82,6 +82,9 @@ namespace LinqPadless
                 Help(options);
                 return;
             }
+
+            if (target == null)
+                target = !string.IsNullOrEmpty(cscPath) ? exe : csx;
 
             var generator =
                 csx.Equals(target, StringComparison.OrdinalIgnoreCase)
