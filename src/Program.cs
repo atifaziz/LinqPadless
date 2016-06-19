@@ -85,7 +85,7 @@ namespace LinqPadless
 
             var generator =
                 csx.Equals(target, StringComparison.OrdinalIgnoreCase)
-                ? GenerateCsScripts
+                ? GenerateCsx
                 : exe.Equals(target, StringComparison.OrdinalIgnoreCase)
                 ? GenerateExecutable(cscPath)
                 : Error.Throw<Generator>("Target is invalid or missing. Supported targets are: "
@@ -499,7 +499,7 @@ namespace LinqPadless
                 yield return r;
         }
 
-        static void GenerateCsScripts(string queryFilePath,
+        static void GenerateCsx(string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<Reference> references,
             IndentingLineWriter writer)
