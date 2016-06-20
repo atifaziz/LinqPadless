@@ -100,10 +100,9 @@ namespace LinqPadless
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
             // TODO Allow package source to be specified via args
+            // TODO Use default NuGet sources configuration
 
-            var psp = CreatePackageSourceProvider();
-            var repo = psp.CreateAggregateRepository(PackageRepositoryFactory.Default, ignoreFailingRepositories: true);
-
+            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
             var queries = GetQueries(tail, recurse);
 
             // TODO Allow packages directory to be specified via args
@@ -183,33 +182,6 @@ namespace LinqPadless
                 foreach (var query in queries)
                     compiler(query);
             }
-        }
-
-        static PackageSourceProvider CreatePackageSourceProvider()
-        {
-            var settings =
-                Settings.LoadDefaultSettings(new PhysicalFileSystem(Directory.GetCurrentDirectory()),
-                    configFileName: null,
-                    machineWideSettings: new MachineWideSettings(Lazy.Create(() => Settings.LoadMachineWideSettings(new PhysicalFileSystem(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData))))));
-
-            const string officialPackageSourceName = "NuGet official package source";
-            var officialPackageSource = new PackageSource(NuGetFeedUrl.Default, officialPackageSourceName);
-
-            return new PackageSourceProvider(
-                settings,
-                new[] { new PackageSource(NuGetFeedUrl.Default) },
-                migratePackageSources: new Dictionary<PackageSource, PackageSource>
-                {
-                    { new PackageSource(NuGetFeedUrl.V1, officialPackageSourceName), officialPackageSource },
-                    { new PackageSource(NuGetFeedUrl.V2, officialPackageSourceName), officialPackageSource }
-                });
-        }
-
-        static class NuGetFeedUrl
-        {
-            public const string Default = "https://www.nuget.org/api/v2/";
-            public const string V1      = "https://go.microsoft.com/fwlink/?LinkID=206669";
-            public const string V2      = "https://go.microsoft.com/fwlink/?LinkID=230477";
         }
 
         static readonly char[] Wildchars = { '*', '?' };
@@ -861,17 +833,5 @@ namespace LinqPadless
         }
         // ReSharper restore InconsistentNaming
         // ReSharper restore UnusedMember.Local
-
-        sealed class MachineWideSettings : IMachineWideSettings
-        {
-            readonly Lazy<IEnumerable<Settings>> _settings;
-
-            public MachineWideSettings(Lazy<IEnumerable<Settings>> settings)
-            {
-                _settings = settings;
-            }
-
-            public IEnumerable<Settings> Settings => _settings.Value;
-        }
     }
 }
