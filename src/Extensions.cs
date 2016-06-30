@@ -147,5 +147,17 @@ namespace LinqPadless
                     yield return remainder.Current;
             }
         }
+
+        public static Dictionary<TKey, TValue> ToDictionary<TKey, TValue>(
+            this IEnumerable<KeyValuePair<TKey, TValue>> source) =>
+            ToDictionary(source, null);
+
+        public static Dictionary<TKey, TValue> ToDictionary<TKey, TValue>(
+            this IEnumerable<KeyValuePair<TKey, TValue>> source,
+            IEqualityComparer<TKey> comparer)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            return source.ToDictionary(e => e.Key, e => e.Value, comparer);
+        }
     }
 }

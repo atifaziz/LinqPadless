@@ -22,8 +22,6 @@ namespace LinqPadless
 
     static class LinqPad
     {
-        public const string RuntimeDirToken = @"<RuntimeDirectory>\";
-
         public static int GetEndOfMetaLineNumber(string path)
         {
             using (var reader = XmlReader.Create(path, new XmlReaderSettings

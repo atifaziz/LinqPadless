@@ -23,12 +23,14 @@ namespace LinqPadless
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
+    using System.Runtime.InteropServices;
     using System.Runtime.Versioning;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Xml.Linq;
     using Mannex;
+    using Mannex.Collections.Generic;
     using Mannex.IO;
     using NDesk.Options;
     using NuGet;
@@ -436,13 +438,40 @@ namespace LinqPadless
                             .Concat(extraImports),
                     LinqPad.DefaultReferences.Select(r => new Reference(r))
                             .Concat(from r in query.Elements("Reference")
-                                    select (string)r into r
-                                    select r.StartsWith(LinqPad.RuntimeDirToken, StringComparison.OrdinalIgnoreCase)
-                                        ? r.Substring(LinqPad.RuntimeDirToken.Length)
-                                        : r into r
+                                    select ((string)r).Trim() into r
+                                    where r.Length > 0
+                                    select ResolveReferencePath(r)
+                                    into r
                                     select new Reference(r))
                             .Concat(from r in references
                                     select new Reference(r.AssemblyPath, r.Package)));
+        }
+
+        static string ResolveReferencePath(string path)
+        {
+            if (path.Length == 0 || path[0] != '<')
+                return path;
+            var endIndex = path.IndexOf('>');
+            if (endIndex < 0)
+                return path;
+            var token = path.Substring(1, endIndex - 1);
+            string basePath;
+            if (!DirPathByToken.TryGetValue(token, out basePath))
+                throw new Exception($"Unknown directory token \"{token}\" in reference \"{path}\".");
+            return Path.Combine(basePath, path.Substring(endIndex + 1).TrimStart(PathSeparators));
+        }
+
+        static Dictionary<string, string> _dirPathByToken;
+
+        public static Dictionary<string, string> DirPathByToken =>
+            _dirPathByToken ?? (_dirPathByToken = ResolvedDirTokens().ToDictionary(StringComparer.OrdinalIgnoreCase));
+
+        static IEnumerable<KeyValuePair<string, string>> ResolvedDirTokens()
+        {
+            yield return "RuntimeDirectory".AsKeyTo(RuntimeEnvironment.GetRuntimeDirectory());
+            yield return "ProgramFiles"    .AsKeyTo(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+            yield return "ProgramFilesX86" .AsKeyTo(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+            yield return "MyDocuments"     .AsKeyTo(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
         static IEnumerable<T> GetReferencesTree<T>(IPackageRepository repo,
