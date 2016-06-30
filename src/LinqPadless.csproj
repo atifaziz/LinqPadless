@@ -69,6 +69,7 @@
       <DependentUpon>AssemblyInfo.g.tt</DependentUpon>
     </Compile>
     <Compile Include="DelegatingDisposable.cs" />
+    <Compile Include="Seq.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="Fun.cs" />
     <Compile Include="IndentingLineWriter.cs" />
@@ -82,7 +83,9 @@
       <DependentUpon>Program.cs</DependentUpon>
     </Compile>
     <Compile Include="Mannex.cs" />
-    <Compile Include="Seq.Partition.cs" />
+    <Compile Include="Seq.Partition.cs">
+      <DependentUpon>Seq.cs</DependentUpon>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="help.txt" />
