@@ -438,9 +438,16 @@ namespace LinqPadless
                             .Concat(extraImports),
                     LinqPad.DefaultReferences.Select(r => new Reference(r))
                             .Concat(from r in query.Elements("Reference")
-                                    select ((string)r).Trim() into r
-                                    where r.Length > 0
-                                    select ResolveReferencePath(r)
+                                    select new
+                                    {
+                                        Relative = (string) r.Attribute("Relative"),
+                                        Path     = ((string) r).Trim(),
+                                    }
+                                    into r
+                                    where r.Path.Length > 0
+                                    select r.Relative?.Length > 0
+                                         ? r.Relative // prefer
+                                         : ResolveReferencePath(r.Path)
                                     into r
                                     select new Reference(r))
                             .Concat(from r in references
@@ -680,7 +687,10 @@ namespace LinqPadless
                 select Path.GetDirectoryName(r) into d
                 where !string.IsNullOrEmpty(d)
                 select MakeRelativePath(queryDirPath, d + Path.DirectorySeparatorChar) into d
-                where !Path.IsPathRooted(d)
+                where d.Length > 0
+                   // TODO consider warning user in following case
+                   && !Path.IsPathRooted(d)
+                   && ".." != d.Split(PathSeparators, 2, StringSplitOptions.None)[0]
                 group 1 by d into g
                 select g.Key.TrimEnd(PathSeparators);
 
