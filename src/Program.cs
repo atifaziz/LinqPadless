@@ -709,7 +709,7 @@ namespace LinqPadless
                 File.WriteAllText(Path.ChangeExtension(queryFilePath, ".exe.config"), config.ToString());
             }
 
-            // TODO User-supplied csi.cmd
+            // TODO User-supplied exe.cmd
 
             GenerateBatch(LoadTextResource("exe.cmd"), queryFilePath, packagesPath, rs);
         }
