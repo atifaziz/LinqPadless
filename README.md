@@ -1,5 +1,7 @@
 # LINQPadless
 
+[![NuGet][nuget-badge]][nuget-pkg]
+
 LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
 [C# scripts (csx)][csx] or executable binaries so that they can be run
 outside and independent of LINQPad.
@@ -102,6 +104,8 @@ packages or otherwise) must be placed in the same directory or
 sub-directories below.
 
 
+[nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
+[nuget-pkg]: https://www.nuget.org/packages/LinqPadless
 [linqpad]: http://www.linqpad.net/
 [csx]: https://msdn.microsoft.com/en-us/magazine/mt614271.aspx
 [lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
