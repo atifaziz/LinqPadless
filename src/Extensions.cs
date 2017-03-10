@@ -16,6 +16,7 @@
 
 namespace LinqPadless
 {
+    using System;
     using System.IO;
     using NDesk.Options;
 
@@ -26,6 +27,15 @@ namespace LinqPadless
         {
             options.WriteOptionDescriptions(writer);
             return writer;
+        }
+    }
+
+    static class FileInfoExtensions
+    {
+        public static string ReadAllText(this FileInfo file)
+        {
+            if (file == null) throw new ArgumentNullException(nameof(file));
+            return File.ReadAllText(file.FullName);
         }
     }
 }

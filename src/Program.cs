@@ -32,11 +32,12 @@ namespace LinqPadless
     using Mannex;
     using Mannex.IO;
     using NDesk.Options;
-    using NuGet;
     using NuGet.Frameworks;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
+    using System.Net;
+    using MoreLinq;
 
     #endregion
 
@@ -53,10 +54,10 @@ namespace LinqPadless
             var force = false;
             var watching = false;
             var incremental = false;
-            var extraPackageList = new List<PackageReference>();
+            var extraPackageList = new List<(string id, Version version, bool pre)>();
             var extraImportList = new List<string>();
-            var cscPath = (string) null;
-            var target = (string) null;
+            var cscPath = (string)null;
+            var target = (string)null;
             var targetFramework = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
             var targetNuGetFramework = default(NuGetFramework);
 
@@ -106,14 +107,13 @@ namespace LinqPadless
             // TODO Allow package source to be specified via args
             // TODO Use default NuGet sources configuration
 
-            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
             var queries = GetQueries(tail, recurse);
 
             // TODO Allow packages directory to be specified via args
 
             const string packagesDirName = "packages";
 
-            var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList,
+            var compiler = Compiler(packagesDirName, extraPackageList, extraImportList,
                                     targetFramework, generator,
                                     watching || incremental, force, verbose);
 
@@ -130,7 +130,7 @@ namespace LinqPadless
 
                 var tokens = SplitDirFileSpec(tail.First()).Fold((dp, fs) =>
                 (
-                    dirPath : dp ?? Environment.CurrentDirectory,
+                    dirPath: dp ?? Environment.CurrentDirectory,
                     fileSpec: fs
                 ));
 
@@ -210,7 +210,7 @@ namespace LinqPadless
                 from spec in tail
                 let tokens = SplitDirFileSpec(spec).Fold((dp, fs) =>
                 (
-                    dirPath : dp ?? Environment.CurrentDirectory,
+                    dirPath: dp ?? Environment.CurrentDirectory,
                     fileSpec: fs
                 ))
                 let dirPath = tokens.dirPath ?? Environment.CurrentDirectory
@@ -231,11 +231,11 @@ namespace LinqPadless
         delegate void Generator(string queryFilePath,
             // ReSharper disable once UnusedParameter.Local
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, (string id, Version version, bool pre)? sourcePackage)> references,
             IndentingLineWriter writer);
 
-        static Func<string, bool> Compiler(IPackageRepository repo, string packagesPath,
-            IEnumerable<PackageReference> extraPackages,
+        static Func<string, bool> Compiler(string packagesPath,
+            IEnumerable<(string id, Version version, bool pre)> extraPackages,
             IEnumerable<string> extraImports,
             FrameworkName targetFramework,
             Generator generator,
@@ -260,11 +260,13 @@ namespace LinqPadless
 
                     var packagesFullPath = Path.GetFullPath(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
                                                                          Path.GetDirectoryName(queryFilePath),
+                                                                         ".lpless",
+                                                                         Path.GetFileNameWithoutExtension(queryFilePath),
                                                                          packagesPath));
 
                     writer.WriteLine($"{queryFilePath}");
 
-                    var info = Compile(queryFilePath, repo, packagesFullPath,
+                    var info = Compile(queryFilePath, packagesFullPath,
                                        extraPackages, extraImports,
                                        targetFramework,
                                        verbose, writer.Indent());
@@ -287,12 +289,14 @@ namespace LinqPadless
             };
         }
 
-        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, IPackage sourcePackage)> references)
-            Compile(string queryFilePath, IPackageRepository repo, string packagesPath,
-            IEnumerable<PackageReference> extraPackageReferences,
-            IEnumerable<string> extraImports,
-            FrameworkName targetFramework,
-            bool verbose, IndentingLineWriter writer)
+        static readonly char[] DirectorySeparatorChars = new[] { Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar };
+
+        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, (string id, Version version, bool pre)? sourcePackage)> references)
+            Compile(string queryFilePath, string packagesPath,
+                    IEnumerable<(string id, Version version, bool pre)> extraPackageReferences,
+                    IEnumerable<string> extraImports,
+                    FrameworkName targetFramework,
+                    bool verbose, IndentingLineWriter writer)
         {
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
             var lines = File.ReadLines(queryFilePath);
@@ -321,10 +325,15 @@ namespace LinqPadless
                 from nrsq in new[]
                 {
                     from nr in query.Elements("NuGetReference")
-                    select new PackageReference((string)nr,
-                                                SemanticVersion.ParseOptionalVersion((string) nr.Attribute("Version")),
-                                                (bool?)nr.Attribute("Prerelease") ?? false),
-                    extraPackageReferences,
+                    let version = (string) nr.Attribute("Version")
+                    select new
+                    {
+                        Id                  = (string)nr,
+                        Version             = version != null ? new Version((string) nr.Attribute("Version")) : null,
+                        IsPrereleaseAllowed = (bool?)nr.Attribute("Prerelease") ?? false
+                    },
+                    from r in extraPackageReferences
+                    select new { Id = r.id, Version = r.version, IsPrereleaseAllowed = r.pre },
                 }
                 from nr in nrsq
                 select new
@@ -347,105 +356,129 @@ namespace LinqPadless
             }
 
             writer.WriteLine($"Packages directory: {packagesPath}");
-            var pm = new PackageManager(repo, packagesPath);
+            var basePath = Path.GetDirectoryName(queryFilePath);
 
-            pm.PackageInstalling += (_, ea) =>
-                writer.WriteLine($"Installing {ea.Package}...");
-            pm.PackageInstalled += (_, ea) =>
-                writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
+            var paketExePath = new FileInfo(Path.Combine(basePath, "paket.exe"));
+            if (!paketExePath.Exists)
+            {
+                var version = new Version(3, 36, 1);
+                var url = new Uri($"https://github.com/fsprojects/Paket/releases/download/{Uri.EscapeUriString(version.ToString())}/paket.exe");
+                if (verbose)
+                    writer.WriteLine($"Downloading Paket {version} from {url}");
+                new WebClient().DownloadFile(url, paketExePath.FullName);
+            }
+
+            var queryName = Path.GetFileNameWithoutExtension(queryFilePath);
+            var workingDirectory = Directory.CreateDirectory(Path.Combine(basePath, ".lpless", queryName));
+
+            var paketDependenciesFilePath = Path.Combine(workingDirectory.FullName, "paket.dependencies");
 
             writer.WriteLine($"Packages target: {targetFramework}");
 
-            var resolutionList = new List<(IPackage package, string assemblyPath)>();
-
-            foreach (var nr in nrs)
-            {
-                var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version,
-                                                         allowPrereleaseVersions: nr.IsPrereleaseAllowed,
-                                                         allowUnlisted: false);
-                if (pkg == null)
+            File.WriteAllLines(paketDependenciesFilePath, 
+                from ls in new[]
                 {
-                    pkg = repo.FindPackage(nr.Id, nr.Version,
-                                           allowPrereleaseVersions: nr.IsPrereleaseAllowed,
-                                           allowUnlisted: false);
+                    Seq.Return("source https://packages.nuget.org/api/v2"),
 
-                    if (pkg == null)
-                    {
-                        throw new Exception("Package not found: " + nr.Title);
-                    }
-
-                    pm.InstallPackage(pkg.Id, pkg.Version);
+                    from nr in nrs
+                    select Seq.Return($"nuget {nr.Id}",
+                                      nr.Version != null ? "~> " + nr.Version : null,
+                                      nr.IsPrereleaseAllowed ? "prerelease" : null)
+                              .Filter()
+                              .ToDelimitedString(" ")
                 }
+                from line in ls
+                select line);
 
-                writer.WriteLine("Resolving references...");
-                resolutionList.AddRange(
-                    GetReferencesTree(pm.LocalRepository, pkg, targetFramework, writer.Indent()).Select(e =>
-                    (
-                        e.package,
-                        e.reference != null
-                        ? Path.Combine(pm.PathResolver.GetInstallPath(e.package), e.reference.Path)
-                        : null
-                    )));
-            }
+            Run(paketExePath, "install", workingDirectory, writer);
+            Run(paketExePath, "generate-include-scripts type csx", workingDirectory, writer);
+
+            var loadScriptFile =
+                workingDirectory.EnumerateFiles("*.main.*.csx", SearchOption.AllDirectories)
+                                .SingleOrDefault();
+
+            if (loadScriptFile == null)
+                throw new FileNotFoundException("Unable to resolve dependencies.");
 
             var packagesPathWithTrailer = packagesPath + Path.DirectorySeparatorChar;
 
-            var resolution =
-                resolutionList
-                    .GroupBy(r => r.package)
-                    .Select(g => g.First())
-                    .Select(r => new
-                    {
-                        r.package,
-                        AssemblyPath = r.assemblyPath != null
-                            ? MakeRelativePath(queryFilePath, packagesPathWithTrailer)
-                            + MakeRelativePath(packagesPathWithTrailer, r.assemblyPath)
-                            : null,
-                    })
-                    .Partition(r => r.AssemblyPath == null, (ok, nok) => new
-                    {
-                        ResolvedReferences    = ok,
-                        ReferencelessPackages = from r in nok
-                                                select r.package.GetFullName(),
-                    });
+            var references = //new (string path, (string id, Version version, bool pre)? sourcePackage)[0];
+                from rd in
+                    CSharpSyntaxTree
+                        .ParseText(loadScriptFile.ReadAllText(), CSharpParseOptions.Default.WithKind(SourceCodeKind.Script))
+                        .GetCompilationUnitRoot().GetReferenceDirectives()
+                select ((string)rd.File.Value).Split(DirectorySeparatorChars)
+                                              .SkipWhile(e => e == "..")
+                                              .ToArray()
+                into path
+                where path.Length > 1
+                   && "packages".Equals(path.First(), StringComparison.OrdinalIgnoreCase)
+                select new
+                {
+                    Path      = Path.Combine(workingDirectory.FullName, path.ToDelimitedString(Path.DirectorySeparatorChar.ToString())),
+                    PackageId = path.Skip(1).First(),
+                }
+                into e
+                where e.PackageId != null
+                // TODO unresolved references?
+                join nr in nrs on e.PackageId equals nr.Id
+                select (e.Path, ((string id, Version version, bool pre)?) (nr.Id, nr.Version, nr.IsPrereleaseAllowed));
 
-            resolution.ReferencelessPackages.StartIter(e =>
-            {
-                writer.WriteLine($"Warning! Packages with no references for {targetFramework}:");
-                writer.Indent().WriteLines(e.ResumeFromCurrent());
-            });
-
-            var references = resolution.ResolvedReferences.ToArray();
-
-            references.Select(r => r.AssemblyPath).StartIter(e =>
-            {
-                writer.WriteLine($"Resolved references ({references.Length:N0}):");
-                writer.Indent().WriteLines(e.ResumeFromCurrent());
-            });
+            var noPackage = default((string id, Version version, bool pre)?);
 
             return (queryKind,
                     // ReSharper disable once PossibleMultipleEnumeration
                     string.Join(Environment.NewLine, lines.Skip(eomLineNumber)),
                     LinqPad.DefaultNamespaces
-                            .Concat(from ns in query.Elements("Namespace")
-                                    select (string)ns)
-                            .Concat(extraImports),
-                    LinqPad.DefaultReferences.Select(r => (r, default(IPackage)))
-                            .Concat(from r in query.Elements("Reference")
-                                    select new
-                                    {
-                                        Relative = (string) r.Attribute("Relative"),
-                                        Path     = ((string) r).Trim(),
-                                    }
-                                    into r
-                                    where r.Path.Length > 0
-                                    select r.Relative?.Length > 0
-                                         ? r.Relative // prefer
-                                         : ResolveReferencePath(r.Path)
-                                    into r
-                                    select (r, default(IPackage)))
-                            .Concat(from r in references
-                                    select (r.AssemblyPath, r.package)));
+                           .Concat(from ns in query.Elements("Namespace") select (string)ns)
+                           .Concat(extraImports),
+                    LinqPad.DefaultReferences.Select(r => (r, noPackage))
+                           .Concat(from r in query.Elements("Reference")
+                                   select new
+                                   {
+                                       Relative = (string) r.Attribute("Relative"),
+                                       Path     = ((string) r).Trim(),
+                                   }
+                                   into r
+                                   where r.Path.Length > 0
+                                   select r.Relative?.Length > 0
+                                        ? r.Relative // prefer
+                                        : ResolveReferencePath(r.Path)
+                                   into r
+                                   select (r, noPackage))
+                           .Concat(references));
+        }
+
+        static void Run(FileInfo executable, string args,
+                        DirectoryInfo workingDirectory, IndentingLineWriter writer)
+        {
+            using (var process = Process.Start(new ProcessStartInfo(executable.FullName, args)
+            {
+                CreateNoWindow         = true,
+                UseShellExecute        = false,
+                RedirectStandardError  = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory       = workingDirectory.FullName,
+            }))
+            {
+                process.OutputDataReceived += OnProcessStdDataReceived;
+                process.ErrorDataReceived  += OnProcessStdDataReceived;
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+
+                var exitCode = process.ExitCode;
+                if (exitCode != 0)
+                    throw new Exception($"Paket finished with a non-zero exit code of {exitCode}.");
+            }
+
+            void OnProcessStdDataReceived(object sender, DataReceivedEventArgs e)
+            {
+                if (e.Data == null)
+                    return;
+                writer?.WriteLines(e.Data);
+            };
         }
 
         static string ResolveReferencePath(string path)
@@ -475,35 +508,6 @@ namespace LinqPadless
             yield return ("MyDocuments"     , Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
-        static IEnumerable<(IPackageAssemblyReference reference, IPackage package)>
-            GetReferencesTree(IPackageRepository repo,
-            IPackage package, FrameworkName targetFrameworkName, IndentingLineWriter writer)
-        {
-            writer?.WriteLine(package.GetFullName());
-
-            IEnumerable<IPackageAssemblyReference> refs;
-            if (VersionUtility.TryGetCompatibleItems(targetFrameworkName, package.AssemblyReferences, out refs))
-            {
-                foreach (var r in refs)
-                    yield return (r, package);
-            }
-            else
-            {
-                yield return (null, package);
-            }
-
-            var subrefs =
-                from d in package.GetCompatiblePackageDependencies(targetFrameworkName)
-                select repo.FindPackage(d.Id) into dp
-                where dp != null
-                from r in GetReferencesTree(repo, dp, targetFrameworkName,
-                                            writer?.Indent())
-                select r;
-
-            foreach (var r in subrefs)
-                yield return r;
-        }
-
         static bool IsMainAsync(string source) =>
             CSharpSyntaxTree
                 .ParseText(source).GetRoot()
@@ -513,7 +517,7 @@ namespace LinqPadless
 
         static void GenerateCsx(string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, (string id, Version version, bool pre)? sourcePackage)> references,
             IndentingLineWriter writer)
         {
             var body = queryKind == QueryLanguage.Expression
@@ -530,7 +534,11 @@ namespace LinqPadless
                 from lines in new[]
                 {
                     from r in rs
-                    select $"#r \"{r.path}\"",
+                    select r.path.IndexOfAny(DirectorySeparatorChars) < 0
+                         ? r.path
+                         : MakeRelativePath(Path.GetDirectoryName(queryFilePath) + Path.DirectorySeparatorChar, r.path)
+                    into path
+                    select $"#r \"{path}\"",
 
                     Seq.Return(string.Empty),
 
@@ -549,7 +557,7 @@ namespace LinqPadless
 
         static void GenerateBatch(string cmdTemplate,
                                   string queryFilePath, string packagesPath,
-                                  IEnumerable<(string path, IPackage sourcePackage)> references)
+                                  IEnumerable<(string path, (string id, Version version, bool pre)? sourcePackage)> references)
         {
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
@@ -560,7 +568,22 @@ namespace LinqPadless
             var installs =
                 from r in references
                 where r.sourcePackage != null
-                select $"if not exist \"{r.path}\" nuget install {r.sourcePackage.Id} -Version {r.sourcePackage.Version}{(!r.sourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
+                select new
+                {
+                    Path             = MakeRelativePath(queryDirPath + Path.DirectorySeparatorChar, r.path),
+                    Id               = r.sourcePackage.Value.id,
+                    Version          = r.sourcePackage.Value.version,
+                    IsReleaseVersion = !r.sourcePackage.Value.pre,
+                }
+                into r
+                select Seq.Return("if not exist", "\"" + r.Path + "\"",
+                                  "nuget install", r.Id,
+                                  r.Version != null ? "-Version " + r.Version : null,
+                                  "-ExcludeVersion",
+                                  !r.IsReleaseVersion ? "-Prerelease" : null,
+                                  "-OutputDirectory", pkgdir.TrimEnd(Path.DirectorySeparatorChar),
+                                  ">&2 || goto :pkgerr") into s
+                select s.Filter().ToDelimitedString(" ");
 
             cmdTemplate = Regex.Replace(cmdTemplate, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
@@ -579,7 +602,7 @@ namespace LinqPadless
 
         static void GenerateExecutable(string cscPath, string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, (string id, Version version, bool pre)? sourcePackage)> references,
             IndentingLineWriter writer)
         {
             // TODO error handling in generated code
@@ -728,7 +751,7 @@ namespace LinqPadless
         static Func<string, string> QuoteOpt(params char[] chars) =>
             s => s?.IndexOfAny(chars) >= 0 ? "\"" + s + "\"" : s;
 
-        static PackageReference ParseExtraPackageReference(string input)
+        static (string id, Version version, bool pre) ParseExtraPackageReference(string input)
         {
             // Syntax: ID [ "@" VERSION ] ["++"]
             // Examples:
@@ -741,20 +764,7 @@ namespace LinqPadless
             var prerelease = input.EndsWith(plusplus, StringComparison.Ordinal);
             if (prerelease)
                 input = input.Substring(0, input.Length - plusplus.Length);
-            return input.Split('@', (id, version) => new PackageReference(id, SemanticVersion.ParseOptionalVersion(version), prerelease));
-        }
-
-        sealed class PackageReference : NuGet.PackageReference
-        {
-            public bool IsPrereleaseAllowed { get; }
-
-            public PackageReference(string id, SemanticVersion version, bool isPrereleaseAllowed,
-                IVersionSpec versionConstraint = null, FrameworkName targetFramework = null,
-                bool isDevelopmentDependency = false, bool requireReinstallation = false) :
-                base(id, version, versionConstraint, targetFramework, isDevelopmentDependency, requireReinstallation)
-            {
-                IsPrereleaseAllowed = isPrereleaseAllowed;
-            }
+            return input.Split('@', (id, version) => (id, new Version(version), prerelease));
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
