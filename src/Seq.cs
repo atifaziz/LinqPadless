@@ -141,15 +141,14 @@ namespace LinqPadless
         }
 
         public static Dictionary<TKey, TValue> ToDictionary<TKey, TValue>(
-            this IEnumerable<KeyValuePair<TKey, TValue>> source) =>
+            this IEnumerable<(TKey, TValue)> source) =>
             ToDictionary(source, null);
 
         public static Dictionary<TKey, TValue> ToDictionary<TKey, TValue>(
-            this IEnumerable<KeyValuePair<TKey, TValue>> source,
-            IEqualityComparer<TKey> comparer)
-        {
-            if (source == null) throw new ArgumentNullException(nameof(source));
-            return source.ToDictionary(e => e.Key, e => e.Value, comparer);
-        }
+            this IEnumerable<(TKey key, TValue value)> source,
+            IEqualityComparer<TKey> comparer) =>
+            source == null
+            ? throw new ArgumentNullException(nameof(source))
+            : source.ToDictionary(e => e.key, e => e.value, comparer);
     }
 }
