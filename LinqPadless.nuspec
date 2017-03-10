@@ -2,12 +2,13 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>LinqPadless</id>
-        <version>1.0.0-beta1</version>
+        <version>1.0.0-beta2</version>
         <authors>Atif Aziz</authors>
         <owners>Atif Aziz</owners>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <summary>LINQPad Queries without LINQPad</summary>
         <description>LINQPadless is a tool for compiling LINQPad query files into stand-alone C# scripts (csx) or executable binaries (exe) so that they can be run outside and independent of LINQPad.</description>
+        <releaseNotes>Adds support for C# Program queries where Main is asynchronous.</releaseNotes>
     </metadata>
     <files>
         <file src="bin\Release\*.exe" target="tools" />
