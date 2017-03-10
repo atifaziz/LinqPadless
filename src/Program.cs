@@ -34,6 +34,9 @@ namespace LinqPadless
     using NDesk.Options;
     using NuGet;
     using NuGet.Frameworks;
+    using Microsoft.CodeAnalysis.CSharp;
+    using Microsoft.CodeAnalysis.CSharp.Syntax;
+    using Microsoft.CodeAnalysis;
 
     #endregion
 
@@ -501,6 +504,13 @@ namespace LinqPadless
                 yield return r;
         }
 
+        static bool IsMainAsync(string source) =>
+            CSharpSyntaxTree
+                .ParseText(source).GetRoot()
+                .DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Any(md => "Main" == md.Identifier.Text
+                            && md.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)));
+
         static void GenerateCsx(string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
@@ -509,7 +519,9 @@ namespace LinqPadless
             var body = queryKind == QueryLanguage.Expression
                      ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
                      : queryKind == QueryLanguage.Program
-                     ? source + Environment.NewLine + "Main();"
+                     ? source + Environment.NewLine
+                              + (IsMainAsync(source) ? "await " : null)
+                              + "Main();"
                      : source;
 
             var rs = references.ToArray();
@@ -584,7 +596,7 @@ namespace LinqPadless
                 ? Seq.Return(
                         "class UserQuery {",
                         "    static int Main(string[] args) {",
-                        "        new UserQuery().Main(); return 0;",
+                        "        new UserQuery().Main()" + (IsMainAsync(source) ? ".Wait()" : null) + "; return 0;",
                         "    }",
                             source,
                         "}")

@@ -89,8 +89,8 @@ scripts or executables enables them be shipped and run without LINQPad.
 ## Limitations
 
 LINQPad Query files must be either C# Statements, Expression or Program. In
-the case of a C# Program query, a `Main` declared to be asynchronous is not
-awaited and therefore may not execute fully.
+the case of a C# Program query, a `Main` declared to be asynchronous must
+return `Task`.
 
 Extension methods are not supported at the moment.
 
