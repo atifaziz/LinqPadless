@@ -560,7 +560,7 @@ namespace LinqPadless
             var installs =
                 from r in references
                 where r.sourcePackage != null
-                select $"if not exist \"{r.path}\" nuget install{(!r.sourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} {r.sourcePackage.Id} -Version {r.sourcePackage.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
+                select $"if not exist \"{r.path}\" nuget install {r.sourcePackage.Id} -Version {r.sourcePackage.Version}{(!r.sourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
 
             cmdTemplate = Regex.Replace(cmdTemplate, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
