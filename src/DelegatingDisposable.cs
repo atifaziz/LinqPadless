@@ -17,6 +17,7 @@
 namespace LinqPadless
 {
     using System;
+    using System.Threading;
 
     sealed class DelegatingDisposable : IDisposable
     {
@@ -30,11 +31,17 @@ namespace LinqPadless
 
         public void Dispose()
         {
-            var disposer = _disposer;
-            if (disposer == null)
+            if (_disposer == null)
                 return;
-            _disposer = null;
-            disposer();
+            for (var sw = new SpinWait(); ; sw.SpinOnce())
+            {
+                var disposer = _disposer;
+                if (disposer == null)
+                    return;
+                if (disposer != Interlocked.CompareExchange(ref _disposer, null, disposer))
+                    continue;
+                disposer();
+            }
         }
     }
 }
