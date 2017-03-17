@@ -24,7 +24,6 @@ namespace LinqPadless
     using System.IO;
     using System.Linq;
     using System.Runtime.InteropServices;
-    using System.Runtime.Versioning;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
@@ -33,10 +32,11 @@ namespace LinqPadless
     using Mannex.IO;
     using NDesk.Options;
     using NuGet;
-    using NuGet.Frameworks;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
+    using global::NuGet.Frameworks;
+    using global::NuGet.Versioning;
 
     #endregion
 
@@ -57,7 +57,7 @@ namespace LinqPadless
             var extraImportList = new List<string>();
             var cscPath = (string) null;
             var target = (string) null;
-            var targetFramework = new FrameworkName(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
+            var targetFramework = NuGetFramework.Parse(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
             var targetNuGetFramework = default(NuGetFramework);
 
             var options = new OptionSet
@@ -99,21 +99,19 @@ namespace LinqPadless
                                       + string.Join(", ", csx, exe));
 
             if (targetNuGetFramework != null)
-                targetFramework = new FrameworkName(targetNuGetFramework.DotNetFrameworkName);
+                targetFramework = new NuGetFramework(targetNuGetFramework.DotNetFrameworkName);
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
             // TODO Allow package source to be specified via args
-            // TODO Use default NuGet sources configuration
 
-            var repo = PackageRepositoryFactory.Default.CreateRepository("https://packages.nuget.org/api/v2");
             var queries = GetQueries(tail, recurse);
 
             // TODO Allow packages directory to be specified via args
 
             const string packagesDirName = "packages";
 
-            var compiler = Compiler(repo, packagesDirName, extraPackageList, extraImportList,
+            var compiler = Compiler(NuGetClient.CreateDefaultFactory(), packagesDirName, extraPackageList, extraImportList,
                                     targetFramework, generator,
                                     watching || incremental, force, verbose);
 
@@ -231,13 +229,14 @@ namespace LinqPadless
         delegate void Generator(string queryFilePath,
             // ReSharper disable once UnusedParameter.Local
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, IInstalledPackage sourcePackage)> references,
             IndentingLineWriter writer);
 
-        static Func<string, bool> Compiler(IPackageRepository repo, string packagesPath,
+        static Func<string, bool> Compiler(Func<DirectoryInfo, NuGetClient> nugetFactory,
+            string packagesPath,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
-            FrameworkName targetFramework,
+            NuGetFramework targetFramework,
             Generator generator,
             bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
@@ -258,18 +257,18 @@ namespace LinqPadless
                         return false;
                     }
 
-                    var packagesFullPath = Path.GetFullPath(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
-                                                                         Path.GetDirectoryName(queryFilePath),
-                                                                         packagesPath));
+                    var packagesDir = new DirectoryInfo(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
+                                                                     Path.GetDirectoryName(queryFilePath),
+                                                                     packagesPath));
 
                     writer.WriteLine($"{queryFilePath}");
 
-                    var info = Compile(queryFilePath, repo, packagesFullPath,
+                    var info = Compile(queryFilePath, nugetFactory(packagesDir),
                                        extraPackages, extraImports,
                                        targetFramework,
                                        verbose, writer.Indent());
 
-                    generator(queryFilePath, packagesFullPath,
+                    generator(queryFilePath, packagesDir.FullName,
                               info.queryKind, info.source, info.namespaces,
                               info.references, writer.Indent());
 
@@ -287,11 +286,11 @@ namespace LinqPadless
             };
         }
 
-        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, IPackage sourcePackage)> references)
-            Compile(string queryFilePath, IPackageRepository repo, string packagesPath,
+        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, IInstalledPackage sourcePackage)> references)
+            Compile(string queryFilePath, NuGetClient nuget,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
-            FrameworkName targetFramework,
+            NuGetFramework targetFramework,
             bool verbose, IndentingLineWriter writer)
         {
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
@@ -321,8 +320,9 @@ namespace LinqPadless
                 from nrsq in new[]
                 {
                     from nr in query.Elements("NuGetReference")
+                    let v = (string) nr.Attribute("Version")
                     select new PackageReference((string)nr,
-                                                SemanticVersion.ParseOptionalVersion((string) nr.Attribute("Version")),
+                                                string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
                                                 (bool?)nr.Attribute("Prerelease") ?? false),
                     extraPackageReferences,
                 }
@@ -346,49 +346,43 @@ namespace LinqPadless
                 writer.Indent().WriteLines(from nr in nrs select nr.Title);
             }
 
-            writer.WriteLine($"Packages directory: {packagesPath}");
-            var pm = new PackageManager(repo, packagesPath);
+            writer.WriteLine($"Packages directory: {nuget.PackagesPath}");
 
-            pm.PackageInstalling += (_, ea) =>
-                writer.WriteLine($"Installing {ea.Package}...");
-            pm.PackageInstalled += (_, ea) =>
-                writer.Indent().WriteLine($"Installed at {ea.InstallPath}");
+            nuget.LogHandlers = CreateLogHandlers(writer);
+            var logSwap = Swapper(() => nuget.LogHandlers, v => nuget.LogHandlers = v);
 
             writer.WriteLine($"Packages target: {targetFramework}");
 
-            var resolutionList = new List<(IPackage package, string assemblyPath)>();
+            var resolutionList = new List<(string assemblyPath, IInstalledPackage package)>();
 
             foreach (var nr in nrs)
             {
-                var pkg = pm.LocalRepository.FindPackage(nr.Id, nr.Version,
-                                                         allowPrereleaseVersions: nr.IsPrereleaseAllowed,
-                                                         allowUnlisted: false);
-                if (pkg == null)
+                var version = nr.Version;
+                if (version == null)
                 {
-                    pkg = repo.FindPackage(nr.Id, nr.Version,
-                                           allowPrereleaseVersions: nr.IsPrereleaseAllowed,
-                                           allowUnlisted: false);
-
-                    if (pkg == null)
+                    writer.WriteLine("Querying latest version of " + nr.Id + (nr.IsPrereleaseAllowed ? " (pre-release)" : null));
+                    var vqw = writer.Indent();
+                    using (logSwap(CreateLogHandlers(vqw)))
                     {
-                        throw new Exception("Package not found: " + nr.Title);
-                    }
+                        version = nuget.GetLatestVersionAsync(nr.Id, targetFramework, nr.IsPrereleaseAllowed).Result;
 
-                    pm.InstallPackage(pkg.Id, pkg.Version);
+                        if (version == null)
+                            throw new Exception("Package not found: " + nr.Title);
+
+                        vqw.WriteLine("Using version " + version);
+                    }
                 }
+
+                var pkg = nuget.FindInstalledPackage(nr.Id, version, nr.IsPrereleaseAllowed)
+                          ?? nuget.InstallPackageAsync(nr.Id, version, nr.IsPrereleaseAllowed, targetFramework).Result;
 
                 writer.WriteLine("Resolving references...");
                 resolutionList.AddRange(
-                    GetReferencesTree(pm.LocalRepository, pkg, targetFramework, writer.Indent()).Select(e =>
-                    (
-                        e.package,
-                        e.reference != null
-                        ? Path.Combine(pm.PathResolver.GetInstallPath(e.package), e.reference.Path)
-                        : null
-                    )));
+                    from r in nuget.GetReferencesTree(pkg, targetFramework, writer.Indent())
+                    select (assemblyPath: r.reference, package: r.package));
             }
 
-            var packagesPathWithTrailer = packagesPath + Path.DirectorySeparatorChar;
+            var packagesPathWithTrailer = nuget.PackagesPath + Path.DirectorySeparatorChar;
 
             var resolution =
                 resolutionList
@@ -406,7 +400,7 @@ namespace LinqPadless
                     {
                         ResolvedReferences    = ok,
                         ReferencelessPackages = from r in nok
-                                                select r.package.GetFullName(),
+                                                select r.package.ToString(),
                     });
 
             resolution.ReferencelessPackages.StartIter(e =>
@@ -430,7 +424,7 @@ namespace LinqPadless
                             .Concat(from ns in query.Elements("Namespace")
                                     select (string)ns)
                             .Concat(extraImports),
-                    LinqPad.DefaultReferences.Select(r => (r, default(IPackage)))
+                    LinqPad.DefaultReferences.Select(r => (r, default(IInstalledPackage)))
                             .Concat(from r in query.Elements("Reference")
                                     select new
                                     {
@@ -443,7 +437,7 @@ namespace LinqPadless
                                          ? r.Relative // prefer
                                          : ResolveReferencePath(r.Path)
                                     into r
-                                    select (r, default(IPackage)))
+                                    select (r, default(IInstalledPackage)))
                             .Concat(from r in references
                                     select (r.AssemblyPath, r.package)));
         }
@@ -462,6 +456,19 @@ namespace LinqPadless
             return Path.Combine(basePath, path.Substring(endIndex + 1).TrimStart(PathSeparators));
         }
 
+        static Func<T, IDisposable> Swapper<T>(Func<T> getter, Action<T> setter) => value =>
+        {
+            var old = getter();
+            setter(value);
+            return new DelegatingDisposable(() => setter(old));
+        };
+
+        static LogHandlerSet CreateLogHandlers(IndentingLineWriter writer) =>
+            new LogHandlerSet(info : message => writer.WriteLine("[INF] " + message),
+                              warn : message => writer.WriteLine("[WRN] " + message),
+                              error: message => writer.WriteLine("[ERR] " + message),
+                              debug: message => writer.WriteLine("[DBG] " + message));
+
         static Dictionary<string, string> _dirPathByToken;
 
         public static Dictionary<string, string> DirPathByToken =>
@@ -475,35 +482,6 @@ namespace LinqPadless
             yield return ("MyDocuments"     , Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
-        static IEnumerable<(IPackageAssemblyReference reference, IPackage package)>
-            GetReferencesTree(IPackageRepository repo,
-            IPackage package, FrameworkName targetFrameworkName, IndentingLineWriter writer)
-        {
-            writer?.WriteLine(package.GetFullName());
-
-            IEnumerable<IPackageAssemblyReference> refs;
-            if (VersionUtility.TryGetCompatibleItems(targetFrameworkName, package.AssemblyReferences, out refs))
-            {
-                foreach (var r in refs)
-                    yield return (r, package);
-            }
-            else
-            {
-                yield return (null, package);
-            }
-
-            var subrefs =
-                from d in package.GetCompatiblePackageDependencies(targetFrameworkName)
-                select repo.FindPackage(d.Id) into dp
-                where dp != null
-                from r in GetReferencesTree(repo, dp, targetFrameworkName,
-                                            writer?.Indent())
-                select r;
-
-            foreach (var r in subrefs)
-                yield return r;
-        }
-
         static bool IsMainAsync(string source) =>
             CSharpSyntaxTree
                 .ParseText(source).GetRoot()
@@ -513,7 +491,7 @@ namespace LinqPadless
 
         static void GenerateCsx(string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, IInstalledPackage sourcePackage)> references,
             IndentingLineWriter writer)
         {
             var body = queryKind == QueryLanguage.Expression
@@ -549,7 +527,7 @@ namespace LinqPadless
 
         static void GenerateBatch(string cmdTemplate,
                                   string queryFilePath, string packagesPath,
-                                  IEnumerable<(string path, IPackage sourcePackage)> references)
+                                  IEnumerable<(string path, IInstalledPackage sourcePackage)> references)
         {
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath));
@@ -560,7 +538,7 @@ namespace LinqPadless
             var installs =
                 from r in references
                 where r.sourcePackage != null
-                select $"if not exist \"{r.path}\" nuget install{(!r.sourcePackage.IsReleaseVersion() ? " -Prerelease" : null)} {r.sourcePackage.Id} -Version {r.sourcePackage.Version} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
+                select $"if not exist \"{r.path}\" nuget install {r.sourcePackage.Id} -Version {r.sourcePackage.Version}{(r.sourcePackage.Version.IsPrerelease ? " -Prerelease" : null)} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
 
             cmdTemplate = Regex.Replace(cmdTemplate, @"^ *(::|rem) *__PACKAGES__",
                                 string.Join(Environment.NewLine, installs),
@@ -579,7 +557,7 @@ namespace LinqPadless
 
         static void GenerateExecutable(string cscPath, string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, IPackage sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string path, IInstalledPackage sourcePackage)> references,
             IndentingLineWriter writer)
         {
             // TODO error handling in generated code
@@ -695,6 +673,7 @@ namespace LinqPadless
 
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath))
+                                   .TrimEnd(PathSeparators)
                              + Path.DirectorySeparatorChar;
 
             var privatePaths =
@@ -755,20 +734,7 @@ namespace LinqPadless
             var prerelease = input.EndsWith(plusplus, StringComparison.Ordinal);
             if (prerelease)
                 input = input.Substring(0, input.Length - plusplus.Length);
-            return input.Split('@', (id, version) => new PackageReference(id, SemanticVersion.ParseOptionalVersion(version), prerelease));
-        }
-
-        sealed class PackageReference : NuGet.PackageReference
-        {
-            public bool IsPrereleaseAllowed { get; }
-
-            public PackageReference(string id, SemanticVersion version, bool isPrereleaseAllowed,
-                IVersionSpec versionConstraint = null, FrameworkName targetFramework = null,
-                bool isDevelopmentDependency = false, bool requireReinstallation = false) :
-                base(id, version, versionConstraint, targetFramework, isDevelopmentDependency, requireReinstallation)
-            {
-                IsPrereleaseAllowed = isPrereleaseAllowed;
-            }
+            return input.Split('@', (id, version) => new PackageReference(id, NuGetVersion.TryParse(version, out var v) ? v : null, prerelease));
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
@@ -864,5 +830,20 @@ namespace LinqPadless
         }
         // ReSharper restore InconsistentNaming
         // ReSharper restore UnusedMember.Local
+    }
+
+    sealed class PackageReference
+    {
+        public string Id { get; }
+        public NuGetVersion Version { get; }
+        public bool HasVersion => Version != null;
+        public bool IsPrereleaseAllowed { get; }
+
+        public PackageReference(string id, NuGetVersion version, bool isPrereleaseAllowed)
+        {
+            Id = id;
+            Version = version;
+            IsPrereleaseAllowed = isPrereleaseAllowed;
+        }
     }
 }

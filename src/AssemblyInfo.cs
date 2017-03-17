@@ -22,7 +22,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("LINQPad Query Less")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("LinqPadless")]
-[assembly: AssemblyCopyright("Copyright \u00a9 2016 Atif Aziz. All rights reserved.")]
+[assembly: AssemblyCopyright("Copyright \u00a9 2016 Atif Aziz. All rights reserved. Portions \u00a9 2014 Dave Glick.")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
