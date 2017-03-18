@@ -32,12 +32,9 @@ namespace LinqPadless
 
         public Observer(Action<T> onNext, Action<Exception> onError, Action onCompleted)
         {
-            if (onNext == null) throw new ArgumentNullException(nameof(onNext));
-            if (onError == null) throw new ArgumentNullException(nameof(onError));
-            if (onCompleted == null) throw new ArgumentNullException(nameof(onCompleted));
-            _onNext = onNext;
-            _onError = onError;
-            _onCompleted = onCompleted;
+            _onNext      = onNext      ?? throw new ArgumentNullException(nameof(onNext));
+            _onError     = onError     ?? throw new ArgumentNullException(nameof(onError));
+            _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
         }
 
         public void OnNext(T value) => _onNext(value);

@@ -95,8 +95,8 @@ namespace LinqPadless
                 ? GenerateCsx
                 : exe.Equals(target, StringComparison.OrdinalIgnoreCase)
                 ? GenerateExecutable(cscPath)
-                : Error.Throw<Generator>("Target is invalid or missing. Supported targets are: "
-                                         + string.Join(", ", csx, exe));
+                : throw new Exception("Target is invalid or missing. Supported targets are: "
+                                      + string.Join(", ", csx, exe));
 
             if (targetNuGetFramework != null)
                 targetFramework = new FrameworkName(targetNuGetFramework.DotNetFrameworkName);

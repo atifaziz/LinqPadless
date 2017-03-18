@@ -23,11 +23,8 @@ namespace LinqPadless
     {
         Action _disposer;
 
-        public DelegatingDisposable(Action disposer)
-        {
-            if (disposer == null) throw new ArgumentNullException("disposer");
-            _disposer = disposer;
-        }
+        public DelegatingDisposable(Action disposer) =>
+            _disposer = disposer ?? throw new ArgumentNullException("disposer");
 
         public void Dispose()
         {
