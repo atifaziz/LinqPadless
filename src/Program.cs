@@ -600,6 +600,20 @@ namespace LinqPadless
                         "    }",
                             source,
                         "}")
+                : CSharpSyntaxTree.ParseText("void Main() {" + source + "}")
+                                  .GetRoot()
+                                  .DescendantNodes()
+                                  .OfType<AwaitExpressionSyntax>()
+                                  .Any()
+                ? Seq.Return(
+                        "class UserQuery {",
+                        "    static int Main(string[] args) {",
+                        "        new UserQuery().Main().Wait(); return 0;",
+                        "    }",
+                        "    async Task Main() {",
+                                source,
+                        "    }",
+                        "}")
                 : Seq.Return(
                         "class UserQuery {",
                         "    static int Main(string[] args) {",
