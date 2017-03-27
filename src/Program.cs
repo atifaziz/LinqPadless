@@ -517,6 +517,8 @@ namespace LinqPadless
                     from ns in imports
                     select $"using {ns};",
 
+                    Seq.Return(string.Empty),
+
                     Seq.Return(body, string.Empty),
                 }
                 from line in lines
