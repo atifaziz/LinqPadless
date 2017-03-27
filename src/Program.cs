@@ -417,7 +417,7 @@ namespace LinqPadless
                 writer.Indent().WriteLines(e.ResumeFromCurrent());
             });
 
-            var references = resolution.ResolvedReferences.ToArray();
+            var references = resolution.ResolvedReferences.OrderBy(r => r.AssemblyPath).ToArray();
 
             references.Select(r => r.AssemblyPath).StartIter(e =>
             {
