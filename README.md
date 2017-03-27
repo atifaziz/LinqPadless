@@ -96,7 +96,7 @@ Extension methods are not supported at the moment.
 
 LINQPad-specified methods like `Dump` and those on its `Util` class will
 cause compilation errors when the compiled C# script is executed. This issue
-can be addressed by using faking/emulation library of sorts, like
+can be addressed by using a faking/emulation library of sorts, like
 [FakeLinqPad][fakelp].
 
 When generating an executable, referenced assemblies (whether from NuGet
