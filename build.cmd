@@ -1,8 +1,12 @@
 @echo off
 setlocal
-if "%PROCESSOR_ARCHITECTURE%"=="x86" set MSBUILD=%ProgramFiles%
-if defined ProgramFiles(x86) set MSBUILD=%ProgramFiles(x86)%
-set MSBUILD=%MSBUILD%\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin\MSBuild.exe
+if "%PROCESSOR_ARCHITECTURE%"=="x86" set PROGRAMS=%ProgramFiles%
+if defined ProgramFiles(x86) set PROGRAMS=%ProgramFiles(x86)%
+for %%e in (Community Professional Enterprise) do (
+    if exist "%PROGRAMS%\Microsoft Visual Studio\2017\%%e\MSBuild\15.0\Bin\MSBuild.exe" (
+        set "MSBUILD=%PROGRAMS%\Microsoft Visual Studio\2017\%%e\MSBuild\15.0\Bin\MSBuild.exe"
+    )
+)
 if exist "%MSBUILD%" goto :restore
 set MSBUILD=
 for %%i in (MSBuild.exe) do set MSBUILD=%%~dpnx$PATH:i
