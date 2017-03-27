@@ -348,6 +348,14 @@ namespace LinqPadless
 
             writer.WriteLine($"Packages directory: {nuget.PackagesPath}");
 
+            LogHandlerSet CreateLogHandlers(IndentingLineWriter w) =>
+                verbose
+                ? new LogHandlerSet(info : message => w.WriteLine("[INF] " + message),
+                                    warn : message => w.WriteLine("[WRN] " + message),
+                                    error: message => w.WriteLine("[ERR] " + message),
+                                    debug: message => w.WriteLine("[DBG] " + message))
+                : LogHandlerSet.Null;
+
             nuget.LogHandlers = CreateLogHandlers(writer);
             var logSwap = Swapper(() => nuget.LogHandlers, v => nuget.LogHandlers = v);
 
@@ -462,12 +470,6 @@ namespace LinqPadless
             setter(value);
             return new DelegatingDisposable(() => setter(old));
         };
-
-        static LogHandlerSet CreateLogHandlers(IndentingLineWriter writer) =>
-            new LogHandlerSet(info : message => writer.WriteLine("[INF] " + message),
-                              warn : message => writer.WriteLine("[WRN] " + message),
-                              error: message => writer.WriteLine("[ERR] " + message),
-                              debug: message => writer.WriteLine("[DBG] " + message));
 
         static Dictionary<string, string> _dirPathByToken;
 
