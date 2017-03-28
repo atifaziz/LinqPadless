@@ -37,6 +37,7 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using global::NuGet.Frameworks;
     using global::NuGet.Versioning;
+    using MoreLinq;
 
     #endregion
 
@@ -390,8 +391,7 @@ namespace LinqPadless
 
             var resolution =
                 resolutionList
-                    .GroupBy(r => r.package)
-                    .Select(g => g.First())
+                    .DistinctBy(r => (r.package.Id, r.package.Version, r.assemblyPath))
                     .Select(r => new
                     {
                         r.package,
