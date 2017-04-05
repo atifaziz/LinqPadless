@@ -1,13 +1,9 @@
 ﻿@echo off
 setlocal
 set LINQPADLESS=__LINQPADLESS__
-for %%i in (csi.exe) do set CSIPATH=%%~$PATH:i
-if defined CSIPATH goto :boot
-if defined ProgramFiles(x86) set CSIPATH=%ProgramFiles(x86)%\MSBuild\14.0\Bin\csi.exe && goto :boot
-set CSIPATH=%ProgramFiles%\MSBuild\14.0\Bin\csi.exe
-:boot
-if not exist "%CSIPATH%" goto :nocsi
+set CSIPATH=%~dp0packages\Microsoft.Net.Compilers.2.0.1\tools\csi.exe
 pushd "%~dp0"
+if not exist "%CSIPATH%" nuget install Microsoft.Net.Compilers -Version 2.0.1 -OutputDirectory packages >&2 || goto :pkgerr
 :: __PACKAGES__
 :run
 popd
