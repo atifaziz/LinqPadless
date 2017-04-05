@@ -23,11 +23,14 @@ namespace LinqPadless
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
+    using System.Net;
+    using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Xml.Linq;
+    using ByteSizeLib;
     using Mannex;
     using Mannex.IO;
     using NDesk.Options;
@@ -56,7 +59,6 @@ namespace LinqPadless
             var incremental = false;
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
-            var cscPath = (string) null;
             var target = (string) null;
             var targetFramework = NuGetFramework.Parse(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
 
@@ -71,7 +73,6 @@ namespace LinqPadless
                 { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
-                { "csc="          , "C# compiler path", v => cscPath = v },
                 { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v => target = v },
                 { "fx="           , $"target framework; default: {targetFramework}", v => targetFramework = NuGetFramework.Parse(v) },
             };
@@ -87,14 +88,11 @@ namespace LinqPadless
                 return;
             }
 
-            if (target == null)
-                target = !string.IsNullOrEmpty(cscPath) ? exe : csx;
-
             var generator =
                 csx.Equals(target, StringComparison.OrdinalIgnoreCase)
                 ? GenerateCsx
                 : exe.Equals(target, StringComparison.OrdinalIgnoreCase)
-                ? GenerateExecutable(cscPath)
+                ? (Generator) GenerateExecutable
                 : throw new Exception("Target is invalid or missing. Supported targets are: "
                                       + string.Join(", ", csx, exe));
 
@@ -549,11 +547,7 @@ namespace LinqPadless
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmdTemplate);
         }
 
-        static Generator GenerateExecutable(string cscPath) =>
-            (queryFilePath, packagesPath, queryKind, source, imports, references, writer) =>
-                GenerateExecutable(cscPath, queryFilePath, packagesPath, queryKind, source, imports, references, writer);
-
-        static void GenerateExecutable(string cscPath, string queryFilePath,
+        static void GenerateExecutable(string queryFilePath,
             string packagesPath, QueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<(string path, IInstalledPackage sourcePackage)> references,
             IndentingLineWriter writer)
@@ -623,51 +617,25 @@ namespace LinqPadless
 
             var workingDirPath = Path.GetDirectoryName(queryFilePath);
 
-            if (cscPath != null)
-            {
-                if (!File.Exists(cscPath))
-                    throw new Exception("Invalid path to C# compiler binary: " + cscPath);
-            }
-            else
-            {
-                var x86ProgramFilesPath = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-                cscPath =
-                    Seq.Return("14.0", "12.0")
-                       .Select(v => Path.Combine(x86ProgramFilesPath, "MSBuild", v, "bin", "csc.exe"))
-                       .FirstOrDefault(File.Exists);
+            var binDirPath = Path.GetDirectoryName(new Uri(Assembly.GetEntryAssembly().CodeBase).LocalPath);
+            var compilersPackagePath = Path.Combine(binDirPath, "Microsoft.Net.Compilers");
+            var cscPath = Path.Combine(compilersPackagePath, "tools", "csc.exe");
 
-                if (cscPath == null)
-                    throw new Exception("Unable to find C# compiler in the expected location(s).");
+            if (!File.Exists(cscPath))
+            {
+                writer.WriteLine("Installing C# compiler using NuGet:");
+                InstallCompilersPackage(Path.Combine(binDirPath, "nuget.exe"),
+                                        compilersPackagePath, new Version(2, 0, 1),
+                                        writer.Indent());
             }
 
             writer.WriteLine(quoteOpt(cscPath) + " " + argsLine);
 
-            using (var process = Process.Start(new ProcessStartInfo
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                FileName = cscPath,
-                Arguments = argsLine,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                WorkingDirectory = string.IsNullOrEmpty(workingDirPath)
-                                 ? Environment.CurrentDirectory
-                                 : Path.GetFullPath(workingDirPath),
-            }))
-            {
-                Debug.Assert(process != null);
-
-                process.OutputDataReceived += OnProcessStdDataReceived(writer.Indent());
-                process.ErrorDataReceived  += OnProcessStdDataReceived(writer.Indent());
-
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                process.WaitForExit();
-
-                var exitCode = process.ExitCode;
-                if (exitCode != 0)
-                    throw new Exception($"C# compiler finished with a non-zero exit code of {exitCode}.");
-            }
+            Spawn(cscPath, argsLine, string.IsNullOrEmpty(workingDirPath)
+                                     ? Environment.CurrentDirectory
+                                     : Path.GetFullPath(workingDirPath),
+                  writer.Indent(),
+                  exitCode => new Exception($"C# compiler finished with a non-zero exit code of {exitCode}."));
 
             var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
                                                 Path.GetDirectoryName(queryFilePath))
@@ -706,6 +674,66 @@ namespace LinqPadless
             // TODO User-supplied exe.cmd
 
             GenerateBatch(LoadTextResource("exe.cmd"), queryFilePath, packagesPath, rs);
+        }
+
+        static void InstallCompilersPackage(string nugetExePath,
+                                            string compilersPackagePath, Version version,
+                                            IndentingLineWriter writer)
+        {
+            if (!File.Exists(Path.GetDirectoryName(nugetExePath)))
+            {
+                var tempDownloadPath = Path.GetTempFileName();
+                var nugetExeUrl = new Uri("https://dist.nuget.org/win-x86-commandline/v3.5.0/nuget.exe");
+                writer.WriteLine("Downloading NuGet from " + nugetExeUrl);
+                using (var wc = new WebClient())
+                    wc.DownloadFile(nugetExeUrl, tempDownloadPath);
+                writer.WriteLine(
+                    $"Downloaded NuGet to {nugetExePath} ({ByteSize.FromBytes(new FileInfo(tempDownloadPath).Length)}).");
+                Directory.CreateDirectory(Path.GetDirectoryName(nugetExePath));
+                File.Delete(nugetExePath);
+                File.Move(tempDownloadPath, nugetExePath);
+            }
+
+            const string compilersPackageId = "Microsoft.Net.Compilers";
+
+            var compilersPackageBasePath = Path.GetDirectoryName(compilersPackagePath);
+            Spawn(nugetExePath, $"install {compilersPackageId} -Version {version}", compilersPackageBasePath,
+                  writer.Indent(),
+                  exitCode => new Exception($"NuGet finished with a non-zero exit code of {exitCode}."));
+
+            Directory.Move(Directory.EnumerateDirectories(Path.Combine(compilersPackageBasePath),
+                           Path.GetFileName(compilersPackagePath + ".*")).FirstOrDefault()
+                           ?? throw new DirectoryNotFoundException(compilersPackageId + " package installation path not found."),
+                           compilersPackagePath);
+        }
+
+        static void Spawn(string path, string args, string workingDirPath, IndentingLineWriter writer,
+                          Func<int, Exception> errorSelector)
+        {
+            using (var process = Process.Start(new ProcessStartInfo
+            {
+                CreateNoWindow         = true,
+                UseShellExecute        = false,
+                FileName               = path,
+                Arguments              = args,
+                RedirectStandardError  = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory       = workingDirPath,
+            }))
+            {
+                Debug.Assert(process != null);
+
+                process.OutputDataReceived += OnProcessStdDataReceived(writer);
+                process.ErrorDataReceived  += OnProcessStdDataReceived(writer);
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+
+                var exitCode = process.ExitCode;
+                if (exitCode != 0)
+                    throw errorSelector(exitCode);
+            }
         }
 
         static DataReceivedEventHandler OnProcessStdDataReceived(IndentingLineWriter writer) =>
