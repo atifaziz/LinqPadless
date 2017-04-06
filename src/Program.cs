@@ -723,8 +723,15 @@ namespace LinqPadless
             {
                 Debug.Assert(process != null);
 
-                process.OutputDataReceived += OnProcessStdDataReceived(writer);
-                process.ErrorDataReceived  += OnProcessStdDataReceived(writer);
+                void OnStdDataReceived(object _, DataReceivedEventArgs e)
+                {
+                    if (e.Data == null)
+                        return;
+                    writer?.WriteLines(e.Data);
+                }
+
+                process.OutputDataReceived += OnStdDataReceived;
+                process.ErrorDataReceived  += OnStdDataReceived;
 
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
@@ -735,14 +742,6 @@ namespace LinqPadless
                     throw errorSelector(exitCode);
             }
         }
-
-        static DataReceivedEventHandler OnProcessStdDataReceived(IndentingLineWriter writer) =>
-            (_, e) =>
-            {
-                if (e.Data == null)
-                    return;
-                writer?.WriteLines(e.Data);
-            };
 
         static Func<string, string> QuoteOpt(params char[] chars) =>
             s => s?.IndexOfAny(chars) >= 0 ? "\"" + s + "\"" : s;
