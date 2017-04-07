@@ -73,7 +73,7 @@ namespace LinqPadless
                 { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
-                { "t|target="     , csx + " = C# script (default); " + exe + " = executable (experimental)", v => target = v },
+                { "t|target="     , csx + " = C# script (default); " + exe + " = executable", v => target = v },
                 { "fx="           , $"target framework; default: {targetFramework}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
