@@ -59,7 +59,7 @@ namespace LinqPadless
             var incremental = false;
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
-            var target = (string) null;
+            var target = csx;
             var targetFramework = NuGetFramework.Parse(AppDomain.CurrentDomain.SetupInformation.TargetFrameworkName);
 
             var options = new OptionSet
