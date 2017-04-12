@@ -411,7 +411,7 @@ namespace LinqPadless
                 writer.Indent().WriteLines(e.ResumeFromCurrent());
             });
 
-            var references = resolution.ResolvedReferences.ToArray();
+            var references = resolution.ResolvedReferences.OrderBy(r => r.AssemblyPath).ToArray();
 
             references.Select(r => r.AssemblyPath).StartIter(e =>
             {
@@ -510,6 +510,8 @@ namespace LinqPadless
 
                     from ns in imports
                     select $"using {ns};",
+
+                    Seq.Return(string.Empty),
 
                     Seq.Return(body, string.Empty),
                 }
