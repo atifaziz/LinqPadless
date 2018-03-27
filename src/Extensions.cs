@@ -17,7 +17,7 @@
 namespace LinqPadless
 {
     using System.IO;
-    using NDesk.Options;
+    using Mono.Options;
 
     static class OptionSetExtensions
     {

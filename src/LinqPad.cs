@@ -101,5 +101,26 @@ namespace LinqPadless
             "System.Xml.Linq",
             "System.Xml.XPath",
         });
+
+        public static readonly ICollection<string> DefaultCoreNamespaces = Array.AsReadOnly(new[]
+        {
+            "System",
+            "System.IO",
+            "System.Text",
+            "System.Text.RegularExpressions",
+            "System.Diagnostics",
+            "System.Threading",
+            "System.Reflection",
+            "System.Collections",
+            "System.Collections.Generic",
+            "System.Linq",
+            "System.Linq.Expressions",
+            "System.Data",
+            "System.Data.SqlClient",
+            "System.Transactions",
+            "System.Xml",
+            "System.Xml.Linq",
+            "System.Xml.XPath",
+        });
     }
 }

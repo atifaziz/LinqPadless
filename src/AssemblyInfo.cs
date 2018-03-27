@@ -19,18 +19,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("LinqPadless")]
-[assembly: AssemblyDescription("LINQPad Query Less")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("LinqPadless")]
-[assembly: AssemblyCopyright("Copyright \u00a9 2016 Atif Aziz. All rights reserved. Portions \u00a9 2014 Dave Glick.")]
+//[assembly: AssemblyDescription("LINQPad Query Less")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
-
-#if DEBUG
-[assembly: AssemblyConfiguration("DEBUG")]
-#else
-[assembly: AssemblyConfiguration("RELEASE")]
-#endif
 
 [assembly: ComVisible(false)]
 [assembly: CLSCompliant(true)]
