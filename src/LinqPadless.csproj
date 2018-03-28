@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <None Remove="csi.cmd" />
-    <None Remove="exe.cmd" />
+    <None Remove="dotnet.cmd" />
     <None Remove="help.txt" />
   </ItemGroup>
 
@@ -42,7 +42,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="csi.cmd" />
-    <EmbeddedResource Include="exe.cmd" />
+    <EmbeddedResource Include="dotnet.cmd" />
     <EmbeddedResource Include="help.txt" />
   </ItemGroup>
 

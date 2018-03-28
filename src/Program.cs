@@ -568,70 +568,9 @@ namespace LinqPadless
                 from line in lines
                 select line);
 
-            return;
+            // TODO User-supplied dotnet.cmd
 
-            var quoteOpt = QuoteOpt(' ');
-            var args = Seq.Return(csFilePath).Concat(rs.Select(r => "/r:" + r.path))
-                          .Select(quoteOpt);
-            var argsLine = string.Join(" ", args);
-
-            var binDirPath = Path.GetDirectoryName(new Uri(Assembly.GetEntryAssembly().CodeBase).LocalPath);
-            var compilersPackagePath = Path.Combine(binDirPath, "Microsoft.Net.Compilers");
-            var cscPath = Path.Combine(compilersPackagePath, "tools", "csc.exe");
-
-            if (!File.Exists(cscPath))
-            {
-                writer.WriteLine("Installing C# compiler using NuGet:");
-                InstallCompilersPackage(Path.Combine(binDirPath, "nuget.exe"),
-                                        compilersPackagePath, new Version(2, 0, 1),
-                                        writer.Indent());
-            }
-
-            writer.WriteLine(quoteOpt(cscPath) + " " + argsLine);
-
-            Spawn(cscPath, argsLine, string.IsNullOrEmpty(workingDirPath)
-                                     ? Environment.CurrentDirectory
-                                     : Path.GetFullPath(workingDirPath),
-                  writer.Indent(),
-                  exitCode => new Exception($"C# compiler finished with a non-zero exit code of {exitCode}."));
-
-            var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
-                                                Path.GetDirectoryName(queryFilePath))
-                                   .TrimEnd(PathSeparators)
-                             + Path.DirectorySeparatorChar;
-
-            var privatePaths =
-                from r in rs
-                select Path.Combine(queryDirPath, r.path) into r
-                where File.Exists(r)
-                select Path.GetDirectoryName(r) into d
-                where !string.IsNullOrEmpty(d)
-                select MakeRelativePath(queryDirPath, d + Path.DirectorySeparatorChar) into d
-                where d.Length > 0
-                   // TODO consider warning user in following case
-                   && !Path.IsPathRooted(d)
-                   && ".." != d.Split(PathSeparators, 2, StringSplitOptions.None)[0]
-                group 1 by d into g
-                select g.Key.TrimEnd(PathSeparators);
-
-            privatePaths = privatePaths.ToArray();
-
-            if (privatePaths.Any())
-            {
-                var asmv1 = XNamespace.Get("urn:schemas-microsoft-com:asm.v1");
-                var config =
-                    new XElement("configuration",
-                        new XElement("runtime",
-                            new XElement(asmv1 + "assemblyBinding",
-                                new XElement(asmv1 + "probing",
-                                    new XAttribute("privatePath", string.Join(";", privatePaths))))));
-
-                File.WriteAllText(Path.ChangeExtension(queryFilePath, ".exe.config"), config.ToString());
-            }
-
-            // TODO User-supplied exe.cmd
-
-            GenerateBatch(LoadTextResource("exe.cmd"), queryFilePath, packagesPath, rs);
+            GenerateBatch(LoadTextResource("dotnet.cmd"), queryFilePath, packagesPath, rs);
         }
 
         static Version GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
@@ -725,9 +664,6 @@ namespace LinqPadless
                     throw errorSelector(exitCode);
             }
         }
-
-        static Func<string, string> QuoteOpt(params char[] chars) =>
-            s => s?.IndexOfAny(chars) >= 0 ? "\"" + s + "\"" : s;
 
         static PackageReference ParseExtraPackageReference(string input)
         {
