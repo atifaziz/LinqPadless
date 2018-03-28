@@ -453,25 +453,7 @@ namespace LinqPadless
                                   string queryFilePath, string packagesPath,
                                   IEnumerable<(string path, PackageReference sourcePackage)> references)
         {
-            var queryDirPath = Path.GetFullPath(// ReSharper disable once AssignNullToNotNullAttribute
-                                                Path.GetDirectoryName(queryFilePath));
-
-            var pkgdir = MakeRelativePath(queryDirPath + Path.DirectorySeparatorChar,
-                                          packagesPath + Path.DirectorySeparatorChar);
-
-            var installs =
-                from r in references
-                where r.sourcePackage != null
-                select $"if not exist \"{r.path}\" nuget install {r.sourcePackage.Id} -Version {r.sourcePackage.Version}{(r.sourcePackage.Version.IsPrerelease ? " -Prerelease" : null)} -OutputDirectory {pkgdir.TrimEnd(Path.DirectorySeparatorChar)} >&2 || goto :pkgerr";
-
-            cmdTemplate = Regex.Replace(cmdTemplate, @"^ *(::|rem) *__PACKAGES__",
-                                string.Join(Environment.NewLine, installs),
-                                RegexOptions.CultureInvariant
-                                | RegexOptions.IgnoreCase
-                                | RegexOptions.Multiline);
-
             cmdTemplate = cmdTemplate.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
-
             File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmdTemplate);
         }
 
