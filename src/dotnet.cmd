@@ -5,7 +5,7 @@ for %%i in (dotnet.exe) do set DOTNETPATH=%%~$PATH:i
 if not defined DOTNETPATH call :no-dotnet
 set LINQPADLESS=__LINQPADLESS__
 pushd "%~dp0"
-dotnet run -p "~dpn0"-- %*
+dotnet run -v quiet -p "%~dpn0" -- %*
 popd
 goto :EOF
 
