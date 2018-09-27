@@ -14,9 +14,6 @@
 //
 #endregion
 
-using System.Runtime.Versioning;
-using System.Xml;
-
 namespace LinqPadless
 {
     #region Imports
@@ -29,9 +26,11 @@ namespace LinqPadless
     using System.Net;
     using System.Reflection;
     using System.Runtime.InteropServices;
+    using System.Runtime.Versioning;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
+    using System.Xml;
     using System.Xml.Linq;
     using ByteSizeLib;
     using Mannex;
