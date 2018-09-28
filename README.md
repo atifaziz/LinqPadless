@@ -6,10 +6,10 @@ LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
 [C# scripts (csx)][csx] or executable binaries so that they can be run
 outside and independent of LINQPad.
 
-The compiler emits a C# script file or an executable in the same directory
-and with the same file name as the source query except it bears either the
-`.csx` or the `.exe` extension. It also creates a Windows batch file
-alongside that does the following:
+The compiler emits a C# script file or an executable console applicaiton in a
+sub-directory. It also creates a Windows batch file alongside that uses
+[dotnet-script] to run the C# script or the `dotnet` CLI to run the
+console applicaiton.
 
 - Checks that referenced NuGet packages are installed.
 - Installs missing NuGet packages.
@@ -88,6 +88,10 @@ scripts or executables enables them be shipped and run without LINQPad.
 
 ## Limitations
 
+Requires .NET Core SDK 2.1+ for executables or [dotnet-script] for C# scripts.
+
+C# scripts will run on .NET Core only.
+
 LINQPad Query files must be either C# Statements, Expression or Program. In
 the case of a C# Program query, a `Main` declared to be asynchronous must
 return `Task`.
@@ -99,10 +103,6 @@ cause compilation errors when the compiled C# script is executed. This issue
 can be addressed by using a faking/emulation library of sorts, like
 [FakeLinqPad][fakelp].
 
-When generating an executable, referenced assemblies (whether from NuGet
-packages or otherwise) must be placed in the same directory or
-sub-directories below.
-
 
 [nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
 [nuget-pkg]: https://www.nuget.org/packages/LinqPadless
@@ -112,3 +112,4 @@ sub-directories below.
 [lprun]: https://www.linqpad.net/lprun.aspx
 [fakelp.pkg]: https://www.nuget.org/packages/FakeLinqPad
 [fakelp]: https://github.com/linqpadless/FakeLinqPad
+[dotnet-script]: https://github.com/filipw/dotnet-script
