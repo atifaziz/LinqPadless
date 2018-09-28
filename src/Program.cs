@@ -430,7 +430,16 @@ namespace LinqPadless
                 from lines in new[]
                 {
                     from r in rs
-                    select $"#r \"{r.path}\"",
+                    select r.sourcePackage into p
+                    select new
+                    {
+                        p.Id,
+                        Version = p.HasVersion
+                                ? p.Version.ToString()
+                                : GetLatestPackageVersion(p.Id, p.IsPrereleaseAllowed).ToString()
+                    }
+                    into p
+                    select $"#r \"nuget: {p.Id}, {p.Version}\"",
 
                     Seq.Return(string.Empty),
 
@@ -444,7 +453,7 @@ namespace LinqPadless
 
             // TODO User-supplied csi.cmd
 
-            GenerateBatch(LoadTextResource("csi.cmd"), queryFilePath, packagesPath, rs);
+            GenerateBatch(LoadTextResource("dotnet-script.cmd"), queryFilePath, packagesPath, rs);
         }
 
         static void GenerateBatch(string cmdTemplate,
