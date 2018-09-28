@@ -32,7 +32,6 @@ namespace LinqPadless
     using System.Threading;
     using System.Xml;
     using System.Xml.Linq;
-    using ByteSizeLib;
     using Mannex;
     using Mannex.IO;
     using Mono.Options;
@@ -579,73 +578,6 @@ namespace LinqPadless
             return versions.SingleOrDefault();
         }
 
-        static void InstallCompilersPackage(string nugetExePath,
-                                            string compilersPackagePath, Version version,
-                                            IndentingLineWriter writer)
-        {
-            if (!File.Exists(Path.GetDirectoryName(nugetExePath)))
-            {
-                var tempDownloadPath = Path.GetTempFileName();
-                var nugetExeUrl = new Uri("https://dist.nuget.org/win-x86-commandline/v3.5.0/nuget.exe");
-                writer.WriteLine("Downloading NuGet from " + nugetExeUrl);
-                using (var wc = new WebClient())
-                    wc.DownloadFile(nugetExeUrl, tempDownloadPath);
-                writer.WriteLine(
-                    $"Downloaded NuGet to {nugetExePath} ({ByteSize.FromBytes(new FileInfo(tempDownloadPath).Length)}).");
-                Directory.CreateDirectory(Path.GetDirectoryName(nugetExePath));
-                File.Delete(nugetExePath);
-                File.Move(tempDownloadPath, nugetExePath);
-            }
-
-            const string compilersPackageId = "Microsoft.Net.Compilers";
-
-            var compilersPackageBasePath = Path.GetDirectoryName(compilersPackagePath);
-            Spawn(nugetExePath, $"install {compilersPackageId} -Version {version}", compilersPackageBasePath,
-                  writer.Indent(),
-                  exitCode => new Exception($"NuGet finished with a non-zero exit code of {exitCode}."));
-
-            Directory.Move(Directory.EnumerateDirectories(Path.Combine(compilersPackageBasePath),
-                           Path.GetFileName(compilersPackagePath + ".*")).FirstOrDefault()
-                           ?? throw new DirectoryNotFoundException(compilersPackageId + " package installation path not found."),
-                           compilersPackagePath);
-        }
-
-        static void Spawn(string path, string args, string workingDirPath, IndentingLineWriter writer,
-                          Func<int, Exception> errorSelector)
-        {
-            using (var process = Process.Start(new ProcessStartInfo
-            {
-                CreateNoWindow         = true,
-                UseShellExecute        = false,
-                FileName               = path,
-                Arguments              = args,
-                RedirectStandardError  = true,
-                RedirectStandardOutput = true,
-                WorkingDirectory       = workingDirPath,
-            }))
-            {
-                Debug.Assert(process != null);
-
-                void OnStdDataReceived(object _, DataReceivedEventArgs e)
-                {
-                    if (e.Data == null)
-                        return;
-                    writer?.WriteLines(e.Data);
-                }
-
-                process.OutputDataReceived += OnStdDataReceived;
-                process.ErrorDataReceived  += OnStdDataReceived;
-
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                process.WaitForExit();
-
-                var exitCode = process.ExitCode;
-                if (exitCode != 0)
-                    throw errorSelector(exitCode);
-            }
-        }
-
         static PackageReference ParseExtraPackageReference(string input)
         {
             // Syntax: ID [ "@" VERSION ] ["++"]
@@ -715,30 +647,6 @@ namespace LinqPadless
 
         static Stream GetManifestResourceStream(Type type, string name) =>
             type.Assembly.GetManifestResourceStream(type, name);
-
-        /// <remarks>
-        /// Credit http://stackoverflow.com/a/340454/6682
-        /// </remarks>
-
-        static string MakeRelativePath(string fromPath, string toPath)
-        {
-            if (string.IsNullOrEmpty(fromPath)) throw new ArgumentNullException(nameof(fromPath));
-            if (string.IsNullOrEmpty(toPath)) throw new ArgumentNullException(nameof(toPath));
-
-            var fromUri = new Uri(fromPath);
-            var toUri = new Uri(toPath);
-
-            if (fromUri.Scheme != toUri.Scheme)
-                return toPath; // path can't be made relative.
-
-            var relativeUri = fromUri.MakeRelativeUri(toUri);
-            var relativePath = Uri.UnescapeDataString(relativeUri.ToString());
-
-            return toUri.Scheme == Uri.UriSchemeFile
-                   && Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar
-                 ? relativePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
-                 : relativePath;
-        }
 
         enum QueryLanguage  // ReSharper disable UnusedMember.Local
         {                   // ReSharper disable InconsistentNaming
