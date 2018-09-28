@@ -523,6 +523,7 @@ namespace LinqPadless
                     new XAttribute("Sdk", "Microsoft.NET.Sdk"),
                     new XElement("PropertyGroup",
                         new XElement("OutputType", "Exe"),
+                        // TODO Remove TargetFramework hard-coding
                         new XElement("TargetFramework", "netcoreapp2.0")),
                     new XElement("ItemGroup",
                         from r in rs
