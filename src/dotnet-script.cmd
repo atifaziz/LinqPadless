@@ -1,10 +1,11 @@
 ﻿@echo off
 setlocal
 set DOTNET_SCRIPT_PATH=
-for %%i in (dotnet-script.exe) do set DOTNET_SCRIPT_PATH=%%~$PATH:i
+for %%x in (com exe bat cmd) do if exist "%~dp0dotnet-script.%%x" set DOTNET_SCRIPT_PATH=%~dp0dotnet-script.%%x
+if not defined DOTNET_SCRIPT_PATH for %%i in (dotnet-script.exe) do set DOTNET_SCRIPT_PATH=%%~$PATH:i
 if not defined DOTNET_SCRIPT_PATH call :no-dotnet-script
 set LINQPADLESS=__LINQPADLESS__
-"%DOTNET_SCRIPT_PATH%" "%~dpn0.csx" -- %*
+call "%DOTNET_SCRIPT_PATH%" "%~dpn0.csx" -- %*
 goto :EOF
 
 :no-dotnet-script
