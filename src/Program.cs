@@ -457,12 +457,14 @@ namespace LinqPadless
                 GenerateBatch(LoadTextResource("dotnet-script" + ext), ext, queryFilePath, null, null);
         }
 
+        static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
         static void GenerateBatch(string template, string extension,
                                   string queryFilePath, string packagesPath,
                                   IEnumerable<(string path, PackageReference sourcePackage)> references)
         {
             template = template.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
-            File.WriteAllText(Path.ChangeExtension(queryFilePath, extension), template);
+            File.WriteAllText(Path.ChangeExtension(queryFilePath, extension), template, Utf8BomlessEncoding);
 
             if (".sh".Equals(extension, StringComparison.OrdinalIgnoreCase)
                 && (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
@@ -544,7 +546,7 @@ namespace LinqPadless
 
             using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
             {
-                Encoding           = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                Encoding           = Utf8BomlessEncoding,
                 Indent             = true,
                 OmitXmlDeclaration = true,
             }))
