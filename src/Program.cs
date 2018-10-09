@@ -453,15 +453,23 @@ namespace LinqPadless
 
             // TODO User-supplied csi.cmd
 
-            GenerateBatch(LoadTextResource("dotnet-script.cmd"), queryFilePath, packagesPath, rs);
+            foreach (var ext in new[] { ".cmd", ".sh" })
+                GenerateBatch(LoadTextResource("dotnet-script" + ext), ext, queryFilePath, null, null);
         }
 
-        static void GenerateBatch(string cmdTemplate,
+        static void GenerateBatch(string template, string extension,
                                   string queryFilePath, string packagesPath,
                                   IEnumerable<(string path, PackageReference sourcePackage)> references)
         {
-            cmdTemplate = cmdTemplate.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
-            File.WriteAllText(Path.ChangeExtension(queryFilePath, ".cmd"), cmdTemplate);
+            template = template.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
+            File.WriteAllText(Path.ChangeExtension(queryFilePath, extension), template);
+
+            if (".sh".Equals(extension, StringComparison.OrdinalIgnoreCase)
+                && (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+                    || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)))
+            {
+                // TODO chmod +x on *nix
+            }
         }
 
         static void GenerateExecutable(string queryFilePath,
@@ -560,7 +568,8 @@ namespace LinqPadless
 
             // TODO User-supplied dotnet.cmd
 
-            GenerateBatch(LoadTextResource("dotnet.cmd"), queryFilePath, packagesPath, rs);
+            foreach (var ext in new[] { ".cmd", ".sh" })
+                GenerateBatch(LoadTextResource("dotnet" + ext), ext, queryFilePath, packagesPath, rs);
         }
 
         static Version GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
