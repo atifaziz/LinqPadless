@@ -35,6 +35,34 @@ namespace LinqPadless
         public static IEnumerable<T> Filter<T>(this IEnumerable<T> source) =>
             from item in source where item != null select item;
 
+        static void Read<T>(ref IEnumerator<T> e, out T item)
+        {
+            if (e != null && e.MoveNext())
+            {
+                item = e.Current;
+            }
+            else
+            {
+                if (e != null)
+                {
+                    e.Dispose();
+                    e = null;
+                }
+
+                item = default;
+            }
+        }
+
+        public static void Deconstruct<T>(this IEnumerable<T> source, out T item1, out T item2)
+        {
+            using (var e = source.GetEnumerator())
+            {
+                var ee = e;
+                Read(ref ee, out item1);
+                Read(ref ee, out item2);
+            }
+        }
+
         public static IEnumerable<T[]> Throttle<T>(this IEnumerable<T> source, TimeSpan timeout)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
