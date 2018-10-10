@@ -29,10 +29,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="dotnet-script.cmd" />
-    <None Remove="dotnet-script.sh" />
-    <None Remove="dotnet.cmd" />
-    <None Remove="dotnet.sh" />
     <None Remove="help.txt" />
   </ItemGroup>
 
@@ -43,10 +39,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="dotnet.sh" />
-    <EmbeddedResource Include="dotnet-script.sh" />
-    <EmbeddedResource Include="dotnet-script.cmd" />
-    <EmbeddedResource Include="dotnet.cmd" />
     <EmbeddedResource Include="help.txt" />
   </ItemGroup>
 
