@@ -1,11 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <Title>LinqPadless</Title>
     <OutputType>Exe</OutputType>
     <VersionPrefix>2.0.0</VersionPrefix>
     <TargetFramework>netcoreapp2.1</TargetFramework>
-    <LangVersion>7</LangVersion>
+    <LangVersion>7.1</LangVersion>
     <AssemblyName>lpless</AssemblyName>
     <Summary>LINQPad Queries without LINQPad</Summary>
     <Description>LINQPadless is a tool for compiling LINQPad query files into stand-alone C# scripts (csx) or executable binaries (exe) so that they can be run outside and independent of LINQPad.</Description>
