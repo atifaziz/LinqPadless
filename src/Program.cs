@@ -175,7 +175,7 @@ namespace LinqPadless
         delegate void Generator(string queryFilePath,
             // ReSharper disable once UnusedParameter.Local
             string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
             IndentingLineWriter writer);
 
         static Func<string, bool> Compiler(
@@ -204,14 +204,15 @@ namespace LinqPadless
 
                     writer.WriteLine($"{queryFilePath}");
 
-                    var info = Compile(queryFilePath,
-                                       extraPackages, extraImports,
-                                       targetFramework,
-                                       verbose, writer.Indent());
+                    var (queryKind, source, namespaces, references) =
+                        Compile(queryFilePath,
+                                extraPackages, extraImports,
+                                targetFramework,
+                                verbose, writer.Indent());
 
                     GenerateExecutable(srcDirPath, binDirPath, queryFilePath, 
-                        info.queryKind, info.source, info.namespaces,
-                        info.references, writer.Indent());
+                        queryKind, source, namespaces,
+                        references, writer.Indent());
 
                     return true;
                 }
@@ -227,7 +228,10 @@ namespace LinqPadless
             };
         }
 
-        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, PackageReference sourcePackage)> references)
+        static (QueryLanguage QueryKind,
+                string Source,
+                IEnumerable<string> Namespaces,
+                IEnumerable<(string Path, PackageReference SourcePackage)> References)
             Compile(string queryFilePath,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
@@ -343,7 +347,7 @@ namespace LinqPadless
         public static Dictionary<string, string> DirPathByToken =>
             _dirPathByToken ?? (_dirPathByToken = Seq.ToDictionary(ResolvedDirTokens(), StringComparer.OrdinalIgnoreCase));
 
-        static IEnumerable<(string token, string path)> ResolvedDirTokens()
+        static IEnumerable<(string Token, string Path)> ResolvedDirTokens()
         {
             yield return ("RuntimeDirectory", RuntimeEnvironment.GetRuntimeDirectory());
             yield return ("ProgramFiles"    , Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
@@ -362,7 +366,7 @@ namespace LinqPadless
 
         static void GenerateExecutable(string srcDirPath, string binDirPath, string queryFilePath,
             QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
+            IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
             IndentingLineWriter writer)
         {
             // TODO error handling in generated code
@@ -425,12 +429,13 @@ namespace LinqPadless
                         new XElement("TargetFramework", "netcoreapp2.0")),
                     new XElement("ItemGroup",
                         from r in rs
+                        select r.SourcePackage into package
                         select
                             new XElement("PackageReference",
-                                new XAttribute("Include", r.sourcePackage.Id),
-                                r.sourcePackage.HasVersion
-                                ? new XAttribute("Version", r.sourcePackage.Version)
-                                : new XAttribute("Version", GetLatestPackageVersion(r.sourcePackage.Id, r.sourcePackage.IsPrereleaseAllowed)))));
+                                new XAttribute("Include", package.Id),
+                                package.HasVersion
+                                ? new XAttribute("Version", package.Version)
+                                : new XAttribute("Version", GetLatestPackageVersion(package.Id, package.IsPrereleaseAllowed)))));
 
             using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
             {
