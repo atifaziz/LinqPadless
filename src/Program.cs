@@ -123,15 +123,9 @@ namespace LinqPadless
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
-            // TODO Allow package source to be specified via args
-
-            // TODO Allow packages directory to be specified via args
-
-            const string packagesDirName = "packages";
-
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
 
-            var compiler = Compiler(packagesDirName, extraPackageList, extraImportList,
+            var compiler = Compiler(extraPackageList, extraImportList,
                                     targetFramework, srcDirPath, binDirPath);
 
             compiler(scriptPath);
@@ -185,7 +179,6 @@ namespace LinqPadless
             IndentingLineWriter writer);
 
         static Func<string, bool> Compiler(
-            string packagesPath,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
             NuGetFramework targetFramework,
@@ -209,10 +202,6 @@ namespace LinqPadless
                         return false;
                     }
 
-                    var packagesDir = new DirectoryInfo(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
-                                                                     Path.GetDirectoryName(queryFilePath),
-                                                                     packagesPath));
-
                     writer.WriteLine($"{queryFilePath}");
 
                     var info = Compile(queryFilePath,
@@ -220,8 +209,7 @@ namespace LinqPadless
                                        targetFramework,
                                        verbose, writer.Indent());
 
-                    GenerateExecutable(srcDirPath, binDirPath,
-                        queryFilePath, packagesDir.FullName,
+                    GenerateExecutable(srcDirPath, binDirPath, queryFilePath, 
                         info.queryKind, info.source, info.namespaces,
                         info.references, writer.Indent());
 
@@ -373,7 +361,7 @@ namespace LinqPadless
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         static void GenerateExecutable(string srcDirPath, string binDirPath, string queryFilePath,
-            string packagesPath, QueryLanguage queryKind, string source,
+            QueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
             IndentingLineWriter writer)
         {
