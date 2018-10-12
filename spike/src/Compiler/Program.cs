@@ -683,7 +683,6 @@ namespace WebLinqPadQueryCompiler
 
     sealed class LinqPadQuery
     {
-        readonly int _eomLineNumber;
         readonly Lazy<XElement> _metaElement;
         readonly Lazy<LinqPadQueryLanguage> _language;
         readonly Lazy<ReadOnlyCollection<string>> _namespaces;
@@ -709,8 +708,6 @@ namespace WebLinqPadQueryCompiler
         {
             FilePath = filePath;
             Source = source;
-
-            _eomLineNumber = eomLineNumber;
 
             _metaElement = Lazy.Create(() =>
                 XElement.Parse(source.Lines()
