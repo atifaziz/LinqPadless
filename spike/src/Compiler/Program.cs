@@ -127,10 +127,10 @@ namespace WebLinqPadQueryCompiler
 
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
 
-            // TODO verbose
             Compile(query,
                     extraPackageList, extraImportList,
-                    targetFramework, srcDirPath, binDirPath);
+                    targetFramework, srcDirPath, binDirPath,
+                    verbose);
 
             {
                 return Run() is int exitCode
