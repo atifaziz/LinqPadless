@@ -206,7 +206,7 @@ namespace WebLinqPadQueryCompiler
 
                     writer.WriteLine($"{queryFilePath}");
 
-                    var (queryKind, source, namespaces, references, options) =
+                    var (queryKind, source, namespaces, references) =
                         Compile(queryFilePath,
                                 extraPackages, extraImports,
                                 targetFramework,
@@ -235,8 +235,7 @@ namespace WebLinqPadQueryCompiler
         static (QueryLanguage QueryKind,
                 string Source,
                 IEnumerable<string> Namespaces,
-                IEnumerable<(string Path, PackageReference SourcePackage)> References,
-                IEnumerable<KeyValuePair<string, string>> Options)
+                IEnumerable<(string Path, PackageReference SourcePackage)> References)
             Compile(string queryFilePath,
             IEnumerable<PackageReference> extraPackageReferences,
             IEnumerable<string> extraImports,
@@ -315,20 +314,6 @@ namespace WebLinqPadQueryCompiler
                 // ReSharper disable once PossibleMultipleEnumeration
                 var source = lines.Skip(eomLineNumber);
 
-                var meta = // ReSharper disable once PossibleMultipleEnumeration
-                    from s in
-                        source.SkipWhile(string.IsNullOrWhiteSpace)
-                              .Select(s => s.TrimStart())
-                              .TakeWhile(s => s.StartsWith("//!", StringComparison.Ordinal))
-                    select Regex.Match(s, @"^ //!
-                                              [\x20\t]* ([a-z][a-z0-9_-]*)
-                                              [\x20\t]* :
-                                              [\x20\t]* (.+)",
-                                              RegexOptions.IgnorePatternWhitespace) into m
-                    where m.Success
-                    select m.Groups into g
-                    select new KeyValuePair<string, string>(g[1].Value, g[2].Value.Trim());
-
                 return (queryKind,
                         // ReSharper disable once PossibleMultipleEnumeration
                         source.ToDelimitedString(Environment.NewLine),
@@ -351,8 +336,7 @@ namespace WebLinqPadQueryCompiler
                                     into r
                                     select (r, default(PackageReference)))
                             .Concat(from r in nrs
-                                    select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed))),
-                        meta.ToArray());
+                                    select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed))));
             }
         }
 
