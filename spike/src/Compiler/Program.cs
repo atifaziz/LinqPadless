@@ -41,6 +41,7 @@ namespace WebLinqPadQueryCompiler
     using MoreLinq.Experimental;
     using NuGet.Frameworks;
     using NuGet.Versioning;
+    using MoreEnumerable = MoreLinq.MoreEnumerable;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
 
@@ -84,10 +85,33 @@ namespace WebLinqPadQueryCompiler
             var scriptPath = Path.GetFullPath(tail.First());
             var scriptArgs = tail.Skip(1);
 
+            var query = LinqPadQuery.Load(scriptPath);
+            if (!query.IsLanguageSupported)
+            {
+                throw new NotSupportedException("Only LINQPad " +
+                                                "C# Statements and Expression queries are fully supported " +
+                                                "and C# Program queries partially in this version.");
+            }
+
+            var resourceAssembly = typeof(Program).Assembly;
+
+            var templateResourceNames =
+                from rn in resourceAssembly.GetManifestResourceNames()
+                where rn.IndexOf($".Templates.{query.Language}.", StringComparison.OrdinalIgnoreCase) >= 0
+                select rn;
+
+            var hashSource =
+                templateResourceNames
+                    .OrderBy(rn => rn, StringComparer.OrdinalIgnoreCase)
+                    .Select(rn => resourceAssembly.GetManifestResourceStream(rn))
+                    .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
+                    .ToStreamable();
+
             string hash;
             using (var sha = SHA1.Create())
+            using (var stream = hashSource.Open())
             {
-                hash = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(scriptPath)))
+                hash = BitConverter.ToString(sha.ComputeHash(stream))
                                    .Replace("-", string.Empty)
                                    .ToLowerInvariant();
             }
@@ -232,7 +256,7 @@ namespace WebLinqPadQueryCompiler
             };
         }
 
-        static (QueryLanguage QueryKind,
+        static (LinqPadQueryLanguage QueryKind,
                 string Source,
                 IEnumerable<string> Namespaces,
                 IEnumerable<(string Path, PackageReference SourcePackage)> References)
@@ -256,10 +280,10 @@ namespace WebLinqPadQueryCompiler
                 if (verbose)
                     writer.Write(query);
 
-                if (!Enum.TryParse((string) query.Attribute("Kind"), true, out QueryLanguage queryKind)
-                    || queryKind != QueryLanguage.Statements
-                    && queryKind != QueryLanguage.Expression
-                    && queryKind != QueryLanguage.Program)
+                if (!Enum.TryParse((string) query.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind)
+                    || queryKind != LinqPadQueryLanguage.Statements
+                    && queryKind != LinqPadQueryLanguage.Expression
+                    && queryKind != LinqPadQueryLanguage.Program)
                 {
                     throw new NotSupportedException("Only LINQPad " +
                         "C# Statements and Expression queries are fully supported " +
@@ -376,7 +400,7 @@ namespace WebLinqPadQueryCompiler
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         static void GenerateExecutable(string srcDirPath, string binDirPath, string queryFilePath,
-            QueryLanguage queryKind, string source,
+            LinqPadQueryLanguage queryKind, string source,
             IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
             IndentingLineWriter writer)
         {
@@ -467,14 +491,14 @@ namespace WebLinqPadQueryCompiler
                          + after);
 
             var body
-                = queryKind == QueryLanguage.Expression
+                = queryKind == LinqPadQueryLanguage.Expression
                 ? Template(programTemplate, "source", (before, after) =>
                       before
                       + source + Environment.NewLine
                       + ", " + SyntaxFactory.Literal(queryFilePath)
                       + ", " + SyntaxFactory.Literal(source)
                       + after).Lines()
-                : queryKind == QueryLanguage.Program
+                : queryKind == LinqPadQueryLanguage.Program
                 ? Seq.Return(
                         "class UserQuery {",
                         "    static int Main(string[] args) {",
@@ -663,19 +687,6 @@ namespace WebLinqPadQueryCompiler
             type != null ? type.Assembly.GetManifestResourceStream(type, name)
                          : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
 
-        enum QueryLanguage  // ReSharper disable UnusedMember.Local
-        {                   // ReSharper disable InconsistentNaming
-            Expression,
-            Statements,
-            Program,
-            VBExpression,
-            VBStatements,
-            VBProgram,
-            FSharpExpression,
-            FSharpProgram,
-            SQL,
-            ESQL,
-        }
         // ReSharper restore InconsistentNaming
         // ReSharper restore UnusedMember.Local
     }
@@ -693,5 +704,62 @@ namespace WebLinqPadQueryCompiler
             Version = version;
             IsPrereleaseAllowed = isPrereleaseAllowed;
         }
+    }
+
+    enum LinqPadQueryLanguage  // ReSharper disable UnusedMember.Local
+    {                          // ReSharper disable InconsistentNaming
+        Unknown,
+        Expression,
+        Statements,
+        Program,
+        VBExpression,
+        VBStatements,
+        VBProgram,
+        FSharpExpression,
+        FSharpProgram,
+        SQL,
+        ESQL,
+    }
+
+    sealed class LinqPadQuery
+    {
+        readonly int _eomLineNumber;
+        readonly Lazy<XElement> _metaElement;
+        readonly Lazy<LinqPadQueryLanguage> _language;
+
+        public string FilePath { get; }
+        public string Source { get; }
+        public LinqPadQueryLanguage Language => _language.Value;
+        public XElement MetaElement => _metaElement.Value;
+
+        public static LinqPadQuery Load(string path)
+        {
+            var source = File.ReadAllText(path);
+            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
+            return new LinqPadQuery(path, source, eomLineNumber);
+        }
+
+        LinqPadQuery(string filePath, string source, int eomLineNumber)
+        {
+            FilePath = filePath;
+            Source = source;
+
+            _eomLineNumber = eomLineNumber;
+
+            _metaElement = Lazy.Create(() =>
+                XElement.Parse(source.Lines()
+                                     .Take(eomLineNumber)
+                                     .ToDelimitedString(Environment.NewLine)));
+
+            _language = Lazy.Create(() =>
+                Enum.TryParse((string) MetaElement.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind) ? queryKind : LinqPadQueryLanguage.Unknown);
+        }
+
+        public bool IsLanguageSupported
+            => Language == LinqPadQueryLanguage.Statements
+            || Language == LinqPadQueryLanguage.Expression
+            || Language == LinqPadQueryLanguage.Program;
+
+        public override string ToString() => Source;
     }
 }
