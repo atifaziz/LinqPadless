@@ -39,7 +39,6 @@ namespace WebLinqPadQueryCompiler
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
-    using MoreLinq.Experimental;
     using NuGet.Frameworks;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
@@ -65,7 +64,6 @@ namespace WebLinqPadQueryCompiler
                 { "?|help|h"      , "prints out the options", _ => help = true },
                 { "verbose|v"     , "enable additional output", _ => verbose = true },
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
-                // { "r|recurse"     , "include sub-directories", _ => recurse = true },
                 { "f|force"       , "force continue on errors", _ => force = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
@@ -158,170 +156,101 @@ namespace WebLinqPadQueryCompiler
 
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
 
-            var compiler = Compiler(extraPackageList, extraImportList,
-                                    targetFramework, srcDirPath, binDirPath);
+            // TODO verbose
+            Compile(query,
+                    extraPackageList, extraImportList,
+                    targetFramework, srcDirPath, binDirPath);
 
-            compiler(query);
             goto retry;
         }
 
-        static readonly char[] Wildchars = { '*', '?' };
-        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-
-        static (string dirPath, string fileName) SplitDirFileSpec(string spec)
-        {
-            var i = spec.LastIndexOfAny(PathSeparators);
-            // TODO handle rooted cases
-            return i >= 0
-                 ? (spec.Substring(0, i + 1), spec.Substring(i + 1))
-                 : (null, spec);
-        }
-
-        static IEnumerable<string> GetQueries(IEnumerable<string> tail,
-                                              bool includeSubdirs)
-        {
-            var dirSearchOption = includeSubdirs
-                                ? SearchOption.AllDirectories
-                                : SearchOption.TopDirectoryOnly;
-            return
-                from spec in tail
-                let tokens = SplitDirFileSpec(spec).Fold((dp, fs) =>
-                (
-                    dirPath : dp ?? Environment.CurrentDirectory,
-                    fileSpec: fs
-                ))
-                let dirPath = tokens.dirPath ?? Environment.CurrentDirectory
-                from e in
-                    tokens.fileSpec.IndexOfAny(Wildchars) >= 0
-                    ? from fi in new DirectoryInfo(dirPath).EnumerateFiles(tokens.fileSpec, dirSearchOption)
-                      select new { File = fi, Searched = true }
-                    : Directory.Exists(spec)
-                    ? from fi in new DirectoryInfo(spec).EnumerateFiles("*.linq", dirSearchOption)
-                      select new { File = fi, Searched = true }
-                    : new[] { new { File = new FileInfo(spec), Searched = false } }
-                where !e.Searched
-                      || (!e.File.Name.StartsWith(".", StringComparison.Ordinal)
-                          && 0 == (e.File.Attributes & (FileAttributes.Hidden | FileAttributes.System)))
-                select e.File.FullName;
-        }
-
-        static Func<LinqPadQuery, bool> Compiler(
+        static void Compile(
+            LinqPadQuery query,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
             NuGetFramework targetFramework,
             string srcDirPath, string binDirPath,
-            bool unlessUpToDate = false, bool force = false, bool verbose = false)
+            bool verbose = false)
         {
             var w = IndentingLineWriter.Create(Console.Error);
 
-            return query =>
-            {
-                var queryFilePath = query.FilePath;
+            var ww = w.Indent();
+            if (verbose)
+                ww.Write(query.MetaElement);
 
-                try
+            var nrs =
+                from nrsq in new[]
                 {
-                    var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
-                    if (unlessUpToDate && scriptFile.Exists && scriptFile.LastWriteTime > File.GetLastWriteTime(queryFilePath))
-                    {
-                        if (verbose)
-                        {
-                            w.WriteLine($"{queryFilePath}");
-                            w.Indent().WriteLine("Skipping compilation because target appears up to date.");
-                        }
-                        return false;
-                    }
+                    query.PackageReferences,
+                    extraPackages,
+                }
+                from nr in nrsq
+                select new
+                {
+                    nr.Id,
+                    nr.Version,
+                    nr.IsPrereleaseAllowed,
+                    Title = Seq.Return(nr.Id,
+                                       nr.Version?.ToString(),
+                                       nr.IsPrereleaseAllowed ? "(pre-release)" : null)
+                               .Filter()
+                               .ToDelimitedString(" "),
+                };
 
-                    w.WriteLine($"{queryFilePath}");
+            nrs = nrs.ToArray();
 
-                    var ww = w.Indent();
-                    if (verbose)
-                        ww.Write(query.MetaElement);
+            if (verbose && nrs.Any())
+            {
+                ww.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                ww.Indent().WriteLines(from nr in nrs select nr.Title);
+            }
 
-                    var nrs =
-                        from nrsq in new[]
-                        {
-                            query.PackageReferences,
-                            extraPackages,
-                        }
-                        from nr in nrsq
+            ww.WriteLine($"Packages target: {targetFramework}");
+
+            var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
+
+            var defaultNamespaces
+                = isNetCoreApp
+                ? LinqPad.DefaultCoreNamespaces
+                : LinqPad.DefaultNamespaces;
+
+            var defaultReferences
+                = isNetCoreApp
+                ? Array.Empty<string>()
+                : LinqPad.DefaultReferences;
+
+            var namespaces =
+                defaultNamespaces
+                    .Concat(query.Namespaces)
+                    .Concat(extraImports);
+
+            var references =
+                defaultReferences
+                    .Select(r => (r, default(PackageReference)))
+                    .Concat(
+                        from r in query.MetaElement.Elements("Reference")
                         select new
                         {
-                            nr.Id,
-                            nr.Version,
-                            nr.IsPrereleaseAllowed,
-                            Title = Seq.Return(nr.Id,
-                                               nr.Version?.ToString(),
-                                               nr.IsPrereleaseAllowed ? "(pre-release)" : null)
-                                       .Filter()
-                                       .ToDelimitedString(" "),
-                        };
+                            Relative = (string) r.Attribute("Relative"),
+                            Path     = ((string) r).Trim(),
+                        }
+                        into r
+                        where r.Path.Length > 0
+                        select r.Relative?.Length > 0
+                            ? r.Relative // prefer
+                            : ResolveReferencePath(r.Path)
+                        into r
+                        select (r, default(PackageReference)))
+                    .Concat(
+                        from r in nrs
+                        select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed)));
 
-                    nrs = nrs.ToArray();
+            // TODO generate to a temp name and rename on success only!
 
-                    if (verbose && nrs.Any())
-                    {
-                        ww.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                        ww.Indent().WriteLines(from nr in nrs select nr.Title);
-                    }
-
-                    ww.WriteLine($"Packages target: {targetFramework}");
-
-                    var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
-
-                    var defaultNamespaces
-                        = isNetCoreApp
-                            ? LinqPad.DefaultCoreNamespaces
-                            : LinqPad.DefaultNamespaces;
-
-                    var defaultReferences
-                        = isNetCoreApp
-                            ? Array.Empty<string>()
-                            : LinqPad.DefaultReferences;
-
-                    var namespaces =
-                        defaultNamespaces
-                            .Concat(query.Namespaces)
-                            .Concat(extraImports);
-
-                    var references =
-                        defaultReferences
-                            .Select(r => (r, default(PackageReference)))
-                            .Concat(
-                                from r in query.MetaElement.Elements("Reference")
-                                select new
-                                {
-                                    Relative = (string) r.Attribute("Relative"),
-                                    Path     = ((string) r).Trim(),
-                                }
-                                into r
-                                where r.Path.Length > 0
-                                select r.Relative?.Length > 0
-                                    ? r.Relative // prefer
-                                    : ResolveReferencePath(r.Path)
-                                into r
-                                select (r, default(PackageReference)))
-                            .Concat(
-                                from r in nrs
-                                select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed)));
-
-                    // TODO generate to a temp name and rename on success only!
-
-                    GenerateExecutable(srcDirPath, binDirPath, query,
-                                       namespaces, references, w.Indent());
-
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    if (!force)
-                        throw;
-                    w.Indent().WriteLines($"WARNING! {e.Message}");
-                    if (verbose)
-                        w.Indent().Indent().WriteLines(e.ToString());
-                    return false;
-                }
-            };
+            GenerateExecutable(srcDirPath, binDirPath, query, namespaces, references, w.Indent());
         }
+
+        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
 
         static string ResolveReferencePath(string path)
         {
