@@ -20,6 +20,7 @@ namespace WebLinqPadQueryCompiler
 
     using System;
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
@@ -160,7 +161,7 @@ namespace WebLinqPadQueryCompiler
             var compiler = Compiler(extraPackageList, extraImportList,
                                     targetFramework, srcDirPath, binDirPath);
 
-            compiler(scriptPath);
+            compiler(query);
             goto retry;
         }
 
@@ -204,17 +205,19 @@ namespace WebLinqPadQueryCompiler
                 select e.File.FullName;
         }
 
-        static Func<string, bool> Compiler(
+        static Func<LinqPadQuery, bool> Compiler(
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
             NuGetFramework targetFramework,
             string srcDirPath, string binDirPath,
             bool unlessUpToDate = false, bool force = false, bool verbose = false)
         {
-            var writer = IndentingLineWriter.Create(Console.Error);
+            var w = IndentingLineWriter.Create(Console.Error);
 
-            return queryFilePath =>
+            return query =>
             {
+                var queryFilePath = query.FilePath;
+
                 try
                 {
                     var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
@@ -222,25 +225,89 @@ namespace WebLinqPadQueryCompiler
                     {
                         if (verbose)
                         {
-                            writer.WriteLine($"{queryFilePath}");
-                            writer.Indent().WriteLine("Skipping compilation because target appears up to date.");
+                            w.WriteLine($"{queryFilePath}");
+                            w.Indent().WriteLine("Skipping compilation because target appears up to date.");
                         }
                         return false;
                     }
 
-                    writer.WriteLine($"{queryFilePath}");
+                    w.WriteLine($"{queryFilePath}");
 
-                    var (queryKind, source, namespaces, references) =
-                        Compile(queryFilePath,
-                                extraPackages, extraImports,
-                                targetFramework,
-                                verbose, writer.Indent());
+                    var ww = w.Indent();
+                    if (verbose)
+                        ww.Write(query.MetaElement);
+
+                    var nrs =
+                        from nrsq in new[]
+                        {
+                            query.PackageReferences,
+                            extraPackages,
+                        }
+                        from nr in nrsq
+                        select new
+                        {
+                            nr.Id,
+                            nr.Version,
+                            nr.IsPrereleaseAllowed,
+                            Title = Seq.Return(nr.Id,
+                                               nr.Version?.ToString(),
+                                               nr.IsPrereleaseAllowed ? "(pre-release)" : null)
+                                       .Filter()
+                                       .ToDelimitedString(" "),
+                        };
+
+                    nrs = nrs.ToArray();
+
+                    if (verbose && nrs.Any())
+                    {
+                        ww.WriteLine($"Packages referenced ({nrs.Count():N0}):");
+                        ww.Indent().WriteLines(from nr in nrs select nr.Title);
+                    }
+
+                    ww.WriteLine($"Packages target: {targetFramework}");
+
+                    var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
+
+                    var defaultNamespaces
+                        = isNetCoreApp
+                            ? LinqPad.DefaultCoreNamespaces
+                            : LinqPad.DefaultNamespaces;
+
+                    var defaultReferences
+                        = isNetCoreApp
+                            ? Array.Empty<string>()
+                            : LinqPad.DefaultReferences;
+
+                    var namespaces =
+                        defaultNamespaces
+                            .Concat(query.Namespaces)
+                            .Concat(extraImports);
+
+                    var references =
+                        defaultReferences
+                            .Select(r => (r, default(PackageReference)))
+                            .Concat(
+                                from r in query.MetaElement.Elements("Reference")
+                                select new
+                                {
+                                    Relative = (string) r.Attribute("Relative"),
+                                    Path     = ((string) r).Trim(),
+                                }
+                                into r
+                                where r.Path.Length > 0
+                                select r.Relative?.Length > 0
+                                    ? r.Relative // prefer
+                                    : ResolveReferencePath(r.Path)
+                                into r
+                                select (r, default(PackageReference)))
+                            .Concat(
+                                from r in nrs
+                                select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed)));
 
                     // TODO generate to a temp name and rename on success only!
 
-                    GenerateExecutable(srcDirPath, binDirPath, queryFilePath,
-                        queryKind, source, namespaces,
-                        references, writer.Indent());
+                    GenerateExecutable(srcDirPath, binDirPath, query,
+                                       namespaces, references, w.Indent());
 
                     return true;
                 }
@@ -248,120 +315,12 @@ namespace WebLinqPadQueryCompiler
                 {
                     if (!force)
                         throw;
-                    writer.Indent().WriteLines($"WARNING! {e.Message}");
+                    w.Indent().WriteLines($"WARNING! {e.Message}");
                     if (verbose)
-                        writer.Indent().Indent().WriteLines(e.ToString());
+                        w.Indent().Indent().WriteLines(e.ToString());
                     return false;
                 }
             };
-        }
-
-        static (LinqPadQueryLanguage QueryKind,
-                string Source,
-                IEnumerable<string> Namespaces,
-                IEnumerable<(string Path, PackageReference SourcePackage)> References)
-            Compile(string queryFilePath,
-            IEnumerable<PackageReference> extraPackageReferences,
-            IEnumerable<string> extraImports,
-            NuGetFramework targetFramework,
-            bool verbose, IndentingLineWriter writer)
-        {
-            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(new FileInfo(queryFilePath));
-            var lines = File.ReadLines(queryFilePath).Memoize();
-            using (lines as IDisposable)
-            {
-                var xml =
-                    // ReSharper disable once PossibleMultipleEnumeration
-                    lines.Take(eomLineNumber)
-                         .ToDelimitedString(Environment.NewLine);
-
-                var query = XElement.Parse(xml);
-
-                if (verbose)
-                    writer.Write(query);
-
-                if (!Enum.TryParse((string) query.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind)
-                    || queryKind != LinqPadQueryLanguage.Statements
-                    && queryKind != LinqPadQueryLanguage.Expression
-                    && queryKind != LinqPadQueryLanguage.Program)
-                {
-                    throw new NotSupportedException("Only LINQPad " +
-                        "C# Statements and Expression queries are fully supported " +
-                        "and C# Program queries partially in this version.");
-                }
-
-                var nrs =
-                    from nrsq in new[]
-                    {
-                        from nr in query.Elements("NuGetReference")
-                        let v = (string) nr.Attribute("Version")
-                        select new PackageReference((string)nr,
-                                                    string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
-                                                    (bool?)nr.Attribute("Prerelease") ?? false),
-                        extraPackageReferences,
-                    }
-                    from nr in nrsq
-                    select new
-                    {
-                        nr.Id,
-                        nr.Version,
-                        nr.IsPrereleaseAllowed,
-                        Title = Seq.Return(nr.Id,
-                                           nr.Version?.ToString(),
-                                           nr.IsPrereleaseAllowed ? "(pre-release)" : null)
-                                   .Filter()
-                                   .ToDelimitedString(" "),
-                    };
-
-                nrs = nrs.ToArray();
-
-                if (verbose && nrs.Any())
-                {
-                    writer.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                    writer.Indent().WriteLines(from nr in nrs select nr.Title);
-                }
-
-                writer.WriteLine($"Packages target: {targetFramework}");
-
-                var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
-
-                var defaultNamespaces
-                    = isNetCoreApp
-                    ? LinqPad.DefaultCoreNamespaces
-                    : LinqPad.DefaultNamespaces;
-
-                var defaultReferences
-                    = isNetCoreApp
-                    ? Array.Empty<string>()
-                    : LinqPad.DefaultReferences;
-
-                // ReSharper disable once PossibleMultipleEnumeration
-                var source = lines.Skip(eomLineNumber);
-
-                return (queryKind,
-                        // ReSharper disable once PossibleMultipleEnumeration
-                        source.ToDelimitedString(Environment.NewLine),
-                        defaultNamespaces
-                            .Concat(from ns in query.Elements("Namespace")
-                                    select (string)ns)
-                            .Concat(extraImports),
-                        defaultReferences.Select(r => (r, default(PackageReference)))
-                            .Concat(from r in query.Elements("Reference")
-                                    select new
-                                    {
-                                        Relative = (string) r.Attribute("Relative"),
-                                        Path     = ((string) r).Trim(),
-                                    }
-                                    into r
-                                    where r.Path.Length > 0
-                                    select r.Relative?.Length > 0
-                                         ? r.Relative // prefer
-                                         : ResolveReferencePath(r.Path)
-                                    into r
-                                    select (r, default(PackageReference)))
-                            .Concat(from r in nrs
-                                    select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed))));
-            }
         }
 
         static string ResolveReferencePath(string path)
@@ -399,9 +358,8 @@ namespace WebLinqPadQueryCompiler
 
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-        static void GenerateExecutable(string srcDirPath, string binDirPath, string queryFilePath,
-            LinqPadQueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
+        static void GenerateExecutable(string srcDirPath, string binDirPath,
+            LinqPadQuery query, IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
             IndentingLineWriter writer)
         {
             // TODO error handling in generated code
@@ -415,7 +373,7 @@ namespace WebLinqPadQueryCompiler
             var resourceNames =
                 typeof(Program).Assembly
                     .GetManifestResourceNames()
-                    .Where(e => e.IndexOf($".Templates.{queryKind}.", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Where(e => e.IndexOf($".Templates.{query.Language}.", StringComparison.OrdinalIgnoreCase) >= 0)
                     .ToDictionary(e => e.Split('.').TakeLast(2).ToDelimitedString("."),
                                   e => e,
                                   StringComparer.OrdinalIgnoreCase);
@@ -444,7 +402,7 @@ namespace WebLinqPadQueryCompiler
                                 ? new XAttribute("Version", package.Version)
                                 : new XAttribute("Version", GetLatestPackageVersion(package.Id, package.IsPrereleaseAllowed)))));
 
-            var queryName = Path.GetFileNameWithoutExtension(queryFilePath);
+            var queryName = Path.GetFileNameWithoutExtension(query.FilePath);
 
             using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
             {
@@ -490,15 +448,17 @@ namespace WebLinqPadQueryCompiler
                                   .ToDelimitedString(Environment.NewLine)
                          + after);
 
+            var source = query.Code;
+
             var body
-                = queryKind == LinqPadQueryLanguage.Expression
+                = query.Language == LinqPadQueryLanguage.Expression
                 ? Template(programTemplate, "source", (before, after) =>
                       before
                       + source + Environment.NewLine
-                      + ", " + SyntaxFactory.Literal(queryFilePath)
+                      + ", " + SyntaxFactory.Literal(query.FilePath)
                       + ", " + SyntaxFactory.Literal(source)
                       + after).Lines()
-                : queryKind == LinqPadQueryLanguage.Program
+                : query.Language == LinqPadQueryLanguage.Program
                 ? Seq.Return(
                         "class UserQuery {",
                         "    static int Main(string[] args) {",
@@ -726,11 +686,17 @@ namespace WebLinqPadQueryCompiler
         readonly int _eomLineNumber;
         readonly Lazy<XElement> _metaElement;
         readonly Lazy<LinqPadQueryLanguage> _language;
+        readonly Lazy<ReadOnlyCollection<string>> _namespaces;
+        readonly Lazy<ReadOnlyCollection<PackageReference>> _packageReferences;
+        readonly Lazy<string> _code;
 
         public string FilePath { get; }
         public string Source { get; }
         public LinqPadQueryLanguage Language => _language.Value;
         public XElement MetaElement => _metaElement.Value;
+        public IReadOnlyCollection<string> Namespaces => _namespaces.Value;
+        public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
+        public string Code => _code.Value;
 
         public static LinqPadQuery Load(string path)
         {
@@ -751,8 +717,29 @@ namespace WebLinqPadQueryCompiler
                                      .Take(eomLineNumber)
                                      .ToDelimitedString(Environment.NewLine)));
 
+            _code = Lazy.Create(() =>
+                source.Lines()
+                      .Skip(eomLineNumber)
+                      .ToDelimitedString(Environment.NewLine));
+
             _language = Lazy.Create(() =>
                 Enum.TryParse((string) MetaElement.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind) ? queryKind : LinqPadQueryLanguage.Unknown);
+
+            ReadOnlyCollection<T> ReadOnlyCollection<T>(IEnumerable<T> items) =>
+                new ReadOnlyCollection<T>(items.ToList());
+
+            _namespaces = Lazy.Create(() =>
+                ReadOnlyCollection(
+                    from ns in MetaElement.Elements("Namespace")
+                    select (string) ns));
+
+            _packageReferences = Lazy.Create(() =>
+                ReadOnlyCollection(
+                    from nr in MetaElement.Elements("NuGetReference")
+                    let v = (string) nr.Attribute("Version")
+                    select new PackageReference((string) nr,
+                               string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
+                               (bool?) nr.Attribute("Prerelease") ?? false)));
         }
 
         public bool IsLanguageSupported
