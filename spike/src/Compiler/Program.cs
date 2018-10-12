@@ -118,39 +118,10 @@ namespace WebLinqPadQueryCompiler
             var cacheBaseDirPath = Path.Combine(Path.GetTempPath(), nameof(WebLinqPadQueryCompiler), "cache");
             var binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
 
-            if (force)
-                goto compile;
-
-            retry:
-
-            if (Directory.Exists(binDirPath))
             {
-                const string runtimeConfigJsonSuffix = ".runtimeconfig.json";
-                const string depsJsonSuffix = ".deps.json";
-
-                var baseNameSearches =
-                    Directory.GetFiles(binDirPath, "*.json")
-                             .Select(p => p.EndsWith(runtimeConfigJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - runtimeConfigJsonSuffix.Length)
-                                        : p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - depsJsonSuffix.Length)
-                                        : null);
-                var binPath = baseNameSearches.FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
-                if (binPath != null)
-                {
-                    using (var process = Process.Start(new ProcessStartInfo
-                    {
-                        UseShellExecute = false,
-                        FileName        = "dotnet",
-                        Arguments       = scriptArgs.Prepend(binPath).ToDelimitedString(" "),
-                    }))
-                    {
-                        Debug.Assert(process != null);
-                        process.WaitForExit();
-                        return process.ExitCode;
-                    }
-                }
+                if (!force && Run() is int exitCode)
+                    return exitCode;
             }
-
-            compile:
 
             extraImportList.RemoveAll(string.IsNullOrEmpty);
 
@@ -161,7 +132,41 @@ namespace WebLinqPadQueryCompiler
                     extraPackageList, extraImportList,
                     targetFramework, srcDirPath, binDirPath);
 
-            goto retry;
+            {
+                return Run() is int exitCode
+                     ? exitCode
+                     : throw new Exception("Internal error executing compilation.");
+            }
+
+            int? Run()
+            {
+                if (!Directory.Exists(binDirPath))
+                    return null;
+
+                const string runtimeConfigJsonSuffix = ".runtimeconfig.json";
+                const string depsJsonSuffix = ".deps.json";
+
+                var baseNameSearches =
+                    Directory.GetFiles(binDirPath, "*.json")
+                             .Select(p => p.EndsWith(runtimeConfigJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - runtimeConfigJsonSuffix.Length)
+                                        : p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - depsJsonSuffix.Length)
+                                        : null);
+                var binPath = baseNameSearches.FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
+                if (binPath == null)
+                    return null;
+
+                using (var process = Process.Start(new ProcessStartInfo
+                {
+                    UseShellExecute = false,
+                    FileName        = "dotnet",
+                    Arguments       = scriptArgs.Prepend(binPath).ToDelimitedString(" "),
+                }))
+                {
+                    Debug.Assert(process != null);
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+            }
         }
 
         static void Compile(
