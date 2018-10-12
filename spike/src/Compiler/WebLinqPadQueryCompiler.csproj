@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>WebLinqPadQueryCompiler</Title>
+    <OutputType>Exe</OutputType>
+    <VersionPrefix>2.0.0</VersionPrefix>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+    <LangVersion>7.1</LangVersion>
+    <AssemblyName>WebLinqPadQueryCompiler</AssemblyName>
+    <Copyright>Copyright 2018 Atif Aziz. All rights reserved.</Copyright>
+    <Authors>Atif Aziz</Authors>
+    <Owners>Atif Aziz</Owners>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <OutputPath>..\..\bin\Debug\</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <OutputPath>..\..\bin\Release\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="help.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\COPYING.txt" Link="COPYING.txt">
+      <PackagePath />
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="help.txt" />
+    <EmbeddedResource Include="..\ExpressionTemplate\ExpressionTemplate.csproj" Link="Templates\Expression\ExpressionTemplate.csproj" />
+    <EmbeddedResource Include="..\ExpressionTemplate\Program.cs" Link="Templates\Expression\Program.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="2.7.0" />
+    <PackageReference Include="morelinq" Version="3.0.0" />
+    <PackageReference Include="NuGet.Frameworks" Version="4.8.0" />
+    <PackageReference Include="NuGet.Versioning" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Templates\Expression\" />
+  </ItemGroup>
+
+</Project>
