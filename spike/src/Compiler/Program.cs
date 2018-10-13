@@ -94,15 +94,20 @@ namespace WebLinqPadQueryCompiler
 
             var resourceAssembly = typeof(Program).Assembly;
 
-            var templateResourceNames =
-                from rn in resourceAssembly.GetManifestResourceNames()
-                where rn.IndexOf($".Templates.{query.Language}.", StringComparison.OrdinalIgnoreCase) >= 0
-                select rn;
+            var templateFiles =
+                resourceAssembly
+                    .GetManifestResourceNames()
+                    .Where(rn => rn.IndexOf($".Templates.{query.Language}.", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Select(rn => (Name   : rn.Split('.')
+                                              .TakeLast(2) // assume file name + "." + extension
+                                              .ToDelimitedString("."),
+                                   Content: Streamable.Create(() => resourceAssembly.GetManifestResourceStream(rn))))
+                    .ToArray();
 
             var hashSource =
-                templateResourceNames
-                    .OrderBy(rn => rn, StringComparer.OrdinalIgnoreCase)
-                    .Select(rn => resourceAssembly.GetManifestResourceStream(rn))
+                templateFiles
+                    .OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(rn => rn.Content.Open())
                     .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
                     .ToStreamable();
 
@@ -130,6 +135,7 @@ namespace WebLinqPadQueryCompiler
             Compile(query,
                     extraPackageList, extraImportList,
                     targetFramework, srcDirPath, binDirPath,
+                    templateFiles,
                     verbose);
 
             {
@@ -169,12 +175,12 @@ namespace WebLinqPadQueryCompiler
             }
         }
 
-        static void Compile(
-            LinqPadQuery query,
+        static void Compile(LinqPadQuery query,
             IEnumerable<PackageReference> extraPackages,
             IEnumerable<string> extraImports,
             NuGetFramework targetFramework,
             string srcDirPath, string binDirPath,
+            IEnumerable<(string Name, IStreamable Content)> templateFiles,
             bool verbose = false)
         {
             var w = IndentingLineWriter.Create(Console.Error);
@@ -252,7 +258,7 @@ namespace WebLinqPadQueryCompiler
 
             // TODO generate to a temp name and rename on success only!
 
-            GenerateExecutable(srcDirPath, binDirPath, query, namespaces, references, w.Indent());
+            GenerateExecutable(srcDirPath, binDirPath, query, namespaces, references, templateFiles, w.Indent());
         }
 
         static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
@@ -293,7 +299,9 @@ namespace WebLinqPadQueryCompiler
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         static void GenerateExecutable(string srcDirPath, string binDirPath,
-            LinqPadQuery query, IEnumerable<string> imports, IEnumerable<(string Path, PackageReference SourcePackage)> references,
+            LinqPadQuery query, IEnumerable<string> imports,
+            IEnumerable<(string Path, PackageReference SourcePackage)> references,
+            IEnumerable<(string Name, IStreamable Content)> templateFiles,
             IndentingLineWriter writer)
         {
             // TODO error handling in generated code
@@ -305,15 +313,13 @@ namespace WebLinqPadQueryCompiler
             var rs = references.ToArray();
 
             var resourceNames =
-                typeof(Program).Assembly
-                    .GetManifestResourceNames()
-                    .Where(e => e.IndexOf($".Templates.{query.Language}.", StringComparison.OrdinalIgnoreCase) >= 0)
-                    .ToDictionary(e => e.Split('.').TakeLast(2).ToDelimitedString("."),
-                                  e => e,
+                templateFiles
+                    .ToDictionary(e => e.Name,
+                                  e => e.Content,
                                   StringComparer.OrdinalIgnoreCase);
 
             var projectDocument =
-                XDocument.Parse(LoadTextResource(null, resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value));
+                XDocument.Parse(resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value.ReadText());
 
             var packageIdSet =
                 rs.Where(e => e.SourcePackage != null)
@@ -372,7 +378,7 @@ namespace WebLinqPadQueryCompiler
                                 template.Substring(replacementMatch.Index + replacementMatch.Length));
             }
 
-            var programTemplate = LoadTextResource(null, resourceNames["Program.cs"]);
+            var programTemplate = resourceNames["Program.cs"].ReadText();
 
             programTemplate =
                 Template(programTemplate, "imports", (before, after) =>
