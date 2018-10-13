@@ -6,6 +6,8 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Reactive.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -17,10 +19,18 @@ using WebLinq.Modules;
 
 static class Program
 {
-    static readonly IHttpClient Http = HttpClient.Default.Wrap((send, req, config) =>
+    static readonly IHttpClient Http = HttpClient.Default.Wrap(async (send, req, config) =>
     {
-        Logger.Log($"HTTP {req.Method} {req.RequestUri}");
-        return send(req, config);
+        Logger.Log($"> HTTP {req.Method} {req.RequestUri}", ConsoleColor.DarkCyan);
+        var rsp = await send(req, config);
+        var statusCode = (int) rsp.StatusCode;
+        var responseColor = statusCode >= 200 || statusCode < 400
+                          ? ConsoleColor.DarkGreen
+                          : ConsoleColor.DarkRed;
+        Logger.Log($"< HTTP {(int) rsp.StatusCode} ({rsp.StatusCode}) {rsp.ReasonPhrase}"
+                   + (rsp.Content.Headers.ContentType is MediaTypeHeaderValue h ? " (" + h + ")" : null),
+                   responseColor);
+        return rsp;
     });
 
     static async System.Threading.Tasks.Task Main()
@@ -137,7 +147,7 @@ static class Util
 
 static class Logger
 {
-    public static void Log(string line, ConsoleColor backgroundColor = ConsoleColor.DarkRed)
+    public static void Log(string line, ConsoleColor backgroundColor = ConsoleColor.DarkGray)
     {
         ConsoleColor oldBackgroundColor = default;
         ConsoleColor oldForegroundColor = default;
@@ -151,12 +161,15 @@ static class Logger
             Console.ForegroundColor = ConsoleColor.White;
         }
 
-        Console.Error.WriteLine(line);
+        Console.Error.Write(line);
+        Console.Error.Flush();
 
         if (oldBackgroundColor is ConsoleColor bc)
             Console.BackgroundColor = bc;
 
         if (oldForegroundColor is ConsoleColor fc)
             Console.ForegroundColor = fc;
+
+        Console.WriteLine();
     }
 }
