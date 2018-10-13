@@ -19,6 +19,7 @@ namespace WebLinqPadQueryCompiler
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Text;
 
     interface IStreamable
     {
@@ -141,6 +142,21 @@ namespace WebLinqPadQueryCompiler
             {
                 get => throw new NotSupportedException();
                 set => throw new NotSupportedException();
+            }
+        }
+
+        public static string ReadText(this IStreamable source) =>
+            ReadText(source, null);
+
+        public static string ReadText(this IStreamable source, Encoding encoding)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+
+            using (var stream = source.Open())
+            using (var reader = encoding != null ? new StreamReader(stream, encoding)
+                                                 : new StreamReader(stream))
+            {
+                return reader.ReadToEnd();
             }
         }
     }
