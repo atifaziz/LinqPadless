@@ -161,6 +161,15 @@ namespace WebLinqPadQueryCompiler
                 if (binPath == null)
                     return null;
 
+                const string runLogFileName = "runs.log";
+                var runLogPath = Path.Combine(binDirPath, runLogFileName);
+                var runLogLockTimeout = TimeSpan.FromSeconds(5);
+                var runLogLockName = string.Join("-", nameof(WebLinqPadQueryCompiler), hash, runLogFileName);
+
+                void LogRun(FormattableString str) =>
+                    File.AppendAllLines(runLogPath, Seq.Return(FormattableString.Invariant(str)));
+
+                using (var runLogLock = ExternalLock.EnterLocal(runLogLockName, runLogLockTimeout))
                 using (var process = Process.Start(new ProcessStartInfo
                 {
                     UseShellExecute = false,
@@ -169,7 +178,20 @@ namespace WebLinqPadQueryCompiler
                 }))
                 {
                     Debug.Assert(process != null);
+
+                    var startTime = process.StartTime;
+                    LogRun($"> {startTime:o} {process.Id}");
+                    runLogLock.Dispose();
+
                     process.WaitForExit();
+                    var endTime = DateTime.Now;
+
+                    if (ExternalLock.TryEnterLocal(runLogLockName, runLogLockTimeout, out var mutex))
+                    {
+                        using (mutex)
+                            LogRun($"< {endTime:o} {startTime:o}/{process.Id} {process.ExitCode}");
+                    }
+
                     return process.ExitCode;
                 }
             }
