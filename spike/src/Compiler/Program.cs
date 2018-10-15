@@ -453,7 +453,7 @@ namespace WebLinqPadQueryCompiler
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
-        static Version GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
+        static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
         {
             var atom = XNamespace.Get("http://www.w3.org/2005/Atom");
             var d    = XNamespace.Get("http://schemas.microsoft.com/ado/2007/08/dataservices");
@@ -472,8 +472,8 @@ namespace WebLinqPadQueryCompiler
                 from e in XDocument.Parse(xml)
                                    .Element(atom + "feed")
                                    .Elements(atom + "entry")
-                select new Version((string) e.Element(m + "properties")
-                                             .Element( d + "Version"));
+                select NuGetVersion.Parse((string) e.Element(m + "properties")
+                                                    .Element( d + "Version"));
 
             return versions.SingleOrDefault();
         }
