@@ -209,11 +209,25 @@ namespace WebLinqPadQueryCompiler
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             bool verbose = false)
         {
-            var w = IndentingLineWriter.Create(Console.Error);
+            var writer = IndentingLineWriter.Create(Console.Error);
 
-            var ww = w.Indent();
             if (verbose)
-                ww.Write(query.MetaElement);
+                writer.Write(query.MetaElement);
+
+            var wc = new WebClient();
+
+            NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
+            {
+                var latestVersion = Program.GetLatestPackageVersion(id, isPrereleaseAllowed, url =>
+                {
+                    if (verbose)
+                        writer.WriteLine(url.OriginalString);
+                    return wc.DownloadString(url);
+                });
+                if (verbose)
+                    writer.WriteLine($"{id} -> {latestVersion}");
+                return latestVersion;
+            }
 
             var nrs =
                 from nr in query.PackageReferences
@@ -221,6 +235,9 @@ namespace WebLinqPadQueryCompiler
                 {
                     nr.Id,
                     nr.Version,
+                    ActualVersion = nr.HasVersion
+                                  ? Lazy.Value(nr.Version)
+                                  : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
                     nr.IsPrereleaseAllowed,
                     Title = Seq.Return(nr.Id,
                                        nr.Version?.ToString(),
@@ -231,14 +248,6 @@ namespace WebLinqPadQueryCompiler
 
             nrs = nrs.ToArray();
 
-            if (verbose && nrs.Any())
-            {
-                ww.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                ww.Indent().WriteLines(from nr in nrs select nr.Title);
-            }
-
-            ww.WriteLine($"Packages target: {targetFramework}");
-
             var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
 
             var defaultNamespaces
@@ -246,12 +255,49 @@ namespace WebLinqPadQueryCompiler
                 ? LinqPad.DefaultCoreNamespaces
                 : LinqPad.DefaultNamespaces;
 
+            var namespaces =
+                from nss in new[]
+                {
+                    from ns in defaultNamespaces
+                    select new
+                    {
+                        Name = ns,
+                        IsDefaulted = true,
+                    },
+                    from ns in query.Namespaces
+                    select new
+                    {
+                        Name = ns,
+                        IsDefaulted = false,
+                    },
+                }
+                from ns in nss
+                select ns;
+
+            namespaces = namespaces.ToArray();
+
+            if (verbose)
+            {
+                if (nrs.Any())
+                {
+                    writer.WriteLine($"Packages ({nrs.Count():N0}):");
+                    writer.WriteLines(from nr in nrs select "- " + nr.Title);
+                }
+
+                if (namespaces.Any())
+                {
+                    writer.WriteLine($"Imports ({query.Namespaces.Count:N0}):");
+                    writer.WriteLines(from ns in namespaces select "- " + ns.Name + (ns.IsDefaulted ? "*" : null));
+                }
+            }
+
+            if (verbose)
+                writer.WriteLine($"Framework: {targetFramework}");
+
             var defaultReferences
                 = isNetCoreApp
                 ? Array.Empty<string>()
                 : LinqPad.DefaultReferences;
-
-            var namespaces = defaultNamespaces.Concat(query.Namespaces);
 
             var references =
                 defaultReferences
@@ -270,13 +316,15 @@ namespace WebLinqPadQueryCompiler
                             : ResolveReferencePath(r.Path)
                         into r
                         select (r, default(PackageReference)))
-                    .Concat(
+                    .Concat(Enumerable.ToArray(
                         from r in nrs
-                        select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed)));
+                        select ((string) null, new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
 
             // TODO generate to a temp name and rename on success only!
 
-            GenerateExecutable(srcDirPath, binDirPath, query, namespaces, references, templateFiles, w.Indent());
+            GenerateExecutable(srcDirPath, binDirPath, query,
+                               from ns in namespaces select ns.Name,
+                               references, templateFiles, verbose, writer);
         }
 
         static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
@@ -320,7 +368,7 @@ namespace WebLinqPadQueryCompiler
             LinqPadQuery query, IEnumerable<string> imports,
             IEnumerable<(string Path, PackageReference SourcePackage)> references,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            IndentingLineWriter writer)
+            bool verbose, IndentingLineWriter writer)
         {
             // TODO error handling in generated code
 
@@ -356,9 +404,7 @@ namespace WebLinqPadQueryCompiler
                     select
                         new XElement("PackageReference",
                             new XAttribute("Include", package.Id),
-                            package.HasVersion
-                                ? new XAttribute("Version", package.Version)
-                                : new XAttribute("Version", GetLatestPackageVersion(package.Id, package.IsPrereleaseAllowed)))));
+                            new XAttribute("Version", package.Version))));
 
             var queryName = Path.GetFileNameWithoutExtension(query.FilePath);
 
@@ -467,13 +513,25 @@ namespace WebLinqPadQueryCompiler
 
             // TODO User-supplied dotnet.cmd
 
+            var publishArgs =
+                Seq.Return("publish",
+                           !verbose ? "-nologo" : null,
+                           "-v", verbose ? "m" : "q",
+                           "-c", "Release",
+                           "-o", binDirPath)
+                   .Filter()
+                   .ToArray();
+
+            if (verbose)
+                writer.WriteLine(PasteArguments.Paste(publishArgs.Prepend("dotnet")));
+
             Spawn("dotnet",
-                  new [] { "publish", "-v", "q", "-o", binDirPath, "-c", "Release" },
-                  workingDirPath, writer,
+                  publishArgs,
+                  workingDirPath, writer.Indent(),
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
-        static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
+        static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed, Func<Uri, string> downloader)
         {
             var atom = XNamespace.Get("http://www.w3.org/2005/Atom");
             var d    = XNamespace.Get("http://schemas.microsoft.com/ado/2007/08/dataservices");
@@ -486,7 +544,7 @@ namespace WebLinqPadQueryCompiler
                     + "&includePrerelease=" + (isPrereleaseAllowed ? "true" : "false")
                     + "&$skip=0&$top=1&semVerLevel=2.0.0";
 
-            var xml = new WebClient().DownloadString(url);
+            var xml = downloader(new Uri(url));
 
             var versions =
                 from e in XDocument.Parse(xml)
