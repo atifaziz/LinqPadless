@@ -1,7 +1,3 @@
-#pragma warning disable 105
-// CS0105: The using directive for 'namespace' appeared previously in this namespace
-// https://docs.microsoft.com/en-us/dotnet/csharp/misc/cs0105
-
 using System;
 using System.CodeDom.Compiler;
 using System.Globalization;
