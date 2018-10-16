@@ -103,9 +103,10 @@ namespace WebLinqPadQueryCompiler
                     .ToArray();
 
             var hashSource =
-                templateFiles
-                    .OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
-                    .Select(rn => rn.Content.Open())
+                MoreEnumerable
+                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("1.0")))
+                    .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
+                            select rn.Content.Open())
                     .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
                     .ToStreamable();
 
