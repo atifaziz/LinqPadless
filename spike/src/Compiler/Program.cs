@@ -127,11 +127,26 @@ namespace WebLinqPadQueryCompiler
             }
 
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
+            var tmpDirPath = Path.Combine(cacheBaseDirPath, "bin", "!" + hash);
 
-            Compile(query,
-                    targetFramework, srcDirPath, binDirPath,
-                    templateFiles,
-                    verbose);
+            try
+            {
+                Compile(query, targetFramework,
+                        srcDirPath, tmpDirPath,
+                        templateFiles,
+                        verbose);
+
+                if (Directory.Exists(binDirPath))
+                    Directory.Delete(binDirPath, true);
+
+                Directory.Move(tmpDirPath, binDirPath);
+            }
+            catch
+            {
+                try { Directory.Delete(tmpDirPath); }
+                catch { /* ignore */}
+                throw;
+            }
 
             {
                 return Run() is int exitCode
@@ -164,6 +179,9 @@ namespace WebLinqPadQueryCompiler
                 };
 
                 scriptArgs.ForEach(psi.ArgumentList.Add);
+
+                if (verbose)
+                    Console.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
 
                 if (dontExecute)
                 {
@@ -318,8 +336,6 @@ namespace WebLinqPadQueryCompiler
                     .Concat(Enumerable.ToArray(
                         from r in nrs
                         select ((string) null, new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
-
-            // TODO generate to a temp name and rename on success only!
 
             GenerateExecutable(srcDirPath, binDirPath, query,
                                from ns in namespaces select ns.Name,
