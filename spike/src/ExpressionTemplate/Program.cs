@@ -170,6 +170,6 @@ static class Logger
         if (oldForegroundColor is ConsoleColor fc)
             Console.ForegroundColor = fc;
 
-        Console.WriteLine();
+        Console.Error.WriteLine();
     }
 }
