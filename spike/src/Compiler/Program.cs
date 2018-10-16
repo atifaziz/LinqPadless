@@ -57,8 +57,6 @@ namespace WebLinqPadQueryCompiler
             // var recurse = false;
             var force = false;
             var dontExecute = false;
-            var extraPackageList = new List<PackageReference>();
-            var extraImportList = new List<string>();
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
 
             var options = new OptionSet
@@ -68,8 +66,6 @@ namespace WebLinqPadQueryCompiler
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
                 { "f|force"       , "force continue on errors", _ => force = true },
                 { "x"             , "build and cache but do not execute", _ => dontExecute = true },
-                { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
-                { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
                 { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
@@ -131,12 +127,9 @@ namespace WebLinqPadQueryCompiler
                     return exitCode;
             }
 
-            extraImportList.RemoveAll(string.IsNullOrEmpty);
-
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
 
             Compile(query,
-                    extraPackageList, extraImportList,
                     targetFramework, srcDirPath, binDirPath,
                     templateFiles,
                     verbose);
@@ -211,8 +204,6 @@ namespace WebLinqPadQueryCompiler
         }
 
         static void Compile(LinqPadQuery query,
-            IEnumerable<PackageReference> extraPackages,
-            IEnumerable<string> extraImports,
             NuGetFramework targetFramework,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
@@ -225,12 +216,7 @@ namespace WebLinqPadQueryCompiler
                 ww.Write(query.MetaElement);
 
             var nrs =
-                from nrsq in new[]
-                {
-                    query.PackageReferences,
-                    extraPackages,
-                }
-                from nr in nrsq
+                from nr in query.PackageReferences
                 select new
                 {
                     nr.Id,
@@ -265,10 +251,7 @@ namespace WebLinqPadQueryCompiler
                 ? Array.Empty<string>()
                 : LinqPad.DefaultReferences;
 
-            var namespaces =
-                defaultNamespaces
-                    .Concat(query.Namespaces)
-                    .Concat(extraImports);
+            var namespaces = defaultNamespaces.Concat(query.Namespaces);
 
             var references =
                 defaultReferences
@@ -553,22 +536,6 @@ namespace WebLinqPadQueryCompiler
                 if (exitCode != 0)
                     throw errorSelector(exitCode);
             }
-        }
-
-        static PackageReference ParseExtraPackageReference(string input)
-        {
-            // Syntax: ID [ "@" VERSION ] ["++"]
-            // Examples:
-            //   Foo                 => Latest release of Foo
-            //   Foo@2.1             => Foo release 2.1
-            //   Foo++               => Latest pre-release of Foo
-            //   Foo@3.0++           => Foo 3.0 pre-release
-
-            const string plusplus = "++";
-            var prerelease = input.EndsWith(plusplus, StringComparison.Ordinal);
-            if (prerelease)
-                input = input.Substring(0, input.Length - plusplus.Length);
-            return input.Split('@', (id, version) => new PackageReference(id, NuGetVersion.TryParse(version, out var v) ? v : null, prerelease));
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
