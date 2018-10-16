@@ -56,6 +56,7 @@ namespace WebLinqPadQueryCompiler
             var force = false;
             var dontExecute = false;
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
+            var binDirPath = (string) null;
 
             var options = new OptionSet
             {
@@ -64,6 +65,7 @@ namespace WebLinqPadQueryCompiler
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
                 { "f|force"       , "force continue on errors", _ => force = true },
                 { "x"             , "build and cache but do not execute", _ => dontExecute = true },
+                { "o|out|output=" , "build output directory; implies -xf", v => binDirPath = v },
                 { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
@@ -119,7 +121,11 @@ namespace WebLinqPadQueryCompiler
             }
 
             var cacheBaseDirPath = Path.Combine(Path.GetTempPath(), nameof(WebLinqPadQueryCompiler), "cache");
-            var binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
+
+            if (binDirPath != null)
+                force = dontExecute = true;
+            else
+                binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
 
             {
                 if (!force && Run() is int exitCode)
