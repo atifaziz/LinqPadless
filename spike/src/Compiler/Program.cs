@@ -54,7 +54,6 @@ namespace WebLinqPadQueryCompiler
         {
             var verbose = false;
             var help = false;
-            // var recurse = false;
             var force = false;
             var dontExecute = false;
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
