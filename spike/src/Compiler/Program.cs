@@ -468,6 +468,15 @@ namespace WebLinqPadQueryCompiler
                                   .ToDelimitedString(Environment.NewLine)
                          + after);
 
+            programTemplate =
+                Template(programTemplate, "generator", (before, after) =>
+                {
+                    var versionInfo = CachedVersionInfo.Value;
+                    return before
+                         + $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]"
+                         + after;
+                });
+
             var source = query.Code;
 
             var body
@@ -512,20 +521,7 @@ namespace WebLinqPadQueryCompiler
 
 
             if (body != null)
-            {
-                File.WriteAllLines(csFilePath,
-                    from lines in new[]
-                    {
-                        from ns in imports.GroupBy(e => e, StringComparer.Ordinal)
-                        select $"using {ns.First()};",
-
-                        body,
-
-                        Seq.Return(string.Empty),
-                    }
-                    from line in lines
-                    select line);
-            }
+                File.WriteAllLines(csFilePath, body.Append(string.Empty));
 
             // TODO User-supplied dotnet.cmd
 

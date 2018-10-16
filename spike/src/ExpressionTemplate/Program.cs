@@ -3,6 +3,7 @@
 // https://docs.microsoft.com/en-us/dotnet/csharp/misc/cs0105
 
 using System;
+using System.CodeDom.Compiler;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,7 @@ using WebLinq.Modules;
 
 // {% imports %}
 
+// {% generator %}
 
 static class Program
 {
@@ -81,6 +83,8 @@ static class Program
 
         var startTime = DateTimeOffset.Now;
         Logger.Log($"{Path.GetFileNameWithoutExtension(path)} started at {startTime}.");
+        if (Assembly.GetExecutingAssembly().GetCustomAttribute<GeneratedCodeAttribute>() is GeneratedCodeAttribute gc)
+            Logger.Log($"Generator: {gc.Tool} ({gc.Version})");
 
         var map =
             Regex.Matches(code, @"
