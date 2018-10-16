@@ -10,7 +10,9 @@ using System.Linq;
 using System.Net.Http.Headers;
 using System.Reactive.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using WebLinq;
 
 partial class Program
@@ -29,7 +31,7 @@ partial class Program
         return rsp;
     });
 
-    static async System.Threading.Tasks.Task __run__<T>(IObservable<T> source, [System.Runtime.CompilerServices.CallerFilePath] string path = null, string code = null)
+    static async Task __run__<T>(IObservable<T> source, [CallerFilePath] string path = null, string code = null)
     {
         if (code == null)
             code = File.ReadAllText(path);
