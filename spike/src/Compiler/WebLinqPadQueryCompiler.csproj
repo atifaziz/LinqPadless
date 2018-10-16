@@ -7,7 +7,7 @@
     <TargetFramework>netcoreapp2.1</TargetFramework>
     <LangVersion>7.1</LangVersion>
     <AssemblyName>WebLinqPadQueryCompiler</AssemblyName>
-    <Copyright>Copyright 2018 Atif Aziz. All rights reserved.</Copyright>
+    <Copyright>Copyright 2018 Atif Aziz. All rights reserved. Portions Copyright .NET Foundation and Contributors</Copyright>
     <Authors>Atif Aziz</Authors>
     <Owners>Atif Aziz</Owners>
   </PropertyGroup>

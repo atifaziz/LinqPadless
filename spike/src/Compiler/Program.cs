@@ -44,6 +44,7 @@ namespace WebLinqPadQueryCompiler
     using MoreEnumerable = MoreLinq.MoreEnumerable;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
+    using static MoreLinq.Extensions.ForEachExtension;
 
     #endregion
 
@@ -167,12 +168,14 @@ namespace WebLinqPadQueryCompiler
                 {
                     UseShellExecute = false,
                     FileName        = "dotnet",
-                    Arguments       = scriptArgs.Prepend(binPath).ToDelimitedString(" "),
+                    ArgumentList    = { binPath },
                 };
+
+                scriptArgs.ForEach(psi.ArgumentList.Add);
 
                 if (dontExecute)
                 {
-                    Console.WriteLine(psi.FileName + " " + psi.Arguments);
+                    Console.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
                     return 0;
                 }
 
@@ -481,7 +484,9 @@ namespace WebLinqPadQueryCompiler
 
             // TODO User-supplied dotnet.cmd
 
-            Spawn("dotnet", $@"publish -v q -o ""{binDirPath}"" -c Release", workingDirPath, writer,
+            Spawn("dotnet",
+                  new [] { "publish", "-v", "q", "-o", binDirPath, "-c", "Release" },
+                  workingDirPath, writer,
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
@@ -510,19 +515,23 @@ namespace WebLinqPadQueryCompiler
             return versions.SingleOrDefault();
         }
 
-        static void Spawn(string path, string args, string workingDirPath, IndentingLineWriter writer,
+        static void Spawn(string path, IEnumerable<string> args,
+                          string workingDirPath, IndentingLineWriter writer,
                           Func<int, Exception> errorSelector)
         {
-            using (var process = Process.Start(new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
                 CreateNoWindow         = true,
                 UseShellExecute        = false,
                 FileName               = path,
-                Arguments              = args,
                 RedirectStandardError  = true,
                 RedirectStandardOutput = true,
                 WorkingDirectory       = workingDirPath,
-            }))
+            };
+
+            args.ForEach(psi.ArgumentList.Add);
+
+            using (var process = Process.Start(psi))
             {
                 Debug.Assert(process != null);
 
