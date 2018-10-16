@@ -149,8 +149,8 @@ static class Logger
 {
     public static void Log(string line, ConsoleColor backgroundColor = ConsoleColor.DarkGray)
     {
-        ConsoleColor oldBackgroundColor = default;
-        ConsoleColor oldForegroundColor = default;
+        ConsoleColor? oldBackgroundColor = default;
+        ConsoleColor? oldForegroundColor = default;
 
         if (!Console.IsErrorRedirected)
         {
