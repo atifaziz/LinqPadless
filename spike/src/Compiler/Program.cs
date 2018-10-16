@@ -160,15 +160,14 @@ namespace WebLinqPadQueryCompiler
                 if (!Directory.Exists(binDirPath))
                     return null;
 
-                const string runtimeConfigJsonSuffix = ".runtimeconfig.json";
                 const string depsJsonSuffix = ".deps.json";
 
-                var baseNameSearches =
+                var binPath =
                     Directory.GetFiles(binDirPath, "*.json")
-                             .Select(p => p.EndsWith(runtimeConfigJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - runtimeConfigJsonSuffix.Length)
-                                        : p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase) ? p.Substring(0, p.Length - depsJsonSuffix.Length)
-                                        : null);
-                var binPath = baseNameSearches.FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
+                             .Where(p => p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase))
+                             .Select(p => p.Substring(0, p.Length - depsJsonSuffix.Length))
+                             .FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
+
                 if (binPath == null)
                     return null;
 
