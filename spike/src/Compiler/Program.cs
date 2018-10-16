@@ -55,6 +55,7 @@ namespace WebLinqPadQueryCompiler
             var help = false;
             // var recurse = false;
             var force = false;
+            var dontExecute = false;
             var extraPackageList = new List<PackageReference>();
             var extraImportList = new List<string>();
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
@@ -65,6 +66,7 @@ namespace WebLinqPadQueryCompiler
                 { "verbose|v"     , "enable additional output", _ => verbose = true },
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
                 { "f|force"       , "force continue on errors", _ => force = true },
+                { "x"             , "build and cache but do not execute", _ => dontExecute = true },
                 { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
                 { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
                 { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
@@ -161,6 +163,19 @@ namespace WebLinqPadQueryCompiler
                 if (binPath == null)
                     return null;
 
+                var psi = new ProcessStartInfo
+                {
+                    UseShellExecute = false,
+                    FileName        = "dotnet",
+                    Arguments       = scriptArgs.Prepend(binPath).ToDelimitedString(" "),
+                };
+
+                if (dontExecute)
+                {
+                    Console.WriteLine(psi.FileName + " " + psi.Arguments);
+                    return 0;
+                }
+
                 const string runLogFileName = "runs.log";
                 var runLogPath = Path.Combine(binDirPath, runLogFileName);
                 var runLogLockTimeout = TimeSpan.FromSeconds(5);
@@ -170,12 +185,7 @@ namespace WebLinqPadQueryCompiler
                     File.AppendAllLines(runLogPath, Seq.Return(FormattableString.Invariant(str)));
 
                 using (var runLogLock = ExternalLock.EnterLocal(runLogLockName, runLogLockTimeout))
-                using (var process = Process.Start(new ProcessStartInfo
-                {
-                    UseShellExecute = false,
-                    FileName        = "dotnet",
-                    Arguments       = scriptArgs.Prepend(binPath).ToDelimitedString(" "),
-                }))
+                using (var process = Process.Start(psi))
                 {
                     Debug.Assert(process != null);
 
