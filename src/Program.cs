@@ -129,10 +129,18 @@ namespace LinqPadless
 
             var cacheBaseDirPath = Path.Combine(Path.GetTempPath(), "lpless", "cache");
 
-            if (binDirPath != null)
+            var exporting = binDirPath != null;
+            if (exporting)
+            {
+                if (Directory.Exists(binDirPath))
+                    throw new Exception("The output directory already exists.");
+
                 force = dontExecute = true;
+            }
             else
+            {
                 binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
+            }
 
             {
                 if (!force && Run() is int exitCode)
@@ -149,7 +157,7 @@ namespace LinqPadless
                         templateFiles,
                         verbose);
 
-                if (Directory.Exists(binDirPath))
+                if (!exporting && Directory.Exists(binDirPath))
                     Directory.Delete(binDirPath, true);
 
                 Directory.Move(tmpDirPath, binDirPath);
