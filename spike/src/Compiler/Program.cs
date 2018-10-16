@@ -181,7 +181,7 @@ namespace WebLinqPadQueryCompiler
                 scriptArgs.ForEach(psi.ArgumentList.Add);
 
                 if (verbose)
-                    Console.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
+                    Console.Error.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
 
                 if (dontExecute)
                 {
