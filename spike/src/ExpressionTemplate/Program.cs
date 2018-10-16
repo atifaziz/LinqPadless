@@ -25,7 +25,7 @@ static class Program
         Logger.Log($"> HTTP {req.Method} {req.RequestUri}", ConsoleColor.DarkCyan);
         var rsp = await send(req, config);
         var statusCode = (int) rsp.StatusCode;
-        var responseColor = statusCode >= 200 || statusCode < 400
+        var responseColor = statusCode >= 200 && statusCode < 400
                           ? ConsoleColor.DarkGreen
                           : ConsoleColor.DarkRed;
         Logger.Log($"< HTTP {(int) rsp.StatusCode} ({rsp.StatusCode}) {rsp.ReasonPhrase}"
