@@ -33,7 +33,6 @@ namespace WebLinqPadQueryCompiler
     using System.Text.RegularExpressions;
     using System.Xml;
     using System.Xml.Linq;
-    using Mannex;
     using Mannex.IO;
     using Mono.Options;
     using Microsoft.CodeAnalysis.CSharp;
