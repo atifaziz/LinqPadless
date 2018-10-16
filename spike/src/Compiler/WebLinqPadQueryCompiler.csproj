@@ -33,7 +33,10 @@
   <ItemGroup>
     <EmbeddedResource Include="help.txt" />
     <EmbeddedResource Include="..\ExpressionTemplate\ExpressionTemplate.csproj" Link="Templates\Expression\ExpressionTemplate.csproj" />
+    <EmbeddedResource Include="..\ExpressionTemplate\Logger.cs" Link="Templates\Expression\Logger.cs" />
+    <EmbeddedResource Include="..\ExpressionTemplate\Main.cs" Link="Templates\Expression\Main.cs" />
     <EmbeddedResource Include="..\ExpressionTemplate\Program.cs" Link="Templates\Expression\Program.cs" />
+    <EmbeddedResource Include="..\ExpressionTemplate\Util.cs" Link="Templates\Expression\Util.cs" />
   </ItemGroup>
 
   <ItemGroup>

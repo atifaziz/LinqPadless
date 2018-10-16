@@ -12,13 +12,8 @@ using System.Reactive.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using WebLinq;
-using WebLinq.Modules;
 
-// {% imports %}
-
-// {% generator %}
-
-static class Program
+partial class Program
 {
     static readonly IHttpClient Http = HttpClient.Default.Wrap(async (send, req, config) =>
     {
@@ -33,48 +28,6 @@ static class Program
                    responseColor);
         return rsp;
     });
-
-    static async System.Threading.Tasks.Task Main()
-    {
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
-        await __run__
-        (
-            #line 1
-            // {% source
-            from sp in Http.Get(new Uri("https://news.ycombinator.com/")).Html().Content()
-            let scores =
-                from s in sp.QuerySelectorAll(".score")
-                select new
-                {
-                    Id = Regex.Match(s.GetAttributeValue("id"), @"(?<=^score_)[0-9]+$").Value,
-                    Score = s.InnerText,
-                }.Dump()
-            from e in
-                from r in sp.QuerySelectorAll(".athing")
-                select new
-                {
-                    Id = r.GetAttributeValue("id"),
-                    Link = r.QuerySelector(".storylink")?.GetAttributeValue("href"),
-                }
-                into r
-                join s in scores on r.Id equals s.Id
-                select new
-                {
-                    r.Id,
-                    Score = int.Parse(Regex.Match(s.Score, @"\b[0-9]+(?= +points)").Value),
-                    r.Link,
-                }
-                into e
-                where e.Score >= 75
-                //// IDENT = Id
-                //// URL   = Link
-                select e
-            select e
-            // %}
-        );
-
-    }
 
     static async System.Threading.Tasks.Task __run__<T>(IObservable<T> source, [System.Runtime.CompilerServices.CallerFilePath] string path = null, string code = null)
     {
@@ -134,45 +87,5 @@ static class Program
         string SnakeCaseScreamingFromPascal(string s) =>
             Regex.Replace(s, @"((?<![A-Z]|^)[A-Z]|(?<=[A-Z]+)[A-Z](?=[a-z]))", m => "_" + m.Value)
                  .ToUpperInvariant();
-    }
-}
-
-static class Util
-{
-    public static T Dump<T>(this T value,
-        [System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = null,
-        [System.Runtime.CompilerServices.CallerLineNumber] int sourceLineNumber = 0)
-    {
-        Logger.Log($"{Path.GetFileName(sourceFilePath)}@{sourceLineNumber}:{value}", ConsoleColor.DarkBlue);
-        return value;
-    }
-}
-
-static class Logger
-{
-    public static void Log(string line, ConsoleColor backgroundColor = ConsoleColor.DarkGray)
-    {
-        ConsoleColor? oldBackgroundColor = default;
-        ConsoleColor? oldForegroundColor = default;
-
-        if (!Console.IsErrorRedirected)
-        {
-            oldBackgroundColor = Console.BackgroundColor;
-            Console.BackgroundColor = backgroundColor;
-
-            oldForegroundColor = Console.ForegroundColor;
-            Console.ForegroundColor = ConsoleColor.White;
-        }
-
-        Console.Error.Write(line);
-        Console.Error.Flush();
-
-        if (oldBackgroundColor is ConsoleColor bc)
-            Console.BackgroundColor = bc;
-
-        if (oldForegroundColor is ConsoleColor fc)
-            Console.ForegroundColor = fc;
-
-        Console.Error.WriteLine();
     }
 }

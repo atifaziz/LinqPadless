@@ -434,7 +434,8 @@ namespace WebLinqPadQueryCompiler
                 projectDocument.WriteTo(xw);
             }
 
-            var csFilePath = Path.Combine(workingDirPath, "Program.cs");
+            const string mainFile = "Main.cs";
+            var csFilePath = Path.Combine(workingDirPath, mainFile);
             File.Delete(csFilePath);
 
             T Template<T>(string template, string name, Func<string, string, T> resultor)
@@ -458,7 +459,7 @@ namespace WebLinqPadQueryCompiler
                                 template.Substring(replacementMatch.Index + replacementMatch.Length));
             }
 
-            var programTemplate = resourceNames["Program.cs"].ReadText();
+            var programTemplate = resourceNames[mainFile].ReadText();
 
             programTemplate =
                 Template(programTemplate, "imports", (before, after) =>
@@ -522,6 +523,17 @@ namespace WebLinqPadQueryCompiler
 
             if (body != null)
                 File.WriteAllLines(csFilePath, body.Append(string.Empty));
+
+            foreach (var (name, content) in
+                from f in resourceNames
+                where !string.Equals(mainFile, f.Key, StringComparison.OrdinalIgnoreCase)
+                   && !f.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                select f)
+            {
+                using (var s = content.Open())
+                using (var w = File.Create(Path.Combine(srcDirPath, name)))
+                    s.CopyTo(w);
+            }
 
             // TODO User-supplied dotnet.cmd
 
