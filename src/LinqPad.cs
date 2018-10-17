@@ -18,27 +18,47 @@ namespace LinqPadless
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Xml;
 
     static class LinqPad
     {
-        public static int GetEndOfMetaLineNumber(string path)
+        public static int GetEndOfMetaLineNumber(FileInfo file)
         {
-            using (var reader = XmlReader.Create(path, new XmlReaderSettings
+            using (var reader = new StreamReader(file.FullName))
+            {
+                return GetEndOfMetaLineNumber(reader,
+                           () => new Exception($"\"{file.FullName}\" does not appear to be a valid LINQPad file."));
+            }
+        }
+
+        public static int GetEndOfMetaLineNumber(string text)
+        {
+            using (var reader = new StringReader(text))
+            {
+                return GetEndOfMetaLineNumber(reader,
+                           () => new Exception("Invalid LINQPad query source format."));
+            }
+        }
+
+        public static int GetEndOfMetaLineNumber(TextReader textReader, Func<Exception> errorSelector)
+        {
+            using (var reader = XmlReader.Create(textReader, new XmlReaderSettings
             {
                 IgnoreProcessingInstructions = true,
                 IgnoreWhitespace             = true,
                 IgnoreComments               = true,
+                CloseInput                   = true,
             }))
             {
                 // A LINQPad Query file has two parts: (1) a header in XML
                 // followed by (2) the query code content.
 
                 if (XmlNodeType.Element != reader.MoveToContent())
-                    throw InvalidLinqPadFileError(path);
+                    throw errorSelector();
 
                 if (!reader.IsStartElement("Query", string.Empty))
-                    throw InvalidLinqPadFileError(path);
+                    throw errorSelector();
 
                 try
                 {
@@ -60,9 +80,6 @@ namespace LinqPadless
                 }
             }
         }
-
-        static Exception InvalidLinqPadFileError(string path) =>
-            new Exception($"\"{path}\" does not appear to be a valid LINQPad file.");
 
         public static readonly ICollection<string> DefaultReferences = Array.AsReadOnly(new[]
         {

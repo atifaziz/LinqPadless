@@ -16,8 +16,26 @@
 
 namespace LinqPadless
 {
+    using System;
+    using System.Collections.Generic;
     using System.IO;
     using Mono.Options;
+
+    static class StringExtensions
+    {
+        public static IEnumerable<string> Lines(this string input)
+        {
+            if (input == null) throw new ArgumentNullException(nameof(input));
+            return _(); IEnumerable<string> _()
+            {
+                using (var reader = new StringReader(input))
+                {
+                    while (reader.ReadLine() is string line)
+                        yield return line;
+                }
+            }
+        }
+    }
 
     static class OptionSetExtensions
     {

@@ -30,8 +30,7 @@ namespace LinqPadless
         {
             try
             {
-                Wain(args);
-                return 0;
+                return Wain(args);
             }
             catch (Exception e)
             {
@@ -40,7 +39,5 @@ namespace LinqPadless
                 return 0xbad;
             }
         }
-
-        static partial void Wain(IEnumerable<string> args);
     }
 }

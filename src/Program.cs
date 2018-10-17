@@ -20,6 +20,7 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
@@ -27,12 +28,11 @@ namespace LinqPadless
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Runtime.Versioning;
+    using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
-    using System.Threading;
     using System.Xml;
     using System.Xml.Linq;
-    using Mannex;
     using Mannex.IO;
     using Mono.Options;
     using Microsoft.CodeAnalysis.CSharp;
@@ -40,43 +40,36 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using NuGet.Frameworks;
     using NuGet.Versioning;
+    using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using static MoreLinq.Extensions.ToDictionaryExtension;
+    using static MoreLinq.Extensions.ForEachExtension;
 
     #endregion
 
     static partial class Program
     {
-        static partial void Wain(IEnumerable<string> args)
+        static int Wain(IEnumerable<string> args)
         {
-            const string csx = "csx";
-            const string exe = "exe";
-
             var verbose = false;
             var help = false;
-            var recurse = false;
             var force = false;
-            var watching = false;
-            var incremental = false;
-            var extraPackageList = new List<PackageReference>();
-            var extraImportList = new List<string>();
-            var target = csx;
+            var dontExecute = false;
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
+            var binDirPath = (string) null;
 
             var options = new OptionSet
             {
                 { "?|help|h"      , "prints out the options", _ => help = true },
                 { "verbose|v"     , "enable additional output", _ => verbose = true },
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
-                { "r|recurse"     , "include sub-directories", _ => recurse = true },
                 { "f|force"       , "force continue on errors", _ => force = true },
-                { "w|watch"       , "watch for changes and re-compile outdated", _ => watching = true },
-                { "i|incremental" , "compile outdated scripts only", _ => incremental = true },
-                { "ref|reference=", "extra NuGet reference", v => { if (!string.IsNullOrEmpty(v)) extraPackageList.Add(ParseExtraPackageReference(v)); } },
-                { "imp|import="   , "extra import", v => { extraImportList.Add(v); } },
-                { "t|target="     , csx + " = C# script (default); " + exe + " = executable", v => target = v },
-                { "fx="           , $"target framework; default: {targetFramework}", v => targetFramework = NuGetFramework.Parse(v) },
+                { "x"             , "build and cache but do not execute", _ => dontExecute = true },
+                { "o|out|output=" , "build output directory; implies -xf", v => binDirPath = v },
+                { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
-            var tail = options.Parse(args.TakeWhile(arg => arg != "--"));
+            var tail = options.Parse(args);
 
             if (verbose)
                 Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
@@ -84,262 +77,205 @@ namespace LinqPadless
             if (help || tail.Count == 0)
             {
                 Help(options);
-                return;
+                return 0;
             }
 
-            var generator =
-                csx.Equals(target, StringComparison.OrdinalIgnoreCase)
-                ? GenerateCsx
-                : exe.Equals(target, StringComparison.OrdinalIgnoreCase)
-                ? (Generator) GenerateExecutable
-                : throw new Exception("Target is invalid or missing. Supported targets are: "
-                                      + string.Join(", ", csx, exe));
+            var scriptPath = Path.GetFullPath(tail.First());
+            var scriptArgs = tail.Skip(1);
 
-            extraImportList.RemoveAll(string.IsNullOrEmpty);
-
-            // TODO Allow package source to be specified via args
-
-            var queries = GetQueries(tail, recurse);
-
-            // TODO Allow packages directory to be specified via args
-
-            const string packagesDirName = "packages";
-
-            var compiler = Compiler(packagesDirName, extraPackageList, extraImportList,
-                                    targetFramework, generator,
-                                    watching || incremental, force, verbose);
-
-            if (watching)
-            {
-                if (tail.Count > 1)
-                {
-                    // TODO Support multiple watch roots
-
-                    throw new NotSupportedException(
-                        "Watch mode does not support multiple file specifications. " +
-                        "Use a single wildcard specification instead instead to watch and re-compile several queries.");
-                }
-
-                var tokens = SplitDirFileSpec(tail.First()).Fold((dp, fs) =>
-                (
-                    dirPath : dp ?? Environment.CurrentDirectory,
-                    fileSpec: fs
-                ));
-
-                using (var cts = new CancellationTokenSource())
-                {
-                    Console.CancelKeyPress += (_, e) =>
-                    {
-                        // TODO Re-consider proper cancellation
-
-                        Console.WriteLine("Aborting...");
-                        // ReSharper disable once AccessToDisposedClosure
-                        cts.Cancel();
-                        e.Cancel = true;
-                    };
-
-                    var changes =
-                        FileMonitor.GetFolderChanges(
-                            tokens.dirPath, tokens.fileSpec,
-                            recurse,
-                            NotifyFilters.FileName
-                                | NotifyFilters.LastWrite,
-                            WatcherChangeTypes.Created
-                                | WatcherChangeTypes.Changed
-                                | WatcherChangeTypes.Renamed,
-                            cts.Token);
-
-                    foreach (var e in from cs in changes.Throttle(TimeSpan.FromSeconds(2))
-                                      select cs.Length)
-                    {
-                        Console.WriteLine($"{e} change(s) detected. Re-compiling...");
-
-                        var count = 0;
-                        var compiledCount = 0;
-                        // ReSharper disable once LoopCanBeConvertedToQuery
-                        // ReSharper disable once LoopCanBePartlyConvertedToQuery
-                        // ReSharper disable once PossibleMultipleEnumeration
-                        foreach (var query in queries)
-                        {
-                            // TODO Re-try on potential file locking issues
-
-                            var compiled = compiler(query);
-                            count++;
-                            compiledCount += compiled ? 1 : 0;
-                        }
-
-                        if (count > 1)
-                            Console.WriteLine($"Re-compiled {compiledCount:N0} of {count:N0} queries.");
-                    }
-                }
-            }
-            else
-            {
-                foreach (var query in queries)
-                    compiler(query);
-            }
-        }
-
-        static readonly char[] Wildchars = { '*', '?' };
-        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-
-        static (string dirPath, string fileName) SplitDirFileSpec(string spec)
-        {
-            var i = spec.LastIndexOfAny(PathSeparators);
-            // TODO handle rooted cases
-            return i >= 0
-                 ? (spec.Substring(0, i + 1), spec.Substring(i + 1))
-                 : (null, spec);
-        }
-
-        static IEnumerable<string> GetQueries(IEnumerable<string> tail,
-                                              bool includeSubdirs)
-        {
-            var dirSearchOption = includeSubdirs
-                                ? SearchOption.AllDirectories
-                                : SearchOption.TopDirectoryOnly;
-            return
-                from spec in tail
-                let tokens = SplitDirFileSpec(spec).Fold((dp, fs) =>
-                (
-                    dirPath : dp ?? Environment.CurrentDirectory,
-                    fileSpec: fs
-                ))
-                let dirPath = tokens.dirPath ?? Environment.CurrentDirectory
-                from e in
-                    tokens.fileSpec.IndexOfAny(Wildchars) >= 0
-                    ? from fi in new DirectoryInfo(dirPath).EnumerateFiles(tokens.fileSpec, dirSearchOption)
-                      select new { File = fi, Searched = true }
-                    : Directory.Exists(spec)
-                    ? from fi in new DirectoryInfo(spec).EnumerateFiles("*.linq", dirSearchOption)
-                      select new { File = fi, Searched = true }
-                    : new[] { new { File = new FileInfo(spec), Searched = false } }
-                where !e.Searched
-                      || (!e.File.Name.StartsWith(".", StringComparison.Ordinal)
-                          && 0 == (e.File.Attributes & (FileAttributes.Hidden | FileAttributes.System)))
-                select e.File.FullName;
-        }
-
-        delegate void Generator(string queryFilePath,
-            // ReSharper disable once UnusedParameter.Local
-            string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
-            IndentingLineWriter writer);
-
-        static Func<string, bool> Compiler(
-            string packagesPath,
-            IEnumerable<PackageReference> extraPackages,
-            IEnumerable<string> extraImports,
-            NuGetFramework targetFramework,
-            Generator generator,
-            bool unlessUpToDate = false, bool force = false, bool verbose = false)
-        {
-            var writer = IndentingLineWriter.Create(Console.Out);
-
-            return queryFilePath =>
-            {
-                try
-                {
-                    var scriptFile = new FileInfo(Path.ChangeExtension(queryFilePath, ".csx"));
-                    if (unlessUpToDate && scriptFile.Exists && scriptFile.LastWriteTime > File.GetLastWriteTime(queryFilePath))
-                    {
-                        if (verbose)
-                        {
-                            writer.WriteLine($"{queryFilePath}");
-                            writer.Indent().WriteLine("Skipping compilation because target appears up to date.");
-                        }
-                        return false;
-                    }
-
-                    var packagesDir = new DirectoryInfo(Path.Combine(// ReSharper disable once AssignNullToNotNullAttribute
-                                                                     Path.GetDirectoryName(queryFilePath),
-                                                                     packagesPath));
-
-                    writer.WriteLine($"{queryFilePath}");
-
-                    var info = Compile(queryFilePath,
-                                       extraPackages, extraImports,
-                                       targetFramework,
-                                       verbose, writer.Indent());
-
-                    generator(queryFilePath, packagesDir.FullName,
-                              info.queryKind, info.source, info.namespaces,
-                              info.references, writer.Indent());
-
-                    return true;
-                }
-                catch (Exception e)
-                {
-                    if (!force)
-                        throw;
-                    writer.Indent().WriteLines($"WARNING! {e.Message}");
-                    if (verbose)
-                        writer.Indent().Indent().WriteLines(e.ToString());
-                    return false;
-                }
-            };
-        }
-
-        static (QueryLanguage queryKind, string source, IEnumerable<string> namespaces, IEnumerable<(string path, PackageReference sourcePackage)> references)
-            Compile(string queryFilePath,
-            IEnumerable<PackageReference> extraPackageReferences,
-            IEnumerable<string> extraImports,
-            NuGetFramework targetFramework,
-            bool verbose, IndentingLineWriter writer)
-        {
-            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(queryFilePath);
-            var lines = File.ReadLines(queryFilePath);
-
-            var xml = string.Join(Environment.NewLine,
-                          // ReSharper disable once PossibleMultipleEnumeration
-                          lines.Take(eomLineNumber));
-
-            var query = XElement.Parse(xml);
-
-            if (verbose)
-                writer.Write(query);
-
-            if (!Enum.TryParse((string) query.Attribute("Kind"), true, out QueryLanguage queryKind)
-                || queryKind != QueryLanguage.Statements
-                && queryKind != QueryLanguage.Expression
-                && queryKind != QueryLanguage.Program)
+            var query = LinqPadQuery.Load(scriptPath);
+            if (!query.IsLanguageSupported)
             {
                 throw new NotSupportedException("Only LINQPad " +
-                    "C# Statements and Expression queries are fully supported " +
-                    "and C# Program queries partially in this version.");
+                                                "C# Statements and Expression queries are fully supported " +
+                                                "and C# Program queries partially in this version.");
+            }
+
+            string KebabCaseFromPascal(string s) =>
+                Regex.Replace(s, @"((?<![A-Z]|^)[A-Z]|(?<=[A-Z]+)[A-Z](?=[a-z]))", m => "-" + m.Value);
+
+            var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
+
+            IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
+                = queryDir.SelfAndParents()
+                          .Select(d => Path.Combine(d.FullName, ".lpless", "templates", KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant()))
+                          .FirstOrDefault(Directory.Exists) is string templateProjectPath
+                ? Directory.GetFiles(templateProjectPath)
+                           .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                                    || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                           .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
+                           .ToArray()
+                : default;
+
+            if (templateFiles == null || templateFiles.Count == 0)
+                throw new Exception("No template for running query.");
+
+            var hashSource =
+                MoreEnumerable
+                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("1.0")))
+                    .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
+                            select rn.Content.Open())
+                    .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
+                    .ToStreamable();
+
+            string hash;
+            using (var sha = SHA1.Create())
+            using (var stream = hashSource.Open())
+            {
+                hash = BitConverter.ToString(sha.ComputeHash(stream))
+                                   .Replace("-", string.Empty)
+                                   .ToLowerInvariant();
+            }
+
+            var cacheBaseDirPath = Path.Combine(Path.GetTempPath(), "lpless", "cache");
+
+            if (binDirPath != null)
+                force = dontExecute = true;
+            else
+                binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
+
+            {
+                if (!force && Run() is int exitCode)
+                    return exitCode;
+            }
+
+            var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
+            var tmpDirPath = Path.Combine(cacheBaseDirPath, "bin", "!" + hash);
+
+            try
+            {
+                Compile(query, targetFramework,
+                        srcDirPath, tmpDirPath,
+                        templateFiles,
+                        verbose);
+
+                if (Directory.Exists(binDirPath))
+                    Directory.Delete(binDirPath, true);
+
+                Directory.Move(tmpDirPath, binDirPath);
+            }
+            catch
+            {
+                try { Directory.Delete(tmpDirPath); }
+                catch { /* ignore */}
+                throw;
+            }
+
+            {
+                return Run() is int exitCode
+                     ? exitCode
+                     : throw new Exception("Internal error executing compilation.");
+            }
+
+            int? Run()
+            {
+                if (!Directory.Exists(binDirPath))
+                    return null;
+
+                const string depsJsonSuffix = ".deps.json";
+
+                var binPath =
+                    Directory.GetFiles(binDirPath, "*.json")
+                             .Where(p => p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase))
+                             .Select(p => p.Substring(0, p.Length - depsJsonSuffix.Length))
+                             .FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
+
+                if (binPath == null)
+                    return null;
+
+                var psi = new ProcessStartInfo
+                {
+                    UseShellExecute = false,
+                    FileName        = "dotnet",
+                    ArgumentList    = { binPath },
+                };
+
+                scriptArgs.ForEach(psi.ArgumentList.Add);
+
+                if (verbose || !dontExecute)
+                    Console.Error.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
+
+                if (dontExecute)
+                {
+                    Console.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
+                    return 0;
+                }
+
+                const string runLogFileName = "runs.log";
+                var runLogPath = Path.Combine(binDirPath, runLogFileName);
+                var runLogLockTimeout = TimeSpan.FromSeconds(5);
+                var runLogLockName = string.Join("-", "lpless", hash, runLogFileName);
+
+                void LogRun(FormattableString str) =>
+                    File.AppendAllLines(runLogPath, Seq.Return(FormattableString.Invariant(str)));
+
+                using (var runLogLock = ExternalLock.EnterLocal(runLogLockName, runLogLockTimeout))
+                using (var process = Process.Start(psi))
+                {
+                    Debug.Assert(process != null);
+
+                    var startTime = process.StartTime;
+                    LogRun($"> {startTime:o} {process.Id}");
+                    runLogLock.Dispose();
+
+                    process.WaitForExit();
+                    var endTime = DateTime.Now;
+
+                    if (ExternalLock.TryEnterLocal(runLogLockName, runLogLockTimeout, out var mutex))
+                    {
+                        using (mutex)
+                            LogRun($"< {endTime:o} {startTime:o}/{process.Id} {process.ExitCode}");
+                    }
+
+                    return process.ExitCode;
+                }
+            }
+        }
+
+        static void Compile(LinqPadQuery query,
+            NuGetFramework targetFramework,
+            string srcDirPath, string binDirPath,
+            IEnumerable<(string Name, IStreamable Content)> templateFiles,
+            bool verbose = false)
+        {
+            var writer = IndentingLineWriter.Create(Console.Error);
+
+            if (verbose)
+                writer.Write(query.MetaElement);
+
+            var wc = new WebClient();
+
+            NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
+            {
+                var latestVersion = Program.GetLatestPackageVersion(id, isPrereleaseAllowed, url =>
+                {
+                    if (verbose)
+                        writer.WriteLine(url.OriginalString);
+                    return wc.DownloadString(url);
+                });
+                if (verbose)
+                    writer.WriteLine($"{id} -> {latestVersion}");
+                return latestVersion;
             }
 
             var nrs =
-                from nrsq in new[]
-                {
-                    from nr in query.Elements("NuGetReference")
-                    let v = (string) nr.Attribute("Version")
-                    select new PackageReference((string)nr,
-                                                string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
-                                                (bool?)nr.Attribute("Prerelease") ?? false),
-                    extraPackageReferences,
-                }
-                from nr in nrsq
+                from nr in query.PackageReferences
                 select new
                 {
                     nr.Id,
                     nr.Version,
+                    ActualVersion = nr.HasVersion
+                                  ? Lazy.Value(nr.Version)
+                                  : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
                     nr.IsPrereleaseAllowed,
-                    Title = string.Join(" ", Seq.Return(nr.Id,
-                                                        nr.Version?.ToString(),
-                                                        nr.IsPrereleaseAllowed ? "(pre-release)" : null)
-                                                .Filter()),
+                    Title = Seq.Return(nr.Id,
+                                       nr.Version?.ToString(),
+                                       nr.IsPrereleaseAllowed ? "(pre-release)" : null)
+                               .Filter()
+                               .ToDelimitedString(" "),
                 };
 
             nrs = nrs.ToArray();
-
-            if (verbose && nrs.Any())
-            {
-                writer.WriteLine($"Packages referenced ({nrs.Count():N0}):");
-                writer.Indent().WriteLines(from nr in nrs select nr.Title);
-            }
-
-            writer.WriteLine($"Packages target: {targetFramework}");
 
             var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
 
@@ -348,35 +284,77 @@ namespace LinqPadless
                 ? LinqPad.DefaultCoreNamespaces
                 : LinqPad.DefaultNamespaces;
 
+            var namespaces =
+                from nss in new[]
+                {
+                    from ns in defaultNamespaces
+                    select new
+                    {
+                        Name = ns,
+                        IsDefaulted = true,
+                    },
+                    from ns in query.Namespaces
+                    select new
+                    {
+                        Name = ns,
+                        IsDefaulted = false,
+                    },
+                }
+                from ns in nss
+                select ns;
+
+            namespaces = namespaces.ToArray();
+
+            if (verbose)
+            {
+                if (nrs.Any())
+                {
+                    writer.WriteLine($"Packages ({nrs.Count():N0}):");
+                    writer.WriteLines(from nr in nrs select "- " + nr.Title);
+                }
+
+                if (namespaces.Any())
+                {
+                    writer.WriteLine($"Imports ({query.Namespaces.Count:N0}):");
+                    writer.WriteLines(from ns in namespaces select "- " + ns.Name + (ns.IsDefaulted ? "*" : null));
+                }
+            }
+
+            if (verbose)
+                writer.WriteLine($"Framework: {targetFramework}");
+
             var defaultReferences
                 = isNetCoreApp
                 ? Array.Empty<string>()
                 : LinqPad.DefaultReferences;
 
-            return (queryKind,
-                    // ReSharper disable once PossibleMultipleEnumeration
-                    string.Join(Environment.NewLine, lines.Skip(eomLineNumber)),
-                    defaultNamespaces
-                            .Concat(from ns in query.Elements("Namespace")
-                                    select (string)ns)
-                            .Concat(extraImports),
-                    defaultReferences.Select(r => (r, default(PackageReference)))
-                            .Concat(from r in query.Elements("Reference")
-                                    select new
-                                    {
-                                        Relative = (string) r.Attribute("Relative"),
-                                        Path     = ((string) r).Trim(),
-                                    }
-                                    into r
-                                    where r.Path.Length > 0
-                                    select r.Relative?.Length > 0
-                                         ? r.Relative // prefer
-                                         : ResolveReferencePath(r.Path)
-                                    into r
-                                    select (r, default(PackageReference)))
-                            .Concat(from r in nrs
-                                    select ((string) null, new PackageReference(r.Id, r.Version, r.IsPrereleaseAllowed))));
+            var references =
+                defaultReferences
+                    .Select(r => (r, default(PackageReference)))
+                    .Concat(
+                        from r in query.MetaElement.Elements("Reference")
+                        select new
+                        {
+                            Relative = (string) r.Attribute("Relative"),
+                            Path     = ((string) r).Trim(),
+                        }
+                        into r
+                        where r.Path.Length > 0
+                        select r.Relative?.Length > 0
+                            ? r.Relative // prefer
+                            : ResolveReferencePath(r.Path)
+                        into r
+                        select (r, default(PackageReference)))
+                    .Concat(Enumerable.ToArray(
+                        from r in nrs
+                        select ((string) null, new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
+
+            GenerateExecutable(srcDirPath, binDirPath, query,
+                               from ns in namespaces select ns.Name,
+                               references, templateFiles, verbose, writer);
         }
+
+        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
 
         static string ResolveReferencePath(string path)
         {
@@ -396,7 +374,7 @@ namespace LinqPadless
         public static Dictionary<string, string> DirPathByToken =>
             _dirPathByToken ?? (_dirPathByToken = ResolvedDirTokens().ToDictionary(StringComparer.OrdinalIgnoreCase));
 
-        static IEnumerable<(string token, string path)> ResolvedDirTokens()
+        static IEnumerable<(string Token, string Path)> ResolvedDirTokens()
         {
             yield return ("RuntimeDirectory", RuntimeEnvironment.GetRuntimeDirectory());
             yield return ("ProgramFiles"    , Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
@@ -411,85 +389,117 @@ namespace LinqPadless
                 .Any(md => "Main" == md.Identifier.Text
                             && md.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)));
 
-        static void GenerateCsx(string queryFilePath,
-            string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
-            IndentingLineWriter writer)
-        {
-            var body = queryKind == QueryLanguage.Expression
-                     ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
-                     : queryKind == QueryLanguage.Program
-                     ? source + Environment.NewLine
-                              + (IsMainAsync(source) ? "await " : null)
-                              + "Main();"
-                     : source;
-
-            var rs = references.ToArray();
-
-            File.WriteAllLines(Path.ChangeExtension(queryFilePath, ".csx"),
-                from lines in new[]
-                {
-                    from r in rs
-                    select r.sourcePackage into p
-                    select new
-                    {
-                        p.Id,
-                        Version = p.HasVersion
-                                ? p.Version.ToString()
-                                : GetLatestPackageVersion(p.Id, p.IsPrereleaseAllowed).ToString()
-                    }
-                    into p
-                    select $"#r \"nuget: {p.Id}, {p.Version}\"",
-
-                    Seq.Return(string.Empty),
-
-                    from ns in imports
-                    select $"using {ns};",
-
-                    Seq.Return(body, string.Empty),
-                }
-                from line in lines
-                select line);
-
-            // TODO User-supplied csi.cmd
-
-            foreach (var ext in new[] { ".cmd", ".sh" })
-                GenerateBatch(LoadTextResource("dotnet-script" + ext), ext, queryFilePath, null, null);
-        }
-
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-        static void GenerateBatch(string template, string extension,
-                                  string queryFilePath, string packagesPath,
-                                  IEnumerable<(string path, PackageReference sourcePackage)> references)
-        {
-            template = template.Replace("__LINQPADLESS__", VersionInfo.FileVersion);
-            File.WriteAllText(Path.ChangeExtension(queryFilePath, extension), template, Utf8BomlessEncoding);
-
-            if (".sh".Equals(extension, StringComparison.OrdinalIgnoreCase)
-                && (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-                    || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)))
-            {
-                // TODO chmod +x on *nix
-            }
-        }
-
-        static void GenerateExecutable(string queryFilePath,
-            string packagesPath, QueryLanguage queryKind, string source,
-            IEnumerable<string> imports, IEnumerable<(string path, PackageReference sourcePackage)> references,
-            IndentingLineWriter writer)
+        static void GenerateExecutable(string srcDirPath, string binDirPath,
+            LinqPadQuery query, IEnumerable<string> imports,
+            IEnumerable<(string Path, PackageReference SourcePackage)> references,
+            IEnumerable<(string Name, IStreamable Content)> templateFiles,
+            bool verbose, IndentingLineWriter writer)
         {
             // TODO error handling in generated code
 
-            var body =
-                queryKind == QueryLanguage.Expression
-                ? Seq.Return(
-                        "static class UserQuery {",
-                        "    static void Main() {",
-                        "        System.Console.WriteLine(", source, ");",
-                        "    }",
-                        "}")
-                : queryKind == QueryLanguage.Program
+            var workingDirPath = srcDirPath;
+            if (!Directory.Exists(workingDirPath))
+                Directory.CreateDirectory(workingDirPath);
+
+            var rs = references.ToArray();
+
+            var resourceNames =
+                templateFiles
+                    .ToDictionary(e => e.Name,
+                                  e => e.Content,
+                                  StringComparer.OrdinalIgnoreCase);
+
+            var projectDocument =
+                XDocument.Parse(resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value.ReadText());
+
+            var packageIdSet =
+                rs.Where(e => e.SourcePackage != null)
+                  .Select(e => e.SourcePackage.Id)
+                  .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            projectDocument
+                .Descendants("PackageReference")
+                .Where(e => packageIdSet.Contains((string) e.Attribute("Include")))
+                .Remove();
+
+            projectDocument.Element("Project").Add(
+                new XElement("ItemGroup",
+                    from r in rs
+                    select r.SourcePackage into package
+                    select
+                        new XElement("PackageReference",
+                            new XAttribute("Include", package.Id),
+                            new XAttribute("Version", package.Version))));
+
+            var queryName = Path.GetFileNameWithoutExtension(query.FilePath);
+
+            using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
+            {
+                Encoding           = Utf8BomlessEncoding,
+                Indent             = true,
+                OmitXmlDeclaration = true,
+            }))
+            {
+                projectDocument.WriteTo(xw);
+            }
+
+            const string mainFile = "Main.cs";
+            var csFilePath = Path.Combine(workingDirPath, mainFile);
+            File.Delete(csFilePath);
+
+            T Template<T>(string template, string name, Func<string, string, T> resultor)
+            {
+                var replacementMatch =
+                    Regex.Matches(template, @"
+                             (?<= ^ | \r?\n )
+                             [\x20\t]* // [\x20\t]* {% [\x20\t]*([a-z]+)
+                             (?: [\x20\t]* %}
+                               | \s.*? // [\x20\t]* %}
+                               )
+                             [\x20\t]* (?=\r?\n)"
+                             , RegexOptions.Singleline
+                             | RegexOptions.IgnorePatternWhitespace)
+                         .SingleOrDefault(m => string.Equals(m.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase));
+
+                if (replacementMatch == null)
+                    throw new Exception("Internal error due to invalid template.");
+
+                return resultor(template.Substring(0, replacementMatch.Index),
+                                template.Substring(replacementMatch.Index + replacementMatch.Length));
+            }
+
+            var programTemplate = resourceNames[mainFile].ReadText();
+
+            programTemplate =
+                Template(programTemplate, "imports", (before, after) =>
+                         before
+                         + imports.GroupBy(e => e, StringComparer.Ordinal)
+                                  .Select(ns => $"using {ns.First()};")
+                                  .ToDelimitedString(Environment.NewLine)
+                         + after);
+
+            programTemplate =
+                Template(programTemplate, "generator", (before, after) =>
+                {
+                    var versionInfo = CachedVersionInfo.Value;
+                    return before
+                         + $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]"
+                         + after;
+                });
+
+            var source = query.Code;
+
+            var body
+                = query.Language == LinqPadQueryLanguage.Expression
+                ? Template(programTemplate, "source", (before, after) =>
+                      before
+                      + source + Environment.NewLine
+                      + ", " + SyntaxFactory.Literal(query.FilePath)
+                      + ", " + SyntaxFactory.Literal(source)
+                      + after).Lines()
+                : query.Language == LinqPadQueryLanguage.Program
                 ? Seq.Return(
                         "class UserQuery {",
                         "    static int Main(string[] args) {",
@@ -521,60 +531,42 @@ namespace LinqPadless
                         "    }",
                         "}");
 
-            var rs = references.ToArray();
 
-            var queryName = Path.GetFileNameWithoutExtension(queryFilePath);
-            var workingDirPath = Path.Combine(Path.GetDirectoryName(queryFilePath), queryName);
-            if (!Directory.Exists(workingDirPath))
-                Directory.CreateDirectory(workingDirPath);
+            if (body != null)
+                File.WriteAllLines(csFilePath, body.Append(string.Empty));
 
-            var projectRoot =
-                new XElement("Project",
-                    new XAttribute("Sdk", "Microsoft.NET.Sdk"),
-                    new XElement("PropertyGroup",
-                        new XElement("OutputType", "Exe"),
-                        // TODO Remove TargetFramework hard-coding
-                        new XElement("TargetFramework", "netcoreapp2.0")),
-                    new XElement("ItemGroup",
-                        from r in rs
-                        select
-                            new XElement("PackageReference",
-                                new XAttribute("Include", r.sourcePackage.Id),
-                                r.sourcePackage.HasVersion
-                                ? new XAttribute("Version", r.sourcePackage.Version)
-                                : new XAttribute("Version", GetLatestPackageVersion(r.sourcePackage.Id, r.sourcePackage.IsPrereleaseAllowed)))));
-
-            using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
+            foreach (var (name, content) in
+                from f in resourceNames
+                where !string.Equals(mainFile, f.Key, StringComparison.OrdinalIgnoreCase)
+                   && !f.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                select f)
             {
-                Encoding           = Utf8BomlessEncoding,
-                Indent             = true,
-                OmitXmlDeclaration = true,
-            }))
-            {
-                projectRoot.WriteTo(xw);
+                using (var s = content.Open())
+                using (var w = File.Create(Path.Combine(srcDirPath, name)))
+                    s.CopyTo(w);
             }
-
-            var csFilePath = Path.Combine(workingDirPath, "Program.cs");
-            File.WriteAllLines(csFilePath,
-                from lines in new[]
-                {
-                    from ns in imports.GroupBy(e => e, StringComparer.Ordinal)
-                    select $"using {ns.First()};",
-
-                    body,
-
-                    Seq.Return(string.Empty),
-                }
-                from line in lines
-                select line);
 
             // TODO User-supplied dotnet.cmd
 
-            foreach (var ext in new[] { ".cmd", ".sh" })
-                GenerateBatch(LoadTextResource("dotnet" + ext), ext, queryFilePath, packagesPath, rs);
+            var publishArgs =
+                Seq.Return("publish",
+                           !verbose ? "-nologo" : null,
+                           "-v", verbose ? "m" : "q",
+                           "-c", "Release",
+                           "-o", binDirPath)
+                   .Filter()
+                   .ToArray();
+
+            if (verbose)
+                writer.WriteLine(PasteArguments.Paste(publishArgs.Prepend("dotnet")));
+
+            Spawn("dotnet",
+                  publishArgs,
+                  workingDirPath, writer.Indent(),
+                  exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
-        static Version GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
+        static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed, Func<Uri, string> downloader)
         {
             var atom = XNamespace.Get("http://www.w3.org/2005/Atom");
             var d    = XNamespace.Get("http://schemas.microsoft.com/ado/2007/08/dataservices");
@@ -587,32 +579,56 @@ namespace LinqPadless
                     + "&includePrerelease=" + (isPrereleaseAllowed ? "true" : "false")
                     + "&$skip=0&$top=1&semVerLevel=2.0.0";
 
-            var xml = new WebClient().DownloadString(url);
+            var xml = downloader(new Uri(url));
 
             var versions =
                 from e in XDocument.Parse(xml)
                                    .Element(atom + "feed")
                                    .Elements(atom + "entry")
-                select new Version((string) e.Element(m + "properties")
-                                             .Element( d + "Version"));
+                select NuGetVersion.Parse((string) e.Element(m + "properties")
+                                                    .Element( d + "Version"));
 
             return versions.SingleOrDefault();
         }
 
-        static PackageReference ParseExtraPackageReference(string input)
+        static void Spawn(string path, IEnumerable<string> args,
+                          string workingDirPath, IndentingLineWriter writer,
+                          Func<int, Exception> errorSelector)
         {
-            // Syntax: ID [ "@" VERSION ] ["++"]
-            // Examples:
-            //   Foo                 => Latest release of Foo
-            //   Foo@2.1             => Foo release 2.1
-            //   Foo++               => Latest pre-release of Foo
-            //   Foo@3.0++           => Foo 3.0 pre-release
+            var psi = new ProcessStartInfo
+            {
+                CreateNoWindow         = true,
+                UseShellExecute        = false,
+                FileName               = path,
+                RedirectStandardError  = true,
+                RedirectStandardOutput = true,
+                WorkingDirectory       = workingDirPath,
+            };
 
-            const string plusplus = "++";
-            var prerelease = input.EndsWith(plusplus, StringComparison.Ordinal);
-            if (prerelease)
-                input = input.Substring(0, input.Length - plusplus.Length);
-            return input.Split('@', (id, version) => new PackageReference(id, NuGetVersion.TryParse(version, out var v) ? v : null, prerelease));
+            args.ForEach(psi.ArgumentList.Add);
+
+            using (var process = Process.Start(psi))
+            {
+                Debug.Assert(process != null);
+
+                void OnStdDataReceived(object _, DataReceivedEventArgs e)
+                {
+                    if (e.Data == null)
+                        return;
+                    writer?.WriteLines(e.Data);
+                }
+
+                process.OutputDataReceived += OnStdDataReceived;
+                process.ErrorDataReceived  += OnStdDataReceived;
+
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+
+                var exitCode = process.ExitCode;
+                if (exitCode != 0)
+                    throw errorSelector(exitCode);
+            }
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
@@ -620,7 +636,7 @@ namespace LinqPadless
 
         static void Help(OptionSet options)
         {
-            var name    = Lazy.Create(() => Path.GetFileName(VersionInfo.FileName));
+            var name    = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
             var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
             var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{VersionInfo.ProductName} (version {VersionInfo.FileVersion})")
                                                                .AppendLine(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"))
@@ -655,7 +671,9 @@ namespace LinqPadless
 
         static string LoadTextResource(Type type, string name, Encoding encoding = null)
         {
-            using (var stream = GetManifestResourceStream(type, name))
+            using (var stream = type != null
+                              ? GetManifestResourceStream(type, name)
+                              : GetManifestResourceStream(null, name))
             {
                 Debug.Assert(stream != null);
                 using (var reader = new StreamReader(stream, encoding ?? Encoding.UTF8))
@@ -667,21 +685,9 @@ namespace LinqPadless
             GetManifestResourceStream(typeof(Program), name);
 
         static Stream GetManifestResourceStream(Type type, string name) =>
-            type.Assembly.GetManifestResourceStream(type, name);
+            type != null ? type.Assembly.GetManifestResourceStream(type, name)
+                         : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
 
-        enum QueryLanguage  // ReSharper disable UnusedMember.Local
-        {                   // ReSharper disable InconsistentNaming
-            Expression,
-            Statements,
-            Program,
-            VBExpression,
-            VBStatements,
-            VBProgram,
-            FSharpExpression,
-            FSharpProgram,
-            SQL,
-            ESQL,
-        }
         // ReSharper restore InconsistentNaming
         // ReSharper restore UnusedMember.Local
     }
@@ -699,5 +705,86 @@ namespace LinqPadless
             Version = version;
             IsPrereleaseAllowed = isPrereleaseAllowed;
         }
+    }
+
+    enum LinqPadQueryLanguage  // ReSharper disable UnusedMember.Local
+    {                          // ReSharper disable InconsistentNaming
+        Unknown,
+        Expression,
+        Statements,
+        Program,
+        VBExpression,
+        VBStatements,
+        VBProgram,
+        FSharpExpression,
+        FSharpProgram,
+        SQL,
+        ESQL,
+    }
+
+    sealed class LinqPadQuery
+    {
+        readonly Lazy<XElement> _metaElement;
+        readonly Lazy<LinqPadQueryLanguage> _language;
+        readonly Lazy<ReadOnlyCollection<string>> _namespaces;
+        readonly Lazy<ReadOnlyCollection<PackageReference>> _packageReferences;
+        readonly Lazy<string> _code;
+
+        public string FilePath { get; }
+        public string Source { get; }
+        public LinqPadQueryLanguage Language => _language.Value;
+        public XElement MetaElement => _metaElement.Value;
+        public IReadOnlyCollection<string> Namespaces => _namespaces.Value;
+        public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
+        public string Code => _code.Value;
+
+        public static LinqPadQuery Load(string path)
+        {
+            var source = File.ReadAllText(path);
+            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
+            return new LinqPadQuery(path, source, eomLineNumber);
+        }
+
+        LinqPadQuery(string filePath, string source, int eomLineNumber)
+        {
+            FilePath = filePath;
+            Source = source;
+
+            _metaElement = Lazy.Create(() =>
+                XElement.Parse(source.Lines()
+                                     .Take(eomLineNumber)
+                                     .ToDelimitedString(Environment.NewLine)));
+
+            _code = Lazy.Create(() =>
+                source.Lines()
+                      .Skip(eomLineNumber)
+                      .ToDelimitedString(Environment.NewLine));
+
+            _language = Lazy.Create(() =>
+                Enum.TryParse((string) MetaElement.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind) ? queryKind : LinqPadQueryLanguage.Unknown);
+
+            ReadOnlyCollection<T> ReadOnlyCollection<T>(IEnumerable<T> items) =>
+                new ReadOnlyCollection<T>(items.ToList());
+
+            _namespaces = Lazy.Create(() =>
+                ReadOnlyCollection(
+                    from ns in MetaElement.Elements("Namespace")
+                    select (string) ns));
+
+            _packageReferences = Lazy.Create(() =>
+                ReadOnlyCollection(
+                    from nr in MetaElement.Elements("NuGetReference")
+                    let v = (string) nr.Attribute("Version")
+                    select new PackageReference((string) nr,
+                               string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
+                               (bool?) nr.Attribute("Prerelease") ?? false)));
+        }
+
+        public bool IsLanguageSupported
+            => Language == LinqPadQueryLanguage.Statements
+            || Language == LinqPadQueryLanguage.Expression
+            || Language == LinqPadQueryLanguage.Program;
+
+        public override string ToString() => Source;
     }
 }

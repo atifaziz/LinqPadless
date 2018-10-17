@@ -1,12 +1,9 @@
 $LOGO$
 
-Usage: $NAME$ [OPTIONS...] FILESPEC...
+Usage: $NAME$ [OPTIONS...] FILE ARGS...
 
-where FILESPEC can be one or more of the following:
-
-- path to a LINQPad Query file (.linq extension)
-- path to a directory; all *.linq files will be compiled
-- a wildcard (*, ?) specification; all matching files will be compiled
+where FILE is the path to the LINQPad Query file (.linq extension) to
+run and ARGS is one or more arguments passed to the query.
 
 Options:
 

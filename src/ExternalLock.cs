@@ -1,4 +1,4 @@
-namespace WebLinqPadQueryCompiler
+namespace LinqPadless
 {
     using System;
     using System.Threading;

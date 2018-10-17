@@ -17,58 +17,6 @@
 //
 #endregion
 
-namespace Mannex
-{
-    using System;
-    using System.Diagnostics;
-
-    /// <summary>
-    /// Extension methods for <see cref="string"/>.
-    /// </summary>
-
-    static partial class StringExtensions
-    {
-        /// <summary>
-        /// Splits a string into a pair using a specified character to
-        /// separate the two.
-        /// </summary>
-        /// <remarks>
-        /// Neither half in the resulting pair is ever <c>null</c>.
-        /// </remarks>
-
-        public static T Split<T>(this string str, char separator, Func<string, string, T> resultFunc)
-        {
-            if (str == null) throw new ArgumentNullException("str");
-            if (resultFunc == null) throw new ArgumentNullException("resultFunc");
-            return SplitRemoving(str, str.IndexOf(separator), 1, resultFunc);
-        }
-
-        /// <summary>
-        /// Splits a string into a pair by removing a portion of the string.
-        /// </summary>
-        /// <remarks>
-        /// Neither half in the resulting pair is ever <c>null</c>.
-        /// </remarks>
-
-        static T SplitRemoving<T>(string str, int index, int count, Func<string, string, T> resultFunc)
-        {
-            Debug.Assert(str != null);
-            Debug.Assert(count > 0);
-            Debug.Assert(resultFunc != null);
-
-            var a = index < 0
-                  ? str
-                  : str.Substring(0, index);
-
-            var b = index < 0 || index + 1 >= str.Length
-                  ? string.Empty
-                  : str.Substring(index + count);
-
-            return resultFunc(a, b);
-        }
-    }
-}
-
 namespace Mannex.IO
 {
     #region Imports
@@ -99,6 +47,57 @@ namespace Mannex.IO
         {
             for (var line = reader.ReadLine(); line != null; line = reader.ReadLine())
                 yield return line;
+        }
+    }
+}
+
+namespace Mannex.IO
+{
+    #region Imports
+
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+
+    #endregion
+
+    /// <summary>
+    /// Extension methods for <see cref="DirectoryInfo"/>.
+    /// </summary>
+
+    static partial class DirectoryInfoExtensions
+    {
+        /// <summary>
+        /// Returns all the parents of the directory.
+        /// </summary>
+        /// <remarks>
+        /// This method uses deferred execution. In addition, it does not
+        /// check for the existence of the directory or its parents.
+        /// </remarks>
+
+        public static IEnumerable<DirectoryInfo> Parents(this DirectoryInfo dir)
+        {
+            return dir.SelfAndParents().Skip(1);
+        }
+
+        /// <summary>
+        /// Returns the directory and all its parents.
+        /// </summary>
+        /// <remarks>
+        /// This method uses deferred execution. In addition, it does not
+        /// check for the existence of the directory or its parents.
+        /// </remarks>
+
+        public static IEnumerable<DirectoryInfo> SelfAndParents(this DirectoryInfo dir)
+        {
+            if (dir == null) throw new ArgumentNullException(nameof(dir));
+
+            return _(); IEnumerable<DirectoryInfo> _()
+            {
+                for (; dir != null; dir = dir.Parent)
+                    yield return dir;
+            }
         }
     }
 }
