@@ -7,4 +7,4 @@ else
     VERSION_SUFFIX=
 fi
 ./build.sh
-dotnet pack -c Release $VERSION_SUFFIX
+dotnet pack --no-restore --no-build -c Release $VERSION_SUFFIX
