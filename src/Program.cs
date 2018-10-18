@@ -204,12 +204,15 @@ namespace LinqPadless
 
                 scriptArgs.ForEach(psi.ArgumentList.Add);
 
+                string FormatCommandLine() =>
+                    PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName));
+
                 if (verbose && !dontExecute)
-                    Console.Error.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
+                    Console.Error.WriteLine(FormatCommandLine());
 
                 if (dontExecute)
                 {
-                    Console.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
+                    Console.WriteLine(FormatCommandLine());
                     return 0;
                 }
 
