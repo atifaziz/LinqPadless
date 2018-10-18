@@ -568,6 +568,7 @@ namespace LinqPadless
                            !verbose ? "-nologo" : null,
                            "-v", verbose ? "m" : "q",
                            "-c", "Release",
+                           $"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}",
                            "-o", binDirPath)
                    .Filter()
                    .ToArray();
