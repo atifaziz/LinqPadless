@@ -41,9 +41,9 @@ namespace LinqPadless
     using NuGet.Frameworks;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
-    using static MoreLinq.Extensions.ForEachExtension;
 
     #endregion
 
@@ -97,9 +97,13 @@ namespace LinqPadless
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
 
             IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
-                = queryDir.SelfAndParents()
-                          .Select(d => Path.Combine(d.FullName, ".lpless", "templates", KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant()))
-                          .FirstOrDefault(Directory.Exists) is string templateProjectPath
+                = queryDir
+                    .SelfAndParents()
+                    .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
+                    .Select(d => Path.Combine(d.FullName, ".lpless", "templates", KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant()))
+                    .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
+                                         .WriteLine(Console.Error, s => "- " + s))
+                    .FirstOrDefault(Directory.Exists) is string templateProjectPath
                 ? Directory.GetFiles(templateProjectPath)
                            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
                                     || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))

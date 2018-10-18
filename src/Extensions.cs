@@ -18,6 +18,7 @@ namespace LinqPadless
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using System.IO;
     using Mono.Options;
 
@@ -34,6 +35,38 @@ namespace LinqPadless
                         yield return line;
                 }
             }
+        }
+    }
+
+    static class EnumerableExtensions
+    {
+        public static IEnumerable<T> If<T>(this IEnumerable<T> source, bool flag, Func<IEnumerable<T>, IEnumerable<T>> then)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            return flag ? then(source) : source;
+        }
+
+        public static IEnumerable<T> Do<T>(this IEnumerable<T> source, Action action)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+
+            return _(); IEnumerable<T> _()
+            {
+                using (var e = source.GetEnumerator())
+                {
+                    action();
+                    while (e.MoveNext())
+                        yield return e.Current;
+                }
+            }
+        }
+
+        public static IEnumerable<T> WriteLine<T>(this IEnumerable<T> source, TextWriter writer, Func<T, string> formatter)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            if (formatter == null) throw new ArgumentNullException(nameof(formatter));
+            return source.Do(e => writer.WriteLine(formatter(e)));
         }
     }
 
