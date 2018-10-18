@@ -24,6 +24,19 @@ namespace LinqPadless
 
     static class StringExtensions
     {
+        public static (string, string)
+            Split2(this string input, char separator,
+                   StringSplitOptions options = StringSplitOptions.None)
+        {
+            var tokens = input.Split(separator, 2, options);
+            switch (tokens.Length)
+            {
+                case 0 : return default;
+                case 1 : return (tokens[0], default);
+                default: return (tokens[0], tokens[2]);
+            }
+        }
+
         public static IEnumerable<string> Lines(this string input)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));

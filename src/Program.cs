@@ -91,8 +91,17 @@ namespace LinqPadless
                                                 "and C# Program queries partially in this version.");
             }
 
+            var whackBang
+                = query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FirstOrDefault() is string firstNonBlankLine
+                ? Regex.Match(firstNonBlankLine, @"(?<=//#?![\x20\t]*).+").Value.Trim()
+                       .Split2(' ', StringSplitOptions.RemoveEmptyEntries)
+                : default;
+
             string KebabCaseFromPascal(string s) =>
                 Regex.Replace(s, @"((?<![A-Z]|^)[A-Z]|(?<=[A-Z]+)[A-Z](?=[a-z]))", m => "-" + m.Value);
+
+            var template = whackBang.Fold((t, _) =>
+                t ?? KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant());
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
 
@@ -100,7 +109,7 @@ namespace LinqPadless
                 = queryDir
                     .SelfAndParents()
                     .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
-                    .Select(d => Path.Combine(d.FullName, ".lpless", "templates", KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant()))
+                    .Select(d => Path.Combine(d.FullName, ".lpless", "templates", template))
                     .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
                                          .WriteLine(Console.Error, s => "- " + s))
                     .FirstOrDefault(Directory.Exists) is string templateProjectPath
