@@ -204,7 +204,7 @@ namespace LinqPadless
 
                 scriptArgs.ForEach(psi.ArgumentList.Add);
 
-                if (verbose || !dontExecute)
+                if (verbose && !dontExecute)
                     Console.Error.WriteLine(PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName)));
 
                 if (dontExecute)
