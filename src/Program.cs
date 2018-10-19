@@ -412,13 +412,6 @@ namespace LinqPadless
             yield return ("MyDocuments"     , Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
-        static bool IsMainAsync(string source) =>
-            CSharpSyntaxTree
-                .ParseText(source).GetRoot()
-                .DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Any(md => "Main" == md.Identifier.Text
-                            && md.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)));
-
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         static void GenerateExecutable(string srcDirPath, string binDirPath,
@@ -457,6 +450,7 @@ namespace LinqPadless
             projectDocument.Element("Project").Add(
                 new XElement("ItemGroup",
                     from r in rs
+                    where r.SourcePackage != null
                     select r.SourcePackage into package
                     select
                         new XElement("PackageReference",
@@ -479,71 +473,60 @@ namespace LinqPadless
             var csFilePath = Path.Combine(workingDirPath, mainFile);
             File.Delete(csFilePath);
 
-            T Template<T>(string template, string name, Func<string, string, T> resultor)
-            {
-                var replacementMatch =
-                    Regex.Matches(template, @"
-                             (?<= ^ | \r?\n )
-                             [\x20\t]* // [\x20\t]* {% [\x20\t]*([a-z]+)
-                             (?: [\x20\t]* %}
-                               | \s.*? // [\x20\t]* %}
-                               )
-                             [\x20\t]* (?=\r?\n)"
-                             , RegexOptions.Singleline
-                             | RegexOptions.IgnorePatternWhitespace)
-                         .SingleOrDefault(m => string.Equals(m.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase));
-
-                if (replacementMatch == null)
-                    throw new Exception("Internal error due to invalid template.");
-
-                return resultor(template.Substring(0, replacementMatch.Index),
-                                template.Substring(replacementMatch.Index + replacementMatch.Length));
-            }
-
-            var programTemplate = resourceNames[mainFile].ReadText();
-
-            programTemplate =
-                Template(programTemplate, "imports", (before, after) =>
-                         before
-                         + imports.GroupBy(e => e, StringComparer.Ordinal)
-                                  .Select(ns => $"using {ns.First()};")
-                                  .ToDelimitedString(Environment.NewLine)
-                         + after);
-
-            programTemplate =
-                Template(programTemplate, "generator", (before, after) =>
-                {
-                    var versionInfo = CachedVersionInfo.Value;
-                    return before
-                         + $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]"
-                         + after;
-                });
-
             var source = query.Code;
+
+            IEnumerable<string> GenerateProgram()
+            {
+                var syntaxTree = CSharpSyntaxTree.ParseText(source);
+
+                var main =
+                    syntaxTree
+                        .GetRoot()
+                        .DescendantNodes().OfType<MethodDeclarationSyntax>()
+                        .Single(md => "Main" == md.Identifier.Text);
+
+                source = source.Substring(0, main.Identifier.Span.Start)
+                       + "RunUserAuthoredQuery"
+                       + source.Substring(main.Identifier.Span.End);
+
+                var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+                var isVoid = main.ReturnType is PredefinedTypeSyntax pdts && pdts.IsKind(SyntaxKind.VoidKeyword);
+                var returns = !isVoid;
+
+                T If<T>(bool flag, T s) => flag ? s : default;
+
+                return
+                    Seq.Return(
+                        "partial class UserQuery {",
+                        "    static " + (isAsync ? "async Task<int>" : "int") + " Main(string[] args) {",
+                        "        " + If(returns, "return") + If(isAsync, " await") + " Program.Run(new UserQuery().RunUserAuthoredQuery" + If(main.ParameterList.Parameters.Any(), ", args") + ");",
+                        "        " + If(returns, "//") + " return 0;",
+                        "    }",
+                        "#line 1",
+                        source,
+                        "}");
+            }
 
             var body
                 = query.Language == LinqPadQueryLanguage.Expression
-                ? Template(programTemplate, "source", (before, after) =>
-                      before
-                      + source + Environment.NewLine
-                      + ", " + SyntaxFactory.Literal(query.FilePath)
-                      + ", " + SyntaxFactory.Literal(source)
-                      + after).Lines()
-                : query.Language == LinqPadQueryLanguage.Program
                 ? Seq.Return(
-                        "class UserQuery {",
-                        "    static int Main(string[] args) {",
-                        "        new UserQuery().Main()" + (IsMainAsync(source) ? ".Wait()" : null) + "; return 0;",
-                        "    }",
-                            source,
+                        "partial class UserQuery {",
+                        "   static async System.Threading.Tasks.Task Main() {",
+                        "       await Program.Run(() =>",
+                        "#line 1",
+                                    source,
+                        "       );",
+                        "   }",
                         "}")
+                : query.Language == LinqPadQueryLanguage.Program
+                ? GenerateProgram()
                 : CSharpSyntaxTree.ParseText("void Main() {" + source + "}")
                                   .GetRoot()
                                   .DescendantNodes()
                                   .OfType<AwaitExpressionSyntax>()
                                   .Any()
                 ? Seq.Return(
-                        "class UserQuery {",
+                        "partial class UserQuery {",
                         "    static int Main(string[] args) {",
                         "        new UserQuery().Main().Wait(); return 0;",
                         "    }",
@@ -552,7 +535,7 @@ namespace LinqPadless
                         "    }",
                         "}")
                 : Seq.Return(
-                        "class UserQuery {",
+                        "partial class UserQuery {",
                         "    static int Main(string[] args) {",
                         "        new UserQuery().Main(); return 0;",
                         "    }",
@@ -563,7 +546,15 @@ namespace LinqPadless
 
 
             if (body != null)
-                File.WriteAllLines(csFilePath, body.Append(string.Empty));
+            {
+                File.WriteAllLines(csFilePath,
+                    Seq.Return("#define CMD")
+                       .Concat(imports.GroupBy(e => e, StringComparer.Ordinal)
+                                      .Select(ns => $"using {ns.First()};"))
+                       .Append($"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(CachedVersionInfo.Value.ProductName)}, {SyntaxFactory.Literal(CachedVersionInfo.Value.FileVersion)})]")
+                       .Concat(body)
+                       .Append(string.Empty));
+            }
 
             foreach (var (name, content) in
                 from f in resourceNames
