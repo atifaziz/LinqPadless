@@ -590,11 +590,11 @@ namespace LinqPadless
 
             var (body, symbols)
                 = query.Language == LinqPadQueryLanguage.Expression
-                ? (Detemplate(program, "expression", source),
+                ? (Detemplate(program, "expression", "#line 1" + Environment.NewLine + source),
                    Enumerable.Empty<string>())
                 : query.Language == LinqPadQueryLanguage.Program
                 ? GenerateProgram()
-                : (Detemplate(program, "statements", source),
+                : (Detemplate(program, "statements", "#line 1" + Environment.NewLine + source),
                    Enumerable.Empty<string>());
 
             var baseCompilationSymbol = "LINQPAD_" +
