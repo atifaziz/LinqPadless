@@ -56,7 +56,8 @@ namespace LinqPadless
             var force = false;
             var dontExecute = false;
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
-            var binDirPath = (string) null;
+            var outDirPath = (string) null;
+            var uncached = false;
 
             var options = new OptionSet
             {
@@ -64,8 +65,9 @@ namespace LinqPadless
                 { "verbose|v"     , "enable additional output", _ => verbose = true },
                 { "d|debug"       , "debug break", _ => Debugger.Launch() },
                 { "f|force"       , "force continue on errors", _ => force = true },
-                { "x"             , "build and cache but do not execute", _ => dontExecute = true },
-                { "o|out|output=" , "build output directory; implies -xf", v => binDirPath = v },
+                { "x"             , "do not execute", _ => dontExecute = true },
+                { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
+                { "o|out|output=" , "output directory; implies -f", v => outDirPath = v },
                 { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
@@ -94,14 +96,10 @@ namespace LinqPadless
             var whackBang
                 = query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FirstOrDefault() is string firstNonBlankLine
                 ? Regex.Match(firstNonBlankLine, @"(?<=//#?![\x20\t]*).+").Value.Trim()
-                       .Split2(' ', StringSplitOptions.RemoveEmptyEntries)
                 : default;
 
-            string KebabCaseFromPascal(string s) =>
-                Regex.Replace(s, @"((?<![A-Z]|^)[A-Z]|(?<=[A-Z]+)[A-Z](?=[a-z]))", m => "-" + m.Value);
-
-            var template = whackBang.Fold((t, _) =>
-                t ?? KebabCaseFromPascal(query.Language.ToString()).ToLowerInvariant());
+            var template = whackBang.Split2(' ', StringSplitOptions.RemoveEmptyEntries)
+                                    .Fold((t, _) => t ?? "template");
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
 
@@ -140,28 +138,31 @@ namespace LinqPadless
                                    .ToLowerInvariant();
             }
 
-            var cacheBaseDirPath = Path.Combine(Path.GetTempPath(), "lpless", "cache");
+            var (cacheBaseDirPath, cacheId)
+                = uncached
+                ? (outDirPath ?? Path.Combine(queryDir.FullName, Path.GetFileNameWithoutExtension(query.FilePath)), ".")
+                : (Path.Combine(Path.GetTempPath(), "lpless", "cache"), hash);
 
-            var exporting = binDirPath != null;
+            if (uncached)
+                force = true;
+
+            var binDirPath = Path.Combine(cacheBaseDirPath, "bin", cacheId);
+            var srcDirPath = Path.Combine(cacheBaseDirPath, "src", cacheId);
+            var tmpDirPath = uncached ? binDirPath : Path.Combine(cacheBaseDirPath, "bin", "!" + cacheId);
+
+            var exporting = outDirPath != null && !uncached;
             if (exporting)
             {
-                if (Directory.Exists(binDirPath))
+                if (Directory.Exists(outDirPath))
                     throw new Exception("The output directory already exists.");
 
-                force = dontExecute = true;
-            }
-            else
-            {
-                binDirPath = Path.Combine(cacheBaseDirPath, "bin", hash);
+                force = true;
             }
 
             {
                 if (!force && Run() is int exitCode)
                     return exitCode;
             }
-
-            var srcDirPath = Path.Combine(cacheBaseDirPath, "src", hash);
-            var tmpDirPath = Path.Combine(cacheBaseDirPath, "bin", "!" + hash);
 
             try
             {
@@ -170,14 +171,21 @@ namespace LinqPadless
                         templateFiles,
                         verbose);
 
-                if (!exporting && Directory.Exists(binDirPath))
-                    Directory.Delete(binDirPath, true);
+                if (tmpDirPath != binDirPath)
+                {
+                    if (!exporting && Directory.Exists(binDirPath))
+                        Directory.Delete(binDirPath, true);
 
-                Directory.Move(tmpDirPath, binDirPath);
+                    Directory.Move(tmpDirPath, binDirPath);
+                }
             }
             catch
             {
-                try { Directory.Delete(tmpDirPath); }
+                try
+                {
+                    if (tmpDirPath != binDirPath)
+                        Directory.Delete(tmpDirPath);
+                }
                 catch { /* ignore */}
                 throw;
             }
