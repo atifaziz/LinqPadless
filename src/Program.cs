@@ -44,6 +44,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
+    using Ix = System.Linq.EnumerableEx;
 
     #endregion
 
@@ -423,6 +424,17 @@ namespace LinqPadless
 
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
+        [Flags]
+        enum MainReturnTypeTraits
+        {
+            VoidTrait = 1,
+            TaskTrait = 2,
+            Int       = 0,
+            Void      = VoidTrait,
+            Task      = TaskTrait | VoidTrait,
+            TaskOfInt = TaskTrait | Int,
+        }
+
         static void GenerateExecutable(string srcDirPath, string binDirPath,
             LinqPadQuery query, IEnumerable<string> imports,
             IEnumerable<(string Path, PackageReference SourcePackage)> references,
@@ -481,91 +493,123 @@ namespace LinqPadless
             var csFilePath = Path.Combine(workingDirPath, mainFile);
             File.Delete(csFilePath);
 
-            T Template<T>(string template, string name, Func<string, string, T> resultor)
-            {
-                var replacementMatch =
-                    Regex.Matches(template, @"
-                             (?<= ^ | \r?\n )
-                             [\x20\t]* // [\x20\t]* {% [\x20\t]*([a-z]+)
-                             (?: [\x20\t]* %}
-                               | \s.*? // [\x20\t]* %}
-                               )
-                             [\x20\t]* (?=\r?\n)"
-                             , RegexOptions.Singleline
-                             | RegexOptions.IgnorePatternWhitespace)
-                         .SingleOrDefault(m => string.Equals(m.Groups[1].Value, name, StringComparison.OrdinalIgnoreCase));
+            var program = resourceNames[mainFile].ReadText();
 
-                if (replacementMatch == null)
-                    throw new Exception("Internal error due to invalid template.");
+            program =
+                Detemplate(program, "imports",
+                    imports.GroupBy(e => e, StringComparer.Ordinal)
+                           .Select(ns => $"using {ns.First()};")
+                           .ToDelimitedString(Environment.NewLine));
 
-                return resultor(template.Substring(0, replacementMatch.Index),
-                                template.Substring(replacementMatch.Index + replacementMatch.Length));
-            }
-
-            var programTemplate = resourceNames[mainFile].ReadText();
-
-            programTemplate =
-                Template(programTemplate, "imports", (before, after) =>
-                         before
-                         + imports.GroupBy(e => e, StringComparer.Ordinal)
-                                  .Select(ns => $"using {ns.First()};")
-                                  .ToDelimitedString(Environment.NewLine)
-                         + after);
-
-            programTemplate =
-                Template(programTemplate, "generator", (before, after) =>
+            program =
+                Detemplate(program, "generator", () =>
                 {
                     var versionInfo = CachedVersionInfo.Value;
-                    return before
-                         + $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]"
-                         + after;
+                    return $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]";
                 });
 
             var source = query.Code;
 
-            var body
-                = query.Language == LinqPadQueryLanguage.Expression
-                ? Template(programTemplate, "source", (before, after) =>
-                      before
-                      + source + Environment.NewLine
-                      + ", " + SyntaxFactory.Literal(query.FilePath)
-                      + ", " + SyntaxFactory.Literal(source)
-                      + after).Lines()
-                : query.Language == LinqPadQueryLanguage.Program
-                ? Seq.Return(
-                        "class UserQuery {",
-                        "    static int Main(string[] args) {",
-                        "        new UserQuery().Main()" + (IsMainAsync(source) ? ".Wait()" : null) + "; return 0;",
-                        "    }",
-                            source,
-                        "}")
-                : CSharpSyntaxTree.ParseText("void Main() {" + source + "}")
-                                  .GetRoot()
-                                  .DescendantNodes()
-                                  .OfType<AwaitExpressionSyntax>()
-                                  .Any()
-                ? Seq.Return(
-                        "class UserQuery {",
-                        "    static int Main(string[] args) {",
-                        "        new UserQuery().Main().Wait(); return 0;",
-                        "    }",
-                        "    async Task Main() {",
-                                source,
-                        "    }",
-                        "}")
-                : Seq.Return(
-                        "class UserQuery {",
-                        "    static int Main(string[] args) {",
-                        "        new UserQuery().Main(); return 0;",
-                        "    }",
-                        "    void Main() {",
-                                source,
-                        "    }",
-                        "}");
+            (string Source, IEnumerable<string> CompilationSymbols)
+                GenerateProgram()
+            {
+                var syntaxTree = CSharpSyntaxTree.ParseText(source);
 
+                var main =
+                    syntaxTree
+                        .GetRoot()
+                        .DescendantNodes().OfType<MethodDeclarationSyntax>()
+                        .Single(md => "Main" == md.Identifier.Text);
+
+                var updatedSource
+                    = source.Substring(0, main.Identifier.Span.Start)
+                    + "RunUserAuthoredQuery"
+                    + source.Substring(main.Identifier.Span.End);
+
+                var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+                var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+
+                MainReturnTypeTraits t;
+                switch (main.ReturnType)
+                {
+                    case IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value):
+                        t = MainReturnTypeTraits.Task; break;
+                    case GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value):
+                        t = MainReturnTypeTraits.TaskOfInt; break;
+                    case PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword):
+                        t = MainReturnTypeTraits.Void; break;
+                    default:
+                        t = MainReturnTypeTraits.Int; break;
+                }
+
+                var isVoid = t.HasFlag(MainReturnTypeTraits.VoidTrait);
+                var isTask = t.HasFlag(MainReturnTypeTraits.TaskTrait);
+
+                var hasArgs = main.ParameterList.Parameters.Any();
+
+                /*
+
+                [ static ] ( void | int | Task | Task<int> ) Main([ string[] args ]) {}
+
+                static void Main()                     | STATIC, VOID
+                static int Main()                      | STATIC,
+                static void Main(string[] args)        | STATIC, VOID, ARGS
+                static int Main(string[] args)         | STATIC, ARGS
+                static Task Main()                     | STATIC, VOID, TASK
+                static Task<int> Main()                | STATIC, TASK
+                static Task Main(string[] args)        | STATIC, VOID, TASK, ARGS
+                static Task<int> Main(string[] args)   | STATIC, TASK, ARGS
+                void Main()                            | VOID
+                int Main()                             |
+                void Main(string[] args)               | VOID, ARGS
+                int Main(string[] args)                | ARGS
+                Task Main()                            | VOID, TASK
+                Task<int> Main()                       | TASK
+                Task Main(string[] args)               | VOID, TASK, ARGS
+                Task<int> Main(string[] args)          | TASK, ARGS
+
+                */
+
+                return (
+                    Detemplate(program, "program", updatedSource + Environment.NewLine),
+                    Enumerable.Empty<string>()
+                              .Concat(Ix.If(() => hasArgs , Seq.Return("ARGS")))
+                              .Concat(Ix.If(() => isVoid  , Seq.Return("VOID")))
+                              .Concat(Ix.If(() => isTask  , Seq.Return("TASK")))
+                              .Concat(Ix.If(() => isAsync , Seq.Return("ASYNC")))
+                              .Concat(Ix.If(() => isStatic, Seq.Return("STATIC"))));
+            }
+
+            program =
+                Detemplate(program, "path-string",
+                    SyntaxFactory.Literal(query.FilePath).ToString());
+
+            program =
+                Detemplate(program, "source-string",
+                    () => SyntaxFactory.Literal(query.Code).ToString());
+
+            var (body, symbols)
+                = query.Language == LinqPadQueryLanguage.Expression
+                ? (Detemplate(program, "expression", source),
+                   Enumerable.Empty<string>())
+                : query.Language == LinqPadQueryLanguage.Program
+                ? GenerateProgram()
+                : (Detemplate(program, "statements", source),
+                   Enumerable.Empty<string>());
+
+            var baseCompilationSymbol = "LINQPAD_" +
+                ( query.Language == LinqPadQueryLanguage.Expression ? "EXPRESSION"
+                : query.Language == LinqPadQueryLanguage.Program    ? "PROGRAM"
+                : query.Language == LinqPadQueryLanguage.Statements ? "STATEMENTS"
+                : throw new NotSupportedException()
+                );
 
             if (body != null)
-                File.WriteAllLines(csFilePath, body.Append(string.Empty));
+                File.WriteAllLines(csFilePath,
+                    Seq.Return("#define " + baseCompilationSymbol)
+                       .Concat(from s in symbols select $"#define {baseCompilationSymbol}_{s}")
+                       .Append(body)
+                       .Append(string.Empty));
 
             foreach (var (name, content) in
                 from f in resourceNames
@@ -598,6 +642,31 @@ namespace LinqPadless
                   workingDirPath, writer.Indent(),
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
+
+        static string Detemplate(string template, string name, string replacement) =>
+            Detemplate(template, name, Lazy.Value(replacement));
+
+        static string Detemplate(string template, string name, Func<string> replacement) =>
+            Detemplate(template, name, Lazy.Create(replacement));
+
+        static string Detemplate(string template, string name, Lazy<string> replacement) =>
+            Regex.Matches(template, @"
+                     (?<= ^ | \r?\n )
+                     [\x20\t]* // [\x20\t]* {% [\x20\t]*([a-z-]+)
+                     (?: [\x20\t]* %}
+                       | \s.*? // [\x20\t]* %}
+                       )
+                     [\x20\t]* (?=\r?\n)"
+                     , RegexOptions.Singleline
+                     | RegexOptions.IgnorePatternWhitespace)
+                 .Aggregate((Index: 0, Text: string.Empty),
+                            (s, m) =>
+                                (m.Index + m.Length,
+                                 s.Text + template.Substring(s.Index, m.Index - s.Index)
+                                        + (string.Equals(name, m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)
+                                           ? replacement.Value
+                                           : m.Value)),
+                            s => s.Text + template.Substring(s.Index));
 
         static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed, Func<Uri, string> downloader)
         {
