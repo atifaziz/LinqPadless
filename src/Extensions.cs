@@ -85,7 +85,7 @@ namespace LinqPadless
 
     static class OptionSetExtensions
     {
-        public static T WriteOptionDescriptionsReturningWriter<T>(this OptionSet options, T writer)
+        public static T WriteOptionDescriptionsReturningWriter<T>(this Mono.Options.OptionSet options, T writer)
             where T : TextWriter
         {
             options.WriteOptionDescriptions(writer);

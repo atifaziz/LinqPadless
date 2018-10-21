@@ -34,7 +34,6 @@ namespace LinqPadless
     using System.Xml;
     using System.Xml.Linq;
     using Mannex.IO;
-    using Mono.Options;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
@@ -45,12 +44,13 @@ namespace LinqPadless
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
     using Ix = System.Linq.EnumerableEx;
+    using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
 
     #endregion
 
     static partial class Program
     {
-        static int Wain(IEnumerable<string> args)
+        static int Wain(string[] args)
         {
             var verbose = false;
             var help = false;
@@ -60,7 +60,27 @@ namespace LinqPadless
             var outDirPath = (string) null;
             var uncached = false;
 
-            var options = new OptionSet
+            OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
+            {
+                var hasTailStarted = false;
+                return (impl, arg, context) =>
+                {
+                    if (hasTailStarted) // once a tail, always a tail
+                        return false;
+
+                    var isOption = impl(arg, context);
+                    if (!isOption)
+                    {
+                        if (arg.Length > 0 && arg[0] == '-' && !hasTailStarted)
+                            throw new Exception("Invalid argument: " + arg);
+                        hasTailStarted = true;
+                    }
+
+                    return isOption;
+                };
+            }
+
+            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
                 { "?|help|h"      , "prints out the options", _ => help = true },
                 { "verbose|v"     , "enable additional output", _ => verbose = true },
@@ -736,7 +756,7 @@ namespace LinqPadless
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
         static FileVersionInfo VersionInfo => CachedVersionInfo.Value;
 
-        static void Help(OptionSet options)
+        static void Help(Mono.Options.OptionSet options)
         {
             var name    = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
             var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
