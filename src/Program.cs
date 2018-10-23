@@ -124,11 +124,16 @@ namespace LinqPadless
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
 
-            IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
-                = queryDir
+            var searchPath =
+                queryDir
                     .SelfAndParents()
                     .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
-                    .Select(d => Path.Combine(d.FullName, ".lpless", "templates", template))
+                    .Select(d => Path.Combine(d.FullName, ".lpless"))
+                    .ToArray();
+
+            IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
+                = searchPath
+                    .Select(d => Path.Combine(d, "templates", template))
                     .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
                                          .WriteLine(Console.Error, s => "- " + s))
                     .FirstOrDefault(Directory.Exists) is string templateProjectPath
@@ -159,13 +164,22 @@ namespace LinqPadless
                                    .ToLowerInvariant();
             }
 
-            var (cacheBaseDirPath, cacheId)
-                = uncached
-                ? (outDirPath ?? Path.Combine(queryDir.FullName, Path.GetFileNameWithoutExtension(query.FilePath)), ".")
-                : (Path.Combine(Path.GetTempPath(), "lpless", "cache"), hash);
+            string cacheId, cacheBaseDirPath;
 
             if (uncached)
+            {
+                cacheId = ".";
+                cacheBaseDirPath = outDirPath ??
+                                   Path.Combine(queryDir.FullName, Path.GetFileNameWithoutExtension(query.FilePath));
                 force = true;
+            }
+            else
+            {
+                cacheId = hash;
+                cacheBaseDirPath =
+                    searchPath.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
+                    ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
+            }
 
             var binDirPath = Path.Combine(cacheBaseDirPath, "bin", cacheId);
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", cacheId);
