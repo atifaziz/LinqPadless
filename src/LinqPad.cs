@@ -81,45 +81,7 @@ namespace LinqPadless
             }
         }
 
-        public static readonly ICollection<string> DefaultReferences = Array.AsReadOnly(new[]
-        {
-            "System.dll",
-            "Microsoft.CSharp.dll",
-            "System.Core.dll",
-            "System.Data.dll",
-            "System.Data.Entity.dll",
-            "System.Transactions.dll",
-            "System.Xml.dll",
-            "System.Xml.Linq.dll",
-            "System.Data.Linq.dll",
-            "System.Drawing.dll",
-            "System.Data.DataSetExtensions.dll",
-        });
-
         public static readonly ICollection<string> DefaultNamespaces = Array.AsReadOnly(new[]
-        {
-            "System",
-            "System.IO",
-            "System.Text",
-            "System.Text.RegularExpressions",
-            "System.Diagnostics",
-            "System.Threading",
-            "System.Reflection",
-            "System.Collections",
-            "System.Collections.Generic",
-            "System.Linq",
-            "System.Linq.Expressions",
-            "System.Data",
-            "System.Data.SqlClient",
-            "System.Data.Linq",
-            "System.Data.Linq.SqlClient",
-            "System.Transactions",
-            "System.Xml",
-            "System.Xml.Linq",
-            "System.Xml.XPath",
-        });
-
-        public static readonly ICollection<string> DefaultCoreNamespaces = Array.AsReadOnly(new[]
         {
             "System",
             "System.IO",

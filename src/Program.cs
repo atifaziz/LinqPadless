@@ -25,24 +25,19 @@ namespace LinqPadless
     using System.Linq;
     using System.Net;
     using System.Reflection;
-    using System.Runtime.InteropServices;
-    using System.Runtime.Versioning;
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Xml;
     using System.Xml.Linq;
-    using Choices;
     using Mannex.IO;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
-    using NuGet.Frameworks;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
-    using static MoreLinq.Extensions.ToDictionaryExtension;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
     using Option = Mono.Options.Option;
@@ -57,7 +52,6 @@ namespace LinqPadless
             var help = Ref.Create(false);
             var force = false;
             var dontExecute = false;
-            var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
             var outDirPath = (string) null;
             var uncached = false;
 
@@ -70,7 +64,6 @@ namespace LinqPadless
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -f", v => outDirPath = v },
-                { "fx="           , $"target framework; default: {targetFramework.GetShortFolderName()}", v => targetFramework = NuGetFramework.Parse(v) },
             };
 
             var tail = options.Parse(args);
@@ -194,10 +187,7 @@ namespace LinqPadless
 
             try
             {
-                Compile(query, targetFramework,
-                        srcDirPath, tmpDirPath,
-                        templateFiles,
-                        verbose);
+                Compile(query, srcDirPath, tmpDirPath, templateFiles, verbose);
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -335,7 +325,6 @@ namespace LinqPadless
         */
 
         static void Compile(LinqPadQuery query,
-            NuGetFramework targetFramework,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             bool verbose = false)
@@ -379,17 +368,10 @@ namespace LinqPadless
 
             nrs = nrs.ToArray();
 
-            var isNetCoreApp = ".NETCoreApp".Equals(targetFramework.Framework, StringComparison.OrdinalIgnoreCase);
-
-            var defaultNamespaces
-                = isNetCoreApp
-                ? LinqPad.DefaultCoreNamespaces
-                : LinqPad.DefaultNamespaces;
-
             var namespaces =
                 from nss in new[]
                 {
-                    from ns in defaultNamespaces
+                    from ns in LinqPad.DefaultNamespaces
                     select new
                     {
                         Name = ns,
@@ -422,66 +404,13 @@ namespace LinqPadless
                 }
             }
 
-            if (verbose)
-                writer.WriteLine($"Framework: {targetFramework}");
-
-            var defaultReferences
-                = isNetCoreApp
-                ? Array.Empty<string>()
-                : LinqPad.DefaultReferences;
-
             var references =
-                defaultReferences
-                    .Select(Choice.New.Choice1<string, PackageReference>)
-                    .Concat(
-                        from r in query.MetaElement.Elements("Reference")
-                        select new
-                        {
-                            Relative = (string) r.Attribute("Relative"),
-                            Path     = ((string) r).Trim(),
-                        }
-                        into r
-                        where r.Path.Length > 0
-                        select r.Relative?.Length > 0
-                            ? r.Relative // prefer
-                            : ResolveReferencePath(r.Path)
-                        into r
-                        select Choice.New.Choice1<string, PackageReference>(r))
-                    .Concat(Enumerable.ToArray(
-                        from r in nrs
-                        select Choice.New.Choice2<string, PackageReference>(new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
+                from r in nrs
+                select new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed);
 
             GenerateExecutable(srcDirPath, binDirPath, query,
                                from ns in namespaces select ns.Name,
                                references, templateFiles, verbose, writer);
-        }
-
-        static readonly char[] PathSeparators = { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-
-        static string ResolveReferencePath(string path)
-        {
-            if (path.Length == 0 || path[0] != '<')
-                return path;
-            var endIndex = path.IndexOf('>');
-            if (endIndex < 0)
-                return path;
-            var token = path.Substring(1, endIndex - 1);
-            if (!DirPathByToken.TryGetValue(token, out var basePath))
-                throw new Exception($"Unknown directory token \"{token}\" in reference \"{path}\".");
-            return Path.Combine(basePath, path.Substring(endIndex + 1).TrimStart(PathSeparators));
-        }
-
-        static Dictionary<string, string> _dirPathByToken;
-
-        public static Dictionary<string, string> DirPathByToken =>
-            _dirPathByToken ?? (_dirPathByToken = ResolvedDirTokens().ToDictionary(StringComparer.OrdinalIgnoreCase));
-
-        static IEnumerable<(string Token, string Path)> ResolvedDirTokens()
-        {
-            yield return ("RuntimeDirectory", RuntimeEnvironment.GetRuntimeDirectory());
-            yield return ("ProgramFiles"    , Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
-            yield return ("ProgramFilesX86" , Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
-            yield return ("MyDocuments"     , Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
@@ -499,7 +428,7 @@ namespace LinqPadless
 
         static void GenerateExecutable(string srcDirPath, string binDirPath,
             LinqPadQuery query, IEnumerable<string> imports,
-            IEnumerable<Choice<string, PackageReference>> references,
+            IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             bool verbose, IndentingLineWriter writer)
         {
@@ -509,7 +438,7 @@ namespace LinqPadless
             if (!Directory.Exists(workingDirPath))
                 Directory.CreateDirectory(workingDirPath);
 
-            var rs = references.ToArray();
+            var ps = packages.ToArray();
 
             var resourceNames =
                 templateFiles
@@ -521,8 +450,7 @@ namespace LinqPadless
                 XDocument.Parse(resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value.ReadText());
 
             var packageIdSet =
-                rs.Select(e => e.Match(_ => null, r => r.Id))
-                  .Where(e => e != null)
+                ps.Select(e => e.Id)
                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             projectDocument
@@ -532,13 +460,11 @@ namespace LinqPadless
 
             projectDocument.Element("Project").Add(
                 new XElement("ItemGroup",
-                    from r in rs
-                    select r.Match(_ => null, p => p) into package
-                    where package != null
+                    from p in ps
                     select
                         new XElement("PackageReference",
-                            new XAttribute("Include", package.Id),
-                            new XAttribute("Version", package.Version))));
+                            new XAttribute("Include", p.Id),
+                            new XAttribute("Version", p.Version))));
 
             var queryName = Path.GetFileNameWithoutExtension(query.FilePath);
 
