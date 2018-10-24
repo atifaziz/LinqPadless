@@ -20,7 +20,6 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Collections.ObjectModel;
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
@@ -878,104 +877,5 @@ namespace LinqPadless
         static Stream GetManifestResourceStream(Type type, string name) =>
             type != null ? type.Assembly.GetManifestResourceStream(type, name)
                          : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
-
-        // ReSharper restore InconsistentNaming
-        // ReSharper restore UnusedMember.Local
-    }
-
-    sealed class PackageReference
-    {
-        public string Id { get; }
-        public NuGetVersion Version { get; }
-        public bool HasVersion => Version != null;
-        public bool IsPrereleaseAllowed { get; }
-
-        public PackageReference(string id, NuGetVersion version, bool isPrereleaseAllowed)
-        {
-            Id = id;
-            Version = version;
-            IsPrereleaseAllowed = isPrereleaseAllowed;
-        }
-    }
-
-    enum LinqPadQueryLanguage  // ReSharper disable UnusedMember.Local
-    {                          // ReSharper disable InconsistentNaming
-        Unknown,
-        Expression,
-        Statements,
-        Program,
-        VBExpression,
-        VBStatements,
-        VBProgram,
-        FSharpExpression,
-        FSharpProgram,
-        SQL,
-        ESQL,
-    }
-
-    sealed class LinqPadQuery
-    {
-        readonly Lazy<XElement> _metaElement;
-        readonly Lazy<LinqPadQueryLanguage> _language;
-        readonly Lazy<ReadOnlyCollection<string>> _namespaces;
-        readonly Lazy<ReadOnlyCollection<PackageReference>> _packageReferences;
-        readonly Lazy<string> _code;
-
-        public string FilePath { get; }
-        public string Source { get; }
-        public LinqPadQueryLanguage Language => _language.Value;
-        public XElement MetaElement => _metaElement.Value;
-        public IReadOnlyCollection<string> Namespaces => _namespaces.Value;
-        public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
-        public string Code => _code.Value;
-
-        public static LinqPadQuery Load(string path)
-        {
-            var source = File.ReadAllText(path);
-            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
-            return new LinqPadQuery(path, source, eomLineNumber);
-        }
-
-        LinqPadQuery(string filePath, string source, int eomLineNumber)
-        {
-            FilePath = filePath;
-            Source = source;
-
-            _metaElement = Lazy.Create(() =>
-                XElement.Parse(source.Lines()
-                                     .Take(eomLineNumber)
-                                     .ToDelimitedString(Environment.NewLine)));
-
-            _code = Lazy.Create(() =>
-                source.Lines()
-                      .Skip(eomLineNumber)
-                      .ToDelimitedString(Environment.NewLine));
-
-            _language = Lazy.Create(() =>
-                Enum.TryParse((string) MetaElement.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind) ? queryKind : LinqPadQueryLanguage.Unknown);
-
-            ReadOnlyCollection<T> ReadOnlyCollection<T>(IEnumerable<T> items) =>
-                new ReadOnlyCollection<T>(items.ToList());
-
-            _namespaces = Lazy.Create(() =>
-                ReadOnlyCollection(
-                    from ns in MetaElement.Elements("Namespace")
-                    select (string) ns));
-
-            _packageReferences = Lazy.Create(() =>
-                ReadOnlyCollection(
-                    from nr in MetaElement.Elements("NuGetReference")
-                    let v = (string) nr.Attribute("Version")
-                    select new PackageReference((string) nr,
-                               string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
-                               (bool?) nr.Attribute("Prerelease") ?? false)));
-        }
-
-        public bool IsLanguageSupported
-            => Language == LinqPadQueryLanguage.Statements
-            || Language == LinqPadQueryLanguage.Expression
-            || Language == LinqPadQueryLanguage.Program;
-
-        public override string ToString() => Source;
     }
 }
