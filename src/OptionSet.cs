@@ -29,4 +29,19 @@ namespace LinqPadless
         protected override bool Parse(string argument, OptionContext c) =>
             _parser(base.Parse, argument, c);
     }
+
+    sealed class ActionOption : Option
+    {
+        readonly Action<OptionValueCollection> _action;
+
+        public ActionOption(string prototype, string description, Action<OptionValueCollection> action) :
+            this(prototype, description, 1, action) {}
+
+        public ActionOption(string prototype, string description, int count, Action<OptionValueCollection> action) :
+            base (prototype, description, count) =>
+            _action = action ?? throw new ArgumentNullException(nameof(action));
+
+        protected override void OnParseComplete(OptionContext c) =>
+            _action(c.OptionValues);
+    }
 }

@@ -45,6 +45,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.ToDictionaryExtension;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
+    using Option = Mono.Options.Option;
 
     #endregion
 
@@ -52,39 +53,19 @@ namespace LinqPadless
     {
         static int Wain(string[] args)
         {
-            var verbose = false;
-            var help = false;
+            var verbose = Ref.Create(false);
+            var help = Ref.Create(false);
             var force = false;
             var dontExecute = false;
             var targetFramework = NuGetFramework.Parse(Assembly.GetEntryAssembly().GetCustomAttribute<TargetFrameworkAttribute>().FrameworkName);
             var outDirPath = (string) null;
             var uncached = false;
 
-            OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
-            {
-                var hasTailStarted = false;
-                return (impl, arg, context) =>
-                {
-                    if (hasTailStarted) // once a tail, always a tail
-                        return false;
-
-                    var isOption = impl(arg, context);
-                    if (!isOption)
-                    {
-                        if (arg.Length > 0 && arg[0] == '-' && !hasTailStarted)
-                            throw new Exception("Invalid argument: " + arg);
-                        hasTailStarted = true;
-                    }
-
-                    return isOption;
-                };
-            }
-
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
-                { "?|help|h"      , "prints out the options", _ => help = true },
-                { "verbose|v"     , "enable additional output", _ => verbose = true },
-                { "d|debug"       , "debug break", _ => Debugger.Launch() },
+                Options.Help(help),
+                Options.Verbose(verbose),
+                Options.Debug,
                 { "f|force"       , "force continue on errors", _ => force = true },
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
@@ -103,8 +84,20 @@ namespace LinqPadless
                 return 0;
             }
 
-            var scriptPath = Path.GetFullPath(tail.First());
+            var subCommand = tail.First();
             var scriptArgs = tail.Skip(1);
+
+            /*
+            switch (subCommand)
+            {
+                case "foo":
+                {
+                    return FooCommand(scriptArgs);
+                }
+            }
+            */
+
+            var scriptPath = Path.GetFullPath(subCommand);
 
             var query = LinqPadQuery.Load(scriptPath);
             if (!query.IsLanguageSupported)
@@ -298,6 +291,48 @@ namespace LinqPadless
                 }
             }
         }
+
+        static class Options
+        {
+            public static Option Help(Ref<bool> value) =>
+                new ActionOption("?|help|h", "prints out the options", _ => value.Value = true);
+
+            public static Option Verbose(Ref<bool> value) =>
+                new ActionOption("verbose|v", "enable additional output", _ => value.Value = true);
+
+            public static readonly Option Debug =
+                new ActionOption("d|debug", "debug break", vs => Debugger.Launch());
+        }
+
+        /*
+        static int FooCommand(IEnumerable<string> args)
+        {
+            var help = Ref.Create(false);
+            var verbose = Ref.Create(false);
+
+            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
+            {
+                Options.Help(help),
+                Options.Verbose(verbose),
+                Options.Debug,
+            };
+
+            var tail = options.Parse(args);
+
+            if (verbose)
+                Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
+
+            if (help)
+            {
+                Help(options);
+                return 0;
+            }
+
+            Console.WriteLine("...");
+
+            return 0;
+        }
+        */
 
         static void Compile(LinqPadQuery query,
             NuGetFramework targetFramework,
@@ -800,6 +835,26 @@ namespace LinqPadless
                 else
                     Console.WriteLine(line);
             }
+        }
+
+        static OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
+        {
+            var hasTailStarted = false;
+            return (impl, arg, context) =>
+            {
+                if (hasTailStarted) // once a tail, always a tail
+                    return false;
+
+                var isOption = impl(arg, context);
+                if (!isOption)
+                {
+                    if (arg.Length > 0 && arg[0] == '-' && !hasTailStarted)
+                        throw new Exception("Invalid argument: " + arg);
+                    hasTailStarted = true;
+                }
+
+                return isOption;
+            };
         }
 
         static string LoadTextResource(string name, Encoding encoding = null) =>
