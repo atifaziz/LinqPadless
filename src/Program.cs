@@ -483,13 +483,6 @@ namespace LinqPadless
             yield return ("MyDocuments"     , Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
         }
 
-        static bool IsMainAsync(string source) =>
-            CSharpSyntaxTree
-                .ParseText(source).GetRoot()
-                .DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Any(md => "Main" == md.Identifier.Text
-                            && md.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)));
-
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
         [Flags]
