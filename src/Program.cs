@@ -32,6 +32,7 @@ namespace LinqPadless
     using System.Text.RegularExpressions;
     using System.Xml;
     using System.Xml.Linq;
+    using Choices;
     using Mannex.IO;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -431,7 +432,7 @@ namespace LinqPadless
 
             var references =
                 defaultReferences
-                    .Select(r => (r, default(PackageReference)))
+                    .Select(Choice.New.Choice1<string, PackageReference>)
                     .Concat(
                         from r in query.MetaElement.Elements("Reference")
                         select new
@@ -445,10 +446,10 @@ namespace LinqPadless
                             ? r.Relative // prefer
                             : ResolveReferencePath(r.Path)
                         into r
-                        select (r, default(PackageReference)))
+                        select Choice.New.Choice1<string, PackageReference>(r))
                     .Concat(Enumerable.ToArray(
                         from r in nrs
-                        select ((string) null, new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
+                        select Choice.New.Choice2<string, PackageReference>(new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed))));
 
             GenerateExecutable(srcDirPath, binDirPath, query,
                                from ns in namespaces select ns.Name,
@@ -498,7 +499,7 @@ namespace LinqPadless
 
         static void GenerateExecutable(string srcDirPath, string binDirPath,
             LinqPadQuery query, IEnumerable<string> imports,
-            IEnumerable<(string Path, PackageReference SourcePackage)> references,
+            IEnumerable<Choice<string, PackageReference>> references,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             bool verbose, IndentingLineWriter writer)
         {
@@ -520,8 +521,8 @@ namespace LinqPadless
                 XDocument.Parse(resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value.ReadText());
 
             var packageIdSet =
-                rs.Where(e => e.SourcePackage != null)
-                  .Select(e => e.SourcePackage.Id)
+                rs.Select(e => e.Match(_ => null, r => r.Id))
+                  .Where(e => e != null)
                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             projectDocument
@@ -532,7 +533,8 @@ namespace LinqPadless
             projectDocument.Element("Project").Add(
                 new XElement("ItemGroup",
                     from r in rs
-                    select r.SourcePackage into package
+                    select r.Match(_ => null, p => p) into package
+                    where package != null
                     select
                         new XElement("PackageReference",
                             new XAttribute("Include", package.Id),
