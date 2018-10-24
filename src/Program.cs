@@ -332,7 +332,12 @@ namespace LinqPadless
             var writer = IndentingLineWriter.Create(Console.Error);
 
             if (verbose)
+            {
                 writer.Write(query.MetaElement);
+
+                foreach (var r in query.MetaElement.Elements("Reference"))
+                    writer.WriteLine("Warning! Reference will be ignored: " + (string) r);
+            }
 
             var wc = new WebClient();
 
