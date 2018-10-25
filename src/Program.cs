@@ -679,12 +679,17 @@ namespace LinqPadless
 
             var versions =
                 from e in XDocument.Parse(xml)
-                                   .Element(atom + "feed")
+                                   .Element(atom + "feed")?
                                    .Elements(atom + "entry")
-                select NuGetVersion.Parse((string) e.Element(m + "properties")
-                                                    .Element( d + "Version"));
+                                   ?? throw Error()
+                select NuGetVersion.Parse((string) e.Element(m + "properties")?
+                                                    .Element(d + "Version")
+                                                    ?? throw Error());
 
             return versions.SingleOrDefault();
+
+            Exception Error() =>
+                new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
         }
 
         static void Spawn(string path, IEnumerable<string> args,
