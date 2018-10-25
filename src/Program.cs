@@ -582,14 +582,14 @@ namespace LinqPadless
                 Detemplate(program, "source-string",
                     () => SyntaxFactory.Literal(query.Code).ToString());
 
+            var noSymbols = Enumerable.Empty<string>();
+
             var (body, symbols)
                 = query.Language == LinqPadQueryLanguage.Expression
-                ? (Detemplate(program, "expression", "#line 1" + Environment.NewLine + source),
-                   Enumerable.Empty<string>())
+                ? (Detemplate(program, "expression", "#line 1" + Environment.NewLine + source), noSymbols)
                 : query.Language == LinqPadQueryLanguage.Program
                 ? GenerateProgram()
-                : (Detemplate(program, "statements", "#line 1" + Environment.NewLine + source),
-                   Enumerable.Empty<string>());
+                : (Detemplate(program, "statements", "#line 1" + Environment.NewLine + source), noSymbols);
 
             var baseCompilationSymbol = "LINQPAD_" +
                 ( query.Language == LinqPadQueryLanguage.Expression ? "EXPRESSION"
@@ -601,7 +601,8 @@ namespace LinqPadless
             if (body != null)
                 File.WriteAllLines(csFilePath,
                     Seq.Return("#define LPLESS", "#define " + baseCompilationSymbol)
-                       .Concat(from s in symbols select $"#define {baseCompilationSymbol}_{s}")
+                       .Concat(from s in symbols
+                               select $"#define {baseCompilationSymbol}_{s}")
                        .Append(body)
                        .Append(string.Empty));
 
