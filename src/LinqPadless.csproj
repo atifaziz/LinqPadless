@@ -30,16 +30,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="dotnet-script.cmd" />
-    <None Remove="dotnet-script.sh" />
     <None Remove="dotnet.cmd" />
     <None Remove="dotnet.sh" />
     <None Remove="help.txt" />
+    <None Remove="lpless.cmd" />
+    <None Remove="lpless.sh" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\COPYING.txt" Link="COPYING.txt">
       <PackagePath />
+    </Content>
+    <Content Include="lpless.cmd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="lpless.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
