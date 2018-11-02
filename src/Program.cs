@@ -626,8 +626,6 @@ namespace LinqPadless
                     s.CopyTo(w);
             }
 
-            // TODO User-supplied dotnet.cmd
-
             var publishArgs =
                 Seq.Return("publish",
                            !verbose ? "-nologo" : null,
