@@ -93,7 +93,7 @@ namespace LinqPadless
             }
 
             var subCommand = tail.First();
-            var scriptArgs = tail.Skip(1);
+            var scriptArgs = tail.Skip(1).TakeWhile(arg => arg != "--");
 
             switch (subCommand)
             {
@@ -311,7 +311,9 @@ namespace LinqPadless
                 Options.Debug,
             };
 
-            options.Parse(args);
+            var tail = options.Parse(args);
+            if (tail.FirstOrDefault() is string arg)
+                throw new Exception("Invalid argument: " + arg);
 
             if (verbose)
                 Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
