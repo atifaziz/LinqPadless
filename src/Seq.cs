@@ -58,5 +58,10 @@ namespace LinqPadless
                 Read(ref ee, out item2);
             }
         }
+
+        public static IEnumerable<string> NonBlanks(this IEnumerable<string> source) =>
+            from s in source
+            where !string.IsNullOrEmpty(s)
+            select s;
     }
 }

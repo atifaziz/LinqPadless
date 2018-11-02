@@ -31,6 +31,7 @@ namespace LinqPadless
     using System.Text.RegularExpressions;
     using System.Xml;
     using System.Xml.Linq;
+    using Choices;
     using Mannex.IO;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -41,6 +42,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using static MoreLinq.Extensions.FoldExtension;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
     using Option = Mono.Options.Option;
@@ -49,6 +51,16 @@ namespace LinqPadless
 
     static partial class Program
     {
+        static IEnumerable<string> GetSearchPaths(DirectoryInfo baseDir) =>
+            baseDir
+                .SelfAndParents()
+                .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
+                .Select(d => Path.Combine(d.FullName, ".lpless"));
+
+        static string GetCacheDirPath(IEnumerable<string> searchPaths) =>
+            searchPaths.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
+            ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
+
         static int Wain(string[] args)
         {
             var verbose = Ref.Create(false);
@@ -83,15 +95,13 @@ namespace LinqPadless
             var subCommand = tail.First();
             var scriptArgs = tail.Skip(1);
 
-            /*
             switch (subCommand)
             {
-                case "foo":
+                case "cache":
                 {
-                    return FooCommand(scriptArgs);
+                    return CacheCommand(scriptArgs);
                 }
             }
-            */
 
             var scriptPath = Path.GetFullPath(subCommand);
 
@@ -112,16 +122,10 @@ namespace LinqPadless
                                     .Fold((t, _) => t ?? "template");
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
-
-            var searchPath =
-                queryDir
-                    .SelfAndParents()
-                    .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
-                    .Select(d => Path.Combine(d.FullName, ".lpless"))
-                    .ToArray();
+            var searchPaths = GetSearchPaths(queryDir).ToArray();
 
             IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
-                = searchPath
+                = searchPaths
                     .Select(d => Path.Combine(d, "templates", template))
                     .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
                                          .WriteLine(Console.Error, s => "- " + s))
@@ -165,9 +169,7 @@ namespace LinqPadless
             else
             {
                 cacheId = hash;
-                cacheBaseDirPath =
-                    searchPath.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
-                    ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
+                cacheBaseDirPath = GetCacheDirPath(searchPaths);
             }
 
             var binDirPath = Path.Combine(cacheBaseDirPath, "bin", cacheId);
@@ -297,8 +299,7 @@ namespace LinqPadless
                 new ActionOption("d|debug", "debug break", vs => Debugger.Launch());
         }
 
-        /*
-        static int FooCommand(IEnumerable<string> args)
+        static int CacheCommand(IEnumerable<string> args)
         {
             var help = Ref.Create(false);
             var verbose = Ref.Create(false);
@@ -310,7 +311,7 @@ namespace LinqPadless
                 Options.Debug,
             };
 
-            var tail = options.Parse(args);
+            options.Parse(args);
 
             if (verbose)
                 Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
@@ -321,11 +322,83 @@ namespace LinqPadless
                 return 0;
             }
 
-            Console.WriteLine("...");
+            var baseDir = new DirectoryInfo(GetCacheDirPath(Enumerable.Empty<string>()));
+            var binDir = new DirectoryInfo(Path.Join(baseDir.FullName, "bin"));
+            if (!binDir.Exists)
+                return 0;
+
+            foreach (var dir in binDir.EnumerateDirectories("*"))
+            {
+                var runLogPath = Path.Join(dir.FullName, "runs.log");
+
+                var log
+                    = File.Exists(runLogPath)
+                    ? File.ReadLines(runLogPath)
+                    : Enumerable.Empty<string>();
+
+                var (count, lastRunTime) =
+                    ParseRunLog(log, (lrt, _) => lrt)
+                        .Aggregate((Count: (int?) null, LatestRun: DateTimeOffset.MinValue),
+                                   (a, e) => ((a.Count ?? 0) + 1, e > a.LatestRun ? e : a.LatestRun));
+
+                var output =
+                    count is int n ? $"{dir.Name} (runs = {n}; last = {lastRunTime:yyyy'-'MM'-'ddTHH':'mm':'sszzz})" : dir.Name;
+                Console.WriteLine(output);
+            }
 
             return 0;
         }
-        */
+
+        static readonly ValueTuple Unit = default;
+
+        static IEnumerable<T> ParseRunLog<T>(IEnumerable<string> lines,
+            Func<DateTimeOffset, DateTimeOffset?, T> selector)
+        {
+            if (lines == null) throw new ArgumentNullException(nameof(lines));
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            return Iterable(); IEnumerable<T> Iterable()
+            {
+                var starts = new Dictionary<string, (string Time, string Pid)>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var e in
+                    from line in lines.NonBlanks()
+                    select line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    into tokens
+                    where tokens.Length >= 3
+                    select Choice.If(tokens[0] == ">", () => tokens.Skip(1).Take(2), () =>
+                           Choice.If(tokens[0] == "<", () => tokens.Skip(1).Take(3), () =>
+                                     Unit)) into e
+                    where e.Match(_ => true, _ => true, _ => false)
+                    select e.Forbid3()
+                            .Map1(fs => fs.Fold((ts, pid) => new { Time = ts, Pid = pid }))
+                            .Map2(fs => fs.Fold((ts, id, ec) => new { Time = ts, Id = id, ExitCode = ec })))
+                {
+                    var (some, item) =
+                        e.Match(
+                            start =>
+                            {
+                                starts.Add(start.Time + start.Pid, (start.Time, start.Pid));
+                                return default;
+                            },
+                            end =>
+                            {
+                                if (starts.TryGetValue(end.Id, out var start))
+                                    starts.Remove(end.Id);
+
+                                var startTime = start.Time is string st ? ParseTime(st) : (DateTimeOffset?) null;
+                                var endTime   = ParseTime(end.Time);
+                                return (true, selector(endTime, startTime));
+                            });
+
+                    if (some)
+                        yield return item;
+                }
+
+                DateTimeOffset ParseTime(string s) =>
+                    DateTimeOffset.ParseExact(s, "o", CultureInfo.InvariantCulture);
+            }
+        }
 
         static void Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
