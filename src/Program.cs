@@ -322,7 +322,7 @@ namespace LinqPadless
                 return 0;
             }
 
-            var baseDir = new DirectoryInfo(GetCacheDirPath(Enumerable.Empty<string>()));
+            var baseDir = new DirectoryInfo(GetCacheDirPath(GetSearchPaths(new DirectoryInfo(Environment.CurrentDirectory))));
             var binDir = new DirectoryInfo(Path.Join(baseDir.FullName, "bin"));
             if (!binDir.Exists)
                 return 0;
