@@ -21,6 +21,7 @@ namespace LinqPadless
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Globalization;
     using System.IO;
     using System.Linq;
     using System.Net;
@@ -36,6 +37,8 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using static MoreLinq.Extensions.ChooseExtension;
+    using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using Ix = System.Linq.EnumerableEx;
@@ -489,11 +492,13 @@ namespace LinqPadless
 
             var program = resourceNames[mainFile].ReadText();
 
+            var eol = Environment.NewLine;
+
             program =
                 Detemplate(program, "imports",
                     imports.GroupBy(e => e, StringComparer.Ordinal)
                            .Select(ns => $"using {ns.First()};")
-                           .ToDelimitedString(Environment.NewLine));
+                           .ToDelimitedString(eol));
 
             program =
                 Detemplate(program, "generator", () =>
@@ -504,75 +509,6 @@ namespace LinqPadless
 
             var source = query.Code;
 
-            (string Source, IEnumerable<string> CompilationSymbols)
-                GenerateProgram()
-            {
-                var syntaxTree = CSharpSyntaxTree.ParseText(source);
-
-                var main =
-                    syntaxTree
-                        .GetRoot()
-                        .DescendantNodes().OfType<MethodDeclarationSyntax>()
-                        .Single(md => "Main" == md.Identifier.Text);
-
-                var updatedSource
-                    = source.Substring(0, main.Identifier.Span.Start)
-                    + "RunUserAuthoredQuery"
-                    + source.Substring(main.Identifier.Span.End);
-
-                var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
-                var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
-
-                MainReturnTypeTraits t;
-                switch (main.ReturnType)
-                {
-                    case IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value):
-                        t = MainReturnTypeTraits.Task; break;
-                    case GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value):
-                        t = MainReturnTypeTraits.TaskOfInt; break;
-                    case PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword):
-                        t = MainReturnTypeTraits.Void; break;
-                    default:
-                        t = MainReturnTypeTraits.Int; break;
-                }
-
-                var isVoid = t.HasFlag(MainReturnTypeTraits.VoidTrait);
-                var isTask = t.HasFlag(MainReturnTypeTraits.TaskTrait);
-
-                var hasArgs = main.ParameterList.Parameters.Any();
-
-                /*
-
-                [ static ] ( void | int | Task | Task<int> ) Main([ string[] args ]) {}
-
-                static void Main()                     | STATIC, VOID
-                static int Main()                      | STATIC,
-                static void Main(string[] args)        | STATIC, VOID, ARGS
-                static int Main(string[] args)         | STATIC, ARGS
-                static Task Main()                     | STATIC, VOID, TASK
-                static Task<int> Main()                | STATIC, TASK
-                static Task Main(string[] args)        | STATIC, VOID, TASK, ARGS
-                static Task<int> Main(string[] args)   | STATIC, TASK, ARGS
-                void Main()                            | VOID
-                int Main()                             |
-                void Main(string[] args)               | VOID, ARGS
-                int Main(string[] args)                | ARGS
-                Task Main()                            | VOID, TASK
-                Task<int> Main()                       | TASK
-                Task Main(string[] args)               | VOID, TASK, ARGS
-                Task<int> Main(string[] args)          | TASK, ARGS
-
-                */
-
-                return (
-                    Detemplate(program, "program", updatedSource + Environment.NewLine),
-                    Enumerable.Empty<string>()
-                              .Concat(Ix.If(() => hasArgs , Seq.Return("ARGS")))
-                              .Concat(Ix.If(() => isVoid  , Seq.Return("VOID")))
-                              .Concat(Ix.If(() => isTask  , Seq.Return("TASK")))
-                              .Concat(Ix.If(() => isAsync , Seq.Return("ASYNC")))
-                              .Concat(Ix.If(() => isStatic, Seq.Return("STATIC"))));
-            }
 
             program =
                 Detemplate(program, "path-string",
@@ -586,10 +522,10 @@ namespace LinqPadless
 
             var (body, symbols)
                 = query.Language == LinqPadQueryLanguage.Expression
-                ? (Detemplate(program, "expression", "#line 1" + Environment.NewLine + source), noSymbols)
+                ? (Detemplate(program, "expression", "#line 1" + eol + source), noSymbols)
                 : query.Language == LinqPadQueryLanguage.Program
-                ? GenerateProgram()
-                : (Detemplate(program, "statements", "#line 1" + Environment.NewLine + source), noSymbols);
+                ? GenerateProgram(source, program)
+                : (Detemplate(program, "statements", "#line 1" + eol + source), noSymbols);
 
             var baseCompilationSymbol = "LINQPAD_" +
                 ( query.Language == LinqPadQueryLanguage.Expression ? "EXPRESSION"
@@ -636,6 +572,116 @@ namespace LinqPadless
                   publishArgs,
                   workingDirPath, writer.Indent(),
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
+        }
+
+        static (string Source, IEnumerable<string> CompilationSymbols)
+            GenerateProgram(string source, string template)
+        {
+            var eol = Environment.NewLine;
+
+            var syntaxTree = CSharpSyntaxTree.ParseText(
+                "class UserQuery {" + eol + source + eol + "}");
+
+            var parts =
+                syntaxTree
+                    .GetRoot()
+                    .ChildNodes()
+                    .OfType<ClassDeclarationSyntax>().Single()
+                    .ChildNodes()
+                    .Select(n => new
+                    {
+                        LineNumber = syntaxTree.GetLineSpan(n.FullSpan).StartLinePosition.Line,
+                        Node = n,
+                    })
+                    .Partition(e => e.Node is TypeDeclarationSyntax, (tds, etc) => new
+                    {
+                        Types  = from e in tds
+                                 select new
+                                 {
+                                     e.LineNumber,
+                                     Node = (TypeDeclarationSyntax) e.Node
+                                 },
+                        // ReSharper disable PossibleMultipleEnumeration
+                        Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
+                                               ? Optional.Some(new { e.LineNumber, Node = md })
+                                               : default)
+                                    .Single(),
+                        Others = etc,
+                        // ReSharper restore PossibleMultipleEnumeration
+                    });
+
+            string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, int> lf, Func<T, SyntaxNode> nf) =>
+                nns.Select(e => "#line " + lf(e).ToString(CultureInfo.InvariantCulture) + eol
+                              + nf(e).ToFullString())
+                   .Append(eol)
+                   .ToDelimitedString(string.Empty);
+
+            var program =
+                Detemplate(template, "program-types",
+                    FullSourceWithLineDirective(parts.Types, e => e.LineNumber, e => e.Node));
+
+            var main = parts.Main.Node;
+
+            program =
+                Detemplate(program, "program",
+                    FullSourceWithLineDirective(parts.Others,
+                        e => e.LineNumber,
+                        e => e.Node == main
+                           ? main.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
+                           : e.Node));
+
+            var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+            var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+
+            MainReturnTypeTraits t;
+            switch (main.ReturnType)
+            {
+                case IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value):
+                    t = MainReturnTypeTraits.Task; break;
+                case GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value):
+                    t = MainReturnTypeTraits.TaskOfInt; break;
+                case PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword):
+                    t = MainReturnTypeTraits.Void; break;
+                default:
+                    t = MainReturnTypeTraits.Int; break;
+            }
+
+            var isVoid = t.HasFlag(MainReturnTypeTraits.VoidTrait);
+            var isTask = t.HasFlag(MainReturnTypeTraits.TaskTrait);
+
+            var hasArgs = main.ParameterList.Parameters.Any();
+
+            /*
+
+            [ static ] ( void | int | Task | Task<int> ) Main([ string[] args ]) {}
+
+            static void Main()                     | STATIC, VOID
+            static int Main()                      | STATIC,
+            static void Main(string[] args)        | STATIC, VOID, ARGS
+            static int Main(string[] args)         | STATIC, ARGS
+            static Task Main()                     | STATIC, VOID, TASK
+            static Task<int> Main()                | STATIC, TASK
+            static Task Main(string[] args)        | STATIC, VOID, TASK, ARGS
+            static Task<int> Main(string[] args)   | STATIC, TASK, ARGS
+            void Main()                            | VOID
+            int Main()                             |
+            void Main(string[] args)               | VOID, ARGS
+            int Main(string[] args)                | ARGS
+            Task Main()                            | VOID, TASK
+            Task<int> Main()                       | TASK
+            Task Main(string[] args)               | VOID, TASK, ARGS
+            Task<int> Main(string[] args)          | TASK, ARGS
+
+            */
+
+            return (
+                program,
+                Enumerable.Empty<string>()
+                          .Concat(Ix.If(() => hasArgs , Seq.Return("ARGS")))
+                          .Concat(Ix.If(() => isVoid  , Seq.Return("VOID")))
+                          .Concat(Ix.If(() => isTask  , Seq.Return("TASK")))
+                          .Concat(Ix.If(() => isAsync , Seq.Return("ASYNC")))
+                          .Concat(Ix.If(() => isStatic, Seq.Return("STATIC"))));
         }
 
         static string Detemplate(string template, string name, string replacement) =>
@@ -809,5 +855,10 @@ namespace LinqPadless
         static Stream GetManifestResourceStream(Type type, string name) =>
             type != null ? type.Assembly.GetManifestResourceStream(type, name)
                          : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
+
+        static class Optional
+        {
+            public static (bool HasValue, T Value) Some<T>(T value) => (true, value);
+        }
     }
 }
