@@ -632,6 +632,7 @@ namespace LinqPadless
                 Seq.Return("publish",
                            !verbose ? "-nologo" : null,
                            "-v", verbose ? "m" : "q",
+                           !verbose ? "-clp:ErrorsOnly" : null,
                            "-c", "Release",
                            $"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}",
                            "-o", binDirPath)
