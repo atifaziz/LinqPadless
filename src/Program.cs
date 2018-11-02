@@ -61,7 +61,7 @@ namespace LinqPadless
             searchPaths.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
             ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
 
-        static int Wain(string[] args)
+        static int Wain(IEnumerable<string> args)
         {
             var verbose = Ref.Create(false);
             var help = Ref.Create(false);
@@ -92,20 +92,30 @@ namespace LinqPadless
                 return 0;
             }
 
-            var subCommand = tail.First();
-            var scriptArgs = tail.Skip(1).TakeWhile(arg => arg != "--");
+            var command = tail.First();
+            args = tail.Skip(1).TakeWhile(arg => arg != "--");
 
-            switch (subCommand)
+            switch (command)
             {
                 case "cache":
-                {
-                    return CacheCommand(scriptArgs);
-                }
+                    return CacheCommand(args);
+                default:
+                    return DefaultCommand(command, args, outDirPath,
+                                          uncached: uncached,
+                                          dontExecute: dontExecute,
+                                          force: force,
+                                          verbose:verbose);
             }
+        }
 
-            var scriptPath = Path.GetFullPath(subCommand);
+        static int DefaultCommand(
+            string queryPath,
+            IEnumerable<string> args,
+            string outDirPath,
+            bool uncached, bool dontExecute, bool force, bool verbose)
+        {
+            var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
 
-            var query = LinqPadQuery.Load(scriptPath);
             if (!query.IsLanguageSupported)
             {
                 throw new NotSupportedException("Only LINQPad " +
@@ -242,7 +252,7 @@ namespace LinqPadless
                     ArgumentList    = { binPath },
                 };
 
-                scriptArgs.ForEach(psi.ArgumentList.Add);
+                args.ForEach(psi.ArgumentList.Add);
 
                 string FormatCommandLine() =>
                     PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName));
