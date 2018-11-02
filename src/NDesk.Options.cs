@@ -709,9 +709,9 @@ namespace Mono.Options
 				from argument in arguments
 				where ++c.OptionIndex >= 0 && (process || def != null)
 					? process
-						? argument == "--" 
+						? /*argument == "--" 
 							? (process = false)
-							: !Parse (argument, c)
+							:*/ !Parse (argument, c)
 								? def != null 
 									? Unprocessed (null, def, c, argument) 
 									: true
@@ -735,11 +735,11 @@ namespace Mono.Options
 			List<string> unprocessed = new List<string> ();
 			Option def = Contains ("<>") ? this ["<>"] : null;
 			foreach (string argument in arguments) {
-				++c.OptionIndex;
+				++c.OptionIndex; /*
 				if (argument == "--") {
 					process = false;
 					continue;
-				}
+				} */
 				if (!process) {
 					Unprocessed (unprocessed, def, c, argument);
 					continue;
