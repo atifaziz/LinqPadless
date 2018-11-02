@@ -609,7 +609,9 @@ namespace LinqPadless
 
             if (body != null)
                 File.WriteAllLines(csFilePath,
-                    Seq.Return("#define LPLESS", "#define " + baseCompilationSymbol)
+                    Seq.Return("#define LPLESS",
+                               "#define LPLESS_TEMPLATE_V1",
+                               "#define " + baseCompilationSymbol)
                        .Concat(from s in symbols
                                select $"#define {baseCompilationSymbol}_{s}")
                        .Append(body)
