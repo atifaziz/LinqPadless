@@ -26,6 +26,7 @@ namespace LinqPadless
     using System.Linq;
     using System.Net;
     using System.Reflection;
+    using System.Runtime.InteropServices;
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
@@ -51,6 +52,13 @@ namespace LinqPadless
 
     static partial class Program
     {
+        static IEnumerable<string> GetDotnetExecutableSearchPaths(IEnumerable<string> searchPaths) =>
+            from sp in searchPaths
+            from ext in RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? Seq.Return(".exe", ".cmd", ".bat")
+                : Seq.Return(string.Empty)
+            select Path.Join(sp, "dotnet" + ext);
+
         static IEnumerable<string> GetSearchPaths(DirectoryInfo baseDir) =>
             baseDir
                 .SelfAndParents()
@@ -195,6 +203,13 @@ namespace LinqPadless
                 force = true;
             }
 
+            var dotnetSearchPaths = GetDotnetExecutableSearchPaths(searchPaths);
+            var dotnetPath =
+                dotnetSearchPaths
+                    .If(verbose, ps => ps.Do(() => Console.Error.WriteLine(".NET Core CLI Searches:"))
+                        .WriteLine(Console.Error, p => "- " + p))
+                    .FirstOrDefault(File.Exists) ?? "dotnet";
+
             {
                 if (!force && Run() is int exitCode)
                     return exitCode;
@@ -202,7 +217,7 @@ namespace LinqPadless
 
             try
             {
-                Compile(query, srcDirPath, tmpDirPath, templateFiles, verbose);
+                Compile(query, srcDirPath, tmpDirPath, templateFiles, dotnetPath, verbose);
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -248,7 +263,7 @@ namespace LinqPadless
                 var psi = new ProcessStartInfo
                 {
                     UseShellExecute = false,
-                    FileName        = "dotnet",
+                    FileName        = dotnetPath,
                     ArgumentList    = { binPath },
                 };
 
@@ -415,7 +430,7 @@ namespace LinqPadless
         static void Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            bool verbose = false)
+            string dotnetPath, bool verbose = false)
         {
             var writer = IndentingLineWriter.Create(Console.Error);
 
@@ -503,7 +518,7 @@ namespace LinqPadless
 
             GenerateExecutable(srcDirPath, binDirPath, query,
                                from ns in namespaces select ns.Name,
-                               references, templateFiles, verbose, writer);
+                               references, templateFiles, dotnetPath, verbose, writer);
         }
 
         static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
@@ -523,7 +538,7 @@ namespace LinqPadless
             LinqPadQuery query, IEnumerable<string> imports,
             IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            bool verbose, IndentingLineWriter writer)
+            string dotnetPath, bool verbose, IndentingLineWriter writer)
         {
             // TODO error handling in generated code
 
@@ -652,9 +667,9 @@ namespace LinqPadless
                    .ToArray();
 
             if (verbose)
-                writer.WriteLine(PasteArguments.Paste(publishArgs.Prepend("dotnet")));
+                writer.WriteLine(PasteArguments.Paste(publishArgs.Prepend(dotnetPath)));
 
-            Spawn("dotnet",
+            Spawn(dotnetPath,
                   publishArgs,
                   workingDirPath, writer.Indent(),
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
