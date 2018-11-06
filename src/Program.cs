@@ -150,7 +150,8 @@ namespace LinqPadless
                     .FirstOrDefault(Directory.Exists) is string templateProjectPath
                 ? Directory.GetFiles(templateProjectPath)
                            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                                    || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                                    || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                                    || f.Equals("global.json", StringComparison.OrdinalIgnoreCase))
                            .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
                            .ToArray()
                 : default;
