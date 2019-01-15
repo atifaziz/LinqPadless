@@ -16,7 +16,7 @@
     <PackageProjectUrl>https://github.com/linqpadless/LinqPadless</PackageProjectUrl>
     <PackageLicenseFile>COPYING.txt</PackageLicenseFile>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
-    <PackageOutputPath>..\dist</PackageOutputPath>
+    <PackageOutputPath>..\dist\nupkg</PackageOutputPath>
     <PackAsTool>true</PackAsTool>
     <IncludeSymbols>true</IncludeSymbols>
     <IncludeSource>true</IncludeSource>
