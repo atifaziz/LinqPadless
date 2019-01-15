@@ -12,6 +12,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		pack.cmd = pack.cmd
 		pack.sh = pack.sh
 		README.md = README.md
+		run.cmd = run.cmd
+		run.sh = run.sh
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LinqPadless", "src\LinqPadless.csproj", "{8E83629C-A7A3-498D-B4E0-A93830C8D1B7}"
