@@ -2,62 +2,31 @@
 
 [![NuGet][nuget-badge]][nuget-pkg]
 
-LINQPadless compiles [LINQPad][linqpad] query files into stand-alone
-[C# scripts (csx)][csx] or executable binaries so that they can be run
-outside and independent of LINQPad.
+LINQPadless compiles and runs [LINQPad] query files as stand-alone .NET Core
+applications without the need for LINQPad.
 
-The compiler emits a C# script file or an executable console applicaiton in a
-sub-directory. It also creates a Windows batch file alongside that uses
-[dotnet-script] to run the C# script or the `dotnet` CLI to run the
-console applicaiton.
+The compilation is cached and re-used until the source query file changes.
 
-- Checks that referenced NuGet packages are installed.
-- Installs missing NuGet packages.
-- Sets `LINQPADLESS` environment variable to the compiler version.
-- Depending on the target output, it either invokes the C# script using
-  `csi.exe`  or the executable and passes any remaining arguments.
+The LINQPad query file can be run on any platform where .NET Core is
+supported however it is the responsibility of the query author to ensure that
+the code and packages referenced are compatible with .NET Core and the
+execution platform.
 
 
 ## Usage Examples
 
-Compile a single LINQPad query file in the current directory:
+Compile and run a single LINQPad query file in the current directory:
 
     lpless Foobar.linq
 
-Compile all LINQPad query files:
+Compile but don't run:
 
-    lpless *.linq
+    lpless -x Foobar.linq
 
-Compile all LINQPad query files in a specific directory:
+Force a re-compilation before running even if the LINQPad query file has not
+changed since the last run:
 
-    lpless C:\LINQPad\Queries\*.linq
-
-Compile all LINQPad query files in a specific directory and sub-directories
-within:
-
-    lpless -r C:\LINQPad\Queries\*.linq
-
-Compile all LINQPad query files starting with `Foo`:
-
-    lpless -r C:\LINQPad\Queries\Foo*.linq
-
-Compile (incremental) outdated files only:
-
-    lpless -i C:\LINQPad\Queries\Foo*.linq
-
-Watch particular files in a directory and re-compile outdated ones on changes:
-
-    lpless -w C:\LINQPad\Queries\Foo*.linq
-
-Compile `Foo.linq` using the [`FakeLinqPad` package][fakelp.pkg] and importing
-the `FakeLinqPad` namespace (both in addition to packages and namespaces
-referenced in `Foo.linq`):
-
-    lpless --ref FakeLinqPad --imp FakeLinqPad Foo.linq
-
-Compile an executable:
-
-    lpless --target exe Foo.linq
+    lpless -f Foobar.linq
 
 For more information, see help:
 
@@ -82,34 +51,22 @@ file into a C# script or an executabe that you can then run without LINQPad.
 [`lprun`][lprun] is a good solution when you need 100% compatibility and
 parity with LINQPad features at _run-time_. On the other hand, when all you
 are doing is using [LINQPad as a lightweight IDE][lpide] to script some task
-that doesn't need its bells and whistles then turning those queries into C#
-scripts or executables enables them be shipped and run without LINQPad.
+that doesn't need its bells and whistles then turning those queries into
+compiled executables enables them be shipped and run without LINQPad.
 
 
 ## Limitations
 
-Requires .NET Core SDK 2.1+ for executables or [dotnet-script] for C# scripts.
+Requires .NET Core SDK 2.1+ for execution.
 
-C# scripts will run on .NET Core only.
-
-LINQPad Query files must be either C# Statements, Expression or Program. In
-the case of a C# Program query, a `Main` declared to be asynchronous must
-return `Task`.
-
-Extension methods are not supported at the moment.
+LINQPad Query files must be either C# Statements, Expression or Program.
 
 LINQPad-specified methods like `Dump` and those on its `Util` class will
-cause compilation errors when the compiled C# script is executed. This issue
-can be addressed by using a faking/emulation library of sorts, like
-[FakeLinqPad][fakelp].
+cause compilation errors.
 
 
 [nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
 [nuget-pkg]: https://www.nuget.org/packages/LinqPadless
-[linqpad]: http://www.linqpad.net/
-[csx]: https://msdn.microsoft.com/en-us/magazine/mt614271.aspx
+[LINQPad]: http://www.linqpad.net/
 [lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
 [lprun]: https://www.linqpad.net/lprun.aspx
-[fakelp.pkg]: https://www.nuget.org/packages/FakeLinqPad
-[fakelp]: https://github.com/linqpadless/FakeLinqPad
-[dotnet-script]: https://github.com/filipw/dotnet-script
