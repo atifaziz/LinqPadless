@@ -83,7 +83,7 @@ namespace LinqPadless
                 Options.Help(help),
                 Options.Verbose(verbose),
                 Options.Debug,
-                { "f|force"       , "force continue on errors", _ => force = true },
+                { "f|force"       , "force re-fresh/build", _ => force = true },
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -f", v => outDirPath = v },
