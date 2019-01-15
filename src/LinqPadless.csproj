@@ -8,7 +8,7 @@
     <LangVersion>7.1</LangVersion>
     <AssemblyName>lpless</AssemblyName>
     <Summary>LINQPad Queries without LINQPad</Summary>
-    <Description>LINQPadless is a tool for compiling LINQPad query files into stand-alone C# scripts (csx) or executable binaries (exe) so that they can be run outside and independent of LINQPad.</Description>
+    <Description>LINQPadless is a tool that compiles and runs LINQPad query files as stand-alone .NET Core programs, without requiring LINQPad.</Description>
     <Product>LinqPadless</Product>
     <Copyright>Copyright 2016 Atif Aziz. All rights reserved.</Copyright>
     <Authors>Atif Aziz</Authors>
