@@ -17,7 +17,7 @@
     <PackageLicenseFile>COPYING.txt</PackageLicenseFile>
     <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
     <PackageOutputPath>..\dist</PackageOutputPath>
-    <IsTool>true</IsTool>
+    <PackAsTool>true</PackAsTool>
     <IncludeSymbols>true</IncludeSymbols>
     <IncludeSource>true</IncludeSource>
   </PropertyGroup>
