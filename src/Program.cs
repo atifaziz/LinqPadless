@@ -151,7 +151,7 @@ namespace LinqPadless
                 ? Directory.GetFiles(templateProjectPath)
                            .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
                                     || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                                    || f.Equals("global.json", StringComparison.OrdinalIgnoreCase))
+                                    || "global.json".Equals(Path.GetFileName(f), StringComparison.OrdinalIgnoreCase))
                            .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
                            .ToArray()
                 : default;
