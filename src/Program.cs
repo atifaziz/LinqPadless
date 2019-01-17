@@ -355,7 +355,13 @@ namespace LinqPadless
             if (!binDir.Exists)
                 return 0;
 
-            foreach (var dir in binDir.EnumerateDirectories("*"))
+            foreach (var dir in
+                from dir in binDir.EnumerateDirectories("*")
+                where 0 == (dir.Attributes & (FileAttributes.Hidden | FileAttributes.System))
+                   && dir.Name.Length == 40
+                   && dir.Name[0] != '.'
+                   && Regex.IsMatch(dir.Name, @"^[a-zA-Z0-9]{40}$")
+                select dir)
             {
                 var runLogPath = Path.Join(dir.FullName, "runs.log");
 
