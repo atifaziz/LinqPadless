@@ -77,6 +77,7 @@ namespace LinqPadless
             var dontExecute = false;
             var outDirPath = (string) null;
             var uncached = false;
+            var template = (string) null;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -87,6 +88,7 @@ namespace LinqPadless
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -f", v => outDirPath = v },
+                { "t|template="   , "template", v => template = v },
             };
 
             var tail = options.Parse(args);
@@ -108,7 +110,7 @@ namespace LinqPadless
                 case "cache":
                     return CacheCommand(args);
                 default:
-                    return DefaultCommand(command, args, outDirPath,
+                    return DefaultCommand(command, args, template, outDirPath,
                                           uncached: uncached,
                                           dontExecute: dontExecute,
                                           force: force,
@@ -119,6 +121,7 @@ namespace LinqPadless
         static int DefaultCommand(
             string queryPath,
             IEnumerable<string> args,
+            string template,
             string outDirPath,
             bool uncached, bool dontExecute, bool force, bool verbose)
         {
@@ -131,13 +134,20 @@ namespace LinqPadless
                                                 "and C# Program queries partially in this version.");
             }
 
+            if (template?.Length == 0)
+                throw new Exception("Template name cannot be empty.");
+
             var whackBang
                 = query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FirstOrDefault() is string firstNonBlankLine
                 ? Regex.Match(firstNonBlankLine, @"(?<=//#?![\x20\t]*).+").Value.Trim()
                 : default;
 
-            var template = whackBang.Split2(' ', StringSplitOptions.RemoveEmptyEntries)
+            var templateOverride = template != null;
+            if (!templateOverride)
+            {
+                template = whackBang.Split2(' ', StringSplitOptions.RemoveEmptyEntries)
                                     .Fold((t, _) => t ?? "template");
+            }
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
             var searchPaths = GetSearchPaths(queryDir).ToArray();
@@ -164,6 +174,8 @@ namespace LinqPadless
                     .From(() => new MemoryStream(Encoding.ASCII.GetBytes("1.0")))
                     .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
                             select rn.Content.Open())
+                    .Concat(Ix.If(() => templateOverride,
+                                  MoreEnumerable.From(() => new MemoryStream(Utf8BomlessEncoding.GetBytes(template)))))
                     .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
                     .ToStreamable();
 
