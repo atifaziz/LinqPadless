@@ -205,6 +205,10 @@ namespace LinqPadless
 
             var binDirPath = Path.Combine(cacheBaseDirPath, "bin", cacheId);
             var srcDirPath = Path.Combine(cacheBaseDirPath, "src", cacheId);
+
+            if (!Path.IsPathFullyQualified(binDirPath))
+                binDirPath = Path.GetFullPath(binDirPath);
+
             var tmpDirPath = uncached ? binDirPath : Path.Combine(cacheBaseDirPath, "bin", "!" + cacheId);
 
             var exporting = outDirPath != null && !uncached;
