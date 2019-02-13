@@ -87,7 +87,7 @@ namespace LinqPadless
                 { "f|force"       , "force re-fresh/build", _ => force = true },
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
-                { "o|out|output=" , "output directory; implies -f", v => outDirPath = v },
+                { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
                 { "t|template="   , "template", v => template = v },
             };
 
@@ -111,7 +111,7 @@ namespace LinqPadless
                     return CacheCommand(args);
                 default:
                     return DefaultCommand(command, args, template, outDirPath,
-                                          uncached: uncached,
+                                          uncached: uncached || outDirPath != null,
                                           dontExecute: dontExecute,
                                           force: force,
                                           verbose:verbose);
