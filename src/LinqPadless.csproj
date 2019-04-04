@@ -58,7 +58,7 @@
     <PackageReference Include="Choices" Version="1.0.1" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.0.0" />
     <PackageReference Include="morelinq" Version="3.1.0" />
-    <PackageReference Include="NuGet.Versioning" Version="4.8.0" />
+    <PackageReference Include="NuGet.Versioning" Version="4.9.4" />
     <PackageReference Include="System.Interactive" Version="3.2.0" />
   </ItemGroup>
 
