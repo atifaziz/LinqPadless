@@ -31,6 +31,9 @@ namespace LinqPadless
         public static IStreamable Create(Func<Stream> opener) =>
             new DelegatingStreamable(opener);
 
+        public static IStreamable ReadFile(string path) =>
+            Create(() => File.OpenRead(path));
+
         sealed class DelegatingStreamable : IStreamable
         {
             readonly Func<Stream> _opener;
@@ -44,6 +47,25 @@ namespace LinqPadless
 
     static class StreamExtensions
     {
+        public static IStreamable MapText(this IStreamable streamable,
+                                          Func<string, string> selector) =>
+            MapText(streamable, Utf8.BomlessEncoding, selector);
+
+        public static IStreamable MapText(this IStreamable streamable,
+                                          Encoding outputEncoding,
+                                          Func<string, string> selector)
+        {
+            if (streamable == null) throw new ArgumentNullException(nameof(streamable));
+            if (outputEncoding == null) throw new ArgumentNullException(nameof(outputEncoding));
+            if (selector == null) throw new ArgumentNullException(nameof(selector));
+
+            return Streamable.Create(() =>
+            {
+                var minified = selector(streamable.ReadText());
+                return new MemoryStream(outputEncoding.GetBytes(minified));
+            });
+        }
+
         public static IStreamable ToStreamable(this IEnumerable<Stream> source)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));

@@ -73,6 +73,9 @@ namespace LinqPadless
             }
         }
 
+        public static IEnumerable<TValue> Values<TKey, TValue>(this IEnumerable<KeyValuePair<TKey, TValue>> source) =>
+            from e in source select e.Value;
+
         public static IEnumerable<T> WriteLine<T>(this IEnumerable<T> source, TextWriter writer, Func<T, string> formatter)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
