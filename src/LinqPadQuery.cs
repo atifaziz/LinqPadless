@@ -63,9 +63,11 @@ namespace LinqPadless
         public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
         public string Code => _code.Value;
 
-        public static LinqPadQuery Load(string path)
+        public static LinqPadQuery Load(string path) =>
+            Parse(File.ReadAllText(path), path);
+
+        public static LinqPadQuery Parse(string source, string path)
         {
-            var source = File.ReadAllText(path);
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
             return new LinqPadQuery(path, source, eomLineNumber);
         }

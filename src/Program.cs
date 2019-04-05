@@ -39,14 +39,17 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.ChooseExtension;
     using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.FoldExtension;
+    using static MoreLinq.Extensions.ToDictionaryExtension;
     using static OptionModule;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
+    using static Minifier;
 
     #endregion
 
@@ -169,14 +172,42 @@ namespace LinqPadless
             if (templateFiles == null || templateFiles.Count == 0)
                 throw new Exception("No template for running query.");
 
+            string MinifyLinqPadQuery(string text)
+            {
+                var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(text);
+                return
+                    text.Lines()
+                        .Index(1)
+                        .Partition(e => e.Key <= eomLineNumber, (xml, cs) => Seq.Return(xml, cs))
+                        .Select(s => s.Values().ToDelimitedString(Environment.NewLine))
+                        .Fold((xml, cs) => MinifyXml(xml) + "\n" + MinifyCSharp(cs));
+            };
+
+            var minifierTable = new (Func<string, string> Function, IEnumerable<string> Extension)[]
+            {
+                (MinifyJavaScript, Seq.Return(".json")),
+                (MinifyCSharp    , Seq.Return(".cs")),
+                (MinifyXml       , Seq.Return(".xml", ".csproj")),
+            };
+
+            var minifierByExtension =
+                minifierTable.SelectMany(m => m.Extension, (m, ext) => KeyValuePair.Create(ext, m.Function))
+                             .ToDictionary(StringComparer.OrdinalIgnoreCase);
+
             var hashSource =
                 MoreEnumerable
                     .From(() => new MemoryStream(Encoding.ASCII.GetBytes("1.0")))
                     .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
-                            select rn.Content.Open())
+                            select minifierByExtension.TryGetValue(Path.GetExtension(rn.Name), out var minifier)
+                                 ? rn.Content.MapText(minifier)
+                                 : rn.Content
+                            into content
+                            select content.Open())
                     .Concat(Ix.If(() => templateOverride,
                                   MoreEnumerable.From(() => new MemoryStream(Utf8BomlessEncoding.GetBytes(template)))))
-                    .Concat(MoreEnumerable.From(() => File.OpenRead(query.FilePath)))
+                    .Concat(MoreEnumerable.From(() => Streamable.ReadFile(query.FilePath)
+                                                                .MapText(MinifyLinqPadQuery)
+                                                                .Open()))
                     .ToStreamable();
 
             string hash;
@@ -981,5 +1012,10 @@ namespace LinqPadless
         static Stream GetManifestResourceStream(Type type, string name) =>
             type != null ? type.Assembly.GetManifestResourceStream(type, name)
                          : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
+    }
+
+    static class Utf8
+    {
+        public static readonly Encoding BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
     }
 }
