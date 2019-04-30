@@ -388,11 +388,13 @@ namespace LinqPadless
 
                 var (count, lastRunTime) =
                     ParseRunLog(log, (lrt, _) => lrt)
-                        .Aggregate((Count: (int?) null, LatestRun: DateTimeOffset.MinValue),
-                                   (a, e) => ((a.Count ?? 0) + 1, e > a.LatestRun ? e : a.LatestRun));
+                        .Aggregate((Count: 0, LatestRun: DateTimeOffset.MinValue),
+                                   (a, e) => (a.Count + 1, e > a.LatestRun ? e : a.LatestRun));
 
-                var output =
-                    count is int n ? $"{dir.Name} (runs = {n}; last = {lastRunTime:yyyy'-'MM'-'ddTHH':'mm':'sszzz})" : dir.Name;
+                var output = count > 0
+                           ? $"{dir.Name} (runs = {count}; last = {lastRunTime:yyyy'-'MM'-'ddTHH':'mm':'sszzz})"
+                           : dir.Name;
+
                 Console.WriteLine(output);
             }
 
