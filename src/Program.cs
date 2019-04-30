@@ -44,9 +44,9 @@ namespace LinqPadless
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.FoldExtension;
+    using static OptionModule;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
-    using Option = Mono.Options.Option;
 
     #endregion
 
@@ -331,13 +331,13 @@ namespace LinqPadless
 
         static class Options
         {
-            public static Option Help(Ref<bool> value) =>
+            public static Mono.Options.Option Help(Ref<bool> value) =>
                 new ActionOption("?|help|h", "prints out the options", _ => value.Value = true);
 
-            public static Option Verbose(Ref<bool> value) =>
+            public static Mono.Options.Option Verbose(Ref<bool> value) =>
                 new ActionOption("verbose|v", "enable additional output", _ => value.Value = true);
 
-            public static readonly Option Debug =
+            public static readonly Mono.Options.Option Debug =
                 new ActionOption("d|debug", "debug break", vs => Debugger.Launch());
         }
 
@@ -492,10 +492,10 @@ namespace LinqPadless
                                   ? Lazy.Value(nr.Version)
                                   : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
                     nr.IsPrereleaseAllowed,
-                    Title = Seq.Return(nr.Id,
-                                       nr.Version?.ToString(),
-                                       nr.IsPrereleaseAllowed ? "(pre-release)" : null)
-                               .Filter()
+                    Title = Seq.Return(Some(nr.Id),
+                                       Some(nr.Version?.ToString()),
+                                       nr.IsPrereleaseAllowed ? Some("(pre-release)") : default)
+                               .Choose(e => e)
                                .ToDelimitedString(" "),
                 };
 
@@ -681,14 +681,14 @@ namespace LinqPadless
             }
 
             var publishArgs =
-                Seq.Return("publish",
-                           !verbose ? "-nologo" : null,
-                           "-v", verbose ? "m" : "q",
-                           !verbose ? "-clp:ErrorsOnly" : null,
-                           "-c", "Release",
-                           $"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}",
-                           "-o", binDirPath)
-                   .Filter()
+                Seq.Return(Some("publish"),
+                           !verbose ? Some("-nologo") : default,
+                           Some("-v"), Some(verbose ? "m" : "q"),
+                           !verbose ? Some("-clp:ErrorsOnly") : default,
+                           Some("-c"), Some("Release"),
+                           Some($"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}"),
+                           Some("-o"), Some(binDirPath))
+                   .Choose(e => e)
                    .ToArray();
 
             if (verbose)
@@ -729,7 +729,7 @@ namespace LinqPadless
                                  },
                         // ReSharper disable PossibleMultipleEnumeration
                         Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
-                                               ? Optional.Some(new { e.LineNumber, Node = md })
+                                               ? Some(new { e.LineNumber, Node = md })
                                                : default)
                                     .Single(),
                         Others = etc,
@@ -981,10 +981,5 @@ namespace LinqPadless
         static Stream GetManifestResourceStream(Type type, string name) =>
             type != null ? type.Assembly.GetManifestResourceStream(type, name)
                          : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
-
-        static class Optional
-        {
-            public static (bool HasValue, T Value) Some<T>(T value) => (true, value);
-        }
     }
 }

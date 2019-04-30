@@ -23,9 +23,6 @@ namespace LinqPadless
     {
         public static IEnumerable<T> Return<T>(params T[] items) => items;
 
-        public static IEnumerable<T> Filter<T>(this IEnumerable<T> source) =>
-            from item in source where item != null select item;
-
         static void Read<T>(ref IEnumerator<T> e, out T item)
         {
             if (e != null && e.MoveNext())
