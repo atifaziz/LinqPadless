@@ -490,13 +490,12 @@ namespace LinqPadless
             IEnumerable<string> imports, IEnumerable<(string path, IInstalledPackage sourcePackage)> references,
             IndentingLineWriter writer)
         {
-            var body = queryKind == QueryLanguage.Expression
-                     ? string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");")
+            var (prologue, body) = queryKind == QueryLanguage.Expression
+                     ? (string.Empty, string.Join(Environment.NewLine, "System.Console.WriteLine(", source, ");"))
                      : queryKind == QueryLanguage.Program
-                     ? source + Environment.NewLine
-                              + (IsMainAsync(source) ? "await " : null)
-                              + "Main();"
-                     : source;
+                     ? (source, "Main()"
+                              + (IsMainAsync(source) ? ".GetAwaiter().GetResult();" : ";"))
+                     : (string.Empty, source);
 
             var rs = references.ToArray();
 
@@ -511,7 +510,16 @@ namespace LinqPadless
                     from ns in imports
                     select $"using {ns};",
 
-                    Seq.Return(body, string.Empty),
+                    Seq.Return(
+                        prologue,
+                        "var t = new System.Threading.Thread(() =>",
+                        "{",
+                        body,
+                        "});",
+                        "t.SetApartmentState(System.Threading.ApartmentState.STA);",
+                        "t.Start();",
+                        "t.Join();",
+                        string.Empty),
                 }
                 from line in lines
                 select line);
@@ -558,6 +566,7 @@ namespace LinqPadless
                 queryKind == QueryLanguage.Expression
                 ? Seq.Return(
                         "static class UserQuery {",
+                        "    [STAThread]",
                         "    static void Main() {",
                         "        System.Console.WriteLine(", source, ");",
                         "    }",
@@ -565,6 +574,7 @@ namespace LinqPadless
                 : queryKind == QueryLanguage.Program
                 ? Seq.Return(
                         "class UserQuery {",
+                        "    [STAThread]",
                         "    static int Main(string[] args) {",
                         "        new UserQuery().Main()" + (IsMainAsync(source) ? ".Wait()" : null) + "; return 0;",
                         "    }",
@@ -577,6 +587,7 @@ namespace LinqPadless
                                   .Any()
                 ? Seq.Return(
                         "class UserQuery {",
+                        "    [STAThread]",
                         "    static int Main(string[] args) {",
                         "        new UserQuery().Main().Wait(); return 0;",
                         "    }",
@@ -586,6 +597,7 @@ namespace LinqPadless
                         "}")
                 : Seq.Return(
                         "class UserQuery {",
+                        "    [STAThread]",
                         "    static int Main(string[] args) {",
                         "        new UserQuery().Main(); return 0;",
                         "    }",
