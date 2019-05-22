@@ -18,6 +18,7 @@ namespace LinqPadless
 {
     using System.Linq;
     using System.Xml.Linq;
+    using CSharpMinifier;
     using Jazmin;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
 
@@ -33,7 +34,11 @@ namespace LinqPadless
         public static string MinifyJavaScript(string js) =>
             JavaScriptCompressor.Compress(js);
 
+        static readonly MinificationOptions MinificationOptions =
+            MinificationOptions.Default.FilterImportantComments();
+
         public static string MinifyCSharp(string text) =>
-            CSharpMinifier.Minifier.Minify(text, "\n").ToDelimitedString(string.Empty);
+            CSharpMinifier.Minifier.Minify(text, "\n", MinificationOptions)
+                                   .ToDelimitedString(string.Empty);
     }
 }
