@@ -39,6 +39,7 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using static MoreLinq.Extensions.AggregateExtension;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.ChooseExtension;
     using static MoreLinq.Extensions.PartitionExtension;
@@ -419,8 +420,9 @@ namespace LinqPadless
 
                 var (count, lastRunTime) =
                     ParseRunLog(log, (lrt, _) => lrt)
-                        .Aggregate((Count: 0, LatestRun: DateTimeOffset.MinValue),
-                                   (a, e) => (a.Count + 1, e > a.LatestRun ? e : a.LatestRun));
+                        .Aggregate(0, (a, _) => a + 1,
+                                   DateTimeOffset.MinValue, (a, lrt) => lrt > a ? lrt : a,
+                                   ValueTuple.Create);
 
                 var output = count > 0
                            ? $"{dir.Name} (runs = {count}; last = {lastRunTime:yyyy'-'MM'-'ddTHH':'mm':'sszzz})"
