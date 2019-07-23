@@ -34,20 +34,12 @@
     <None Remove="dotnet.cmd" />
     <None Remove="dotnet.sh" />
     <None Remove="help.txt" />
-    <None Remove="lpless.cmd" />
-    <None Remove="lpless.sh" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="..\COPYING.txt" Pack="true" PackagePath="$(PackageLicenseFile)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <Content Include="lpless.cmd">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="lpless.sh">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -62,6 +54,15 @@
     <PackageReference Include="NuGet.Versioning" Version="5.1.0" />
     <PackageReference Include="Optuple" Version="1.0.0" />
     <PackageReference Include="System.Interactive" Version="3.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="lpless.cmd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="lpless.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
