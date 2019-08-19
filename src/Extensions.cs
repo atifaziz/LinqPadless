@@ -20,6 +20,7 @@ namespace LinqPadless
     using System.Collections.Generic;
     using System.Linq;
     using System.IO;
+    using System.Text;
 
     static class StringExtensions
     {
@@ -34,6 +35,13 @@ namespace LinqPadless
                 case 1 : return (tokens[0], default);
                 default: return (tokens[0], tokens[2]);
             }
+        }
+
+        public static StringBuilder AppendLines(this StringBuilder builder, IEnumerable<string> lines)
+        {
+            foreach (var line in lines)
+                builder.AppendLine(line);
+            return builder;
         }
 
         public static IEnumerable<string> Lines(this string input)

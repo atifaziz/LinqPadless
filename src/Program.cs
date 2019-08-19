@@ -47,6 +47,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
+    using static MoreLinq.Extensions.TagFirstLastExtension;
     using static OptionModule;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
@@ -946,7 +947,8 @@ namespace LinqPadless
             var name    = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
             var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
             var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{VersionInfo.ProductName} (version {VersionInfo.FileVersion})")
-                                                               .AppendLine(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"))
+                                                               .AppendLines(Regex.Split(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"), @"\. *(?=(?:Portions +)?Copyright\b)")
+                                                                                 .TagFirstLast((s, _, l) => l ? s : s + "."))
                                                                .ToString());
 
             using (var stream = GetManifestResourceStream("help.txt"))

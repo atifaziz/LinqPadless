@@ -10,7 +10,7 @@
     <Summary>LINQPad Queries without LINQPad</Summary>
     <Description>LINQPadless is a tool that compiles and runs LINQPad query files as stand-alone .NET Core programs, without requiring LINQPad.</Description>
     <Product>LinqPadless</Product>
-    <Copyright>Copyright 2016 Atif Aziz. All rights reserved.</Copyright>
+    <Copyright>Copyright 2016 Atif Aziz. All rights reserved. Portions Copyright 2008 Novell.</Copyright>
     <Authors>Atif Aziz</Authors>
     <Owners>Atif Aziz</Owners>
     <PackageProjectUrl>https://github.com/linqpadless/LinqPadless</PackageProjectUrl>
