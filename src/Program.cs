@@ -177,7 +177,7 @@ namespace LinqPadless
             if (templateFiles == null || templateFiles.Count == 0)
                 throw new Exception("No template for running query.");
 
-            string MinifyLinqPadQuery(string text)
+            static string MinifyLinqPadQuery(string text)
             {
                 var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(text);
                 return
@@ -499,10 +499,10 @@ namespace LinqPadless
                     }
                     else
                     {
-                        version = GetLatestPackageVersion(id, searchPrereleases, searchUrl =>
+                        version = GetLatestPackageVersion(id, searchPrereleases, url =>
                         {
-                            log?.WriteLine($"Searching latest version of {id}: {searchUrl.OriginalString}");
-                            return http.Value.GetStringAsync(searchUrl).GetAwaiter().GetResult();
+                            log?.WriteLine($"Searching latest version of {id}: {url.OriginalString}");
+                            return http.Value.GetStringAsync(url).GetAwaiter().GetResult();
                         });
                     }
 
@@ -624,7 +624,7 @@ namespace LinqPadless
                                     .ToDelimitedString(Environment.NewLine));
             }
 
-            HttpClient CreateHttpClient() =>
+            static HttpClient CreateHttpClient() =>
                 new HttpClient(new HttpClientHandler
                 {
                     AutomaticDecompression = DecompressionMethods.Deflate
@@ -799,7 +799,7 @@ namespace LinqPadless
                         yield return item;
                 }
 
-                DateTimeOffset ParseTime(string s) =>
+                static DateTimeOffset ParseTime(string s) =>
                     DateTimeOffset.ParseExact(s, "o", CultureInfo.InvariantCulture);
             }
         }
