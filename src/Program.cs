@@ -114,19 +114,16 @@ namespace LinqPadless
             var command = tail.First();
             args = tail.Skip(1).TakeWhile(arg => arg != "--");
 
-            switch (command)
+            return command switch
             {
-                case "cache":
-                    return CacheCommand(args);
-                case "init":
-                    return InitCommand(args).GetAwaiter().GetResult();
-                default:
-                    return DefaultCommand(command, args, template, outDirPath,
-                                          uncached: uncached || outDirPath != null,
-                                          dontExecute: dontExecute,
-                                          force: force,
-                                          verbose:verbose);
-            }
+                "cache" => CacheCommand(args),
+                "init"  => InitCommand(args).GetAwaiter().GetResult(),
+                _ => // ...
+                    DefaultCommand(command, args, template, outDirPath,
+                                   uncached: uncached || outDirPath != null,
+                                   dontExecute: dontExecute,
+                                   force: force, verbose: verbose)
+            };
         }
 
         static int DefaultCommand(
@@ -1114,18 +1111,17 @@ namespace LinqPadless
             var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
             var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 
-            MainReturnTypeTraits t;
-            switch (main.ReturnType)
+            var t = main.ReturnType switch
             {
-                case IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value):
-                    t = MainReturnTypeTraits.Task; break;
-                case GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value):
-                    t = MainReturnTypeTraits.TaskOfInt; break;
-                case PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword):
-                    t = MainReturnTypeTraits.Void; break;
-                default:
-                    t = MainReturnTypeTraits.Int; break;
-            }
+                IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value) =>
+                    MainReturnTypeTraits.Task,
+                GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value) =>
+                    MainReturnTypeTraits.TaskOfInt,
+                PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword) =>
+                    MainReturnTypeTraits.Void,
+                _ =>
+                    MainReturnTypeTraits.Int
+            };
 
             var isVoid = t.HasFlag(MainReturnTypeTraits.VoidTrait);
             var isTask = t.HasFlag(MainReturnTypeTraits.TaskTrait);
@@ -1277,15 +1273,12 @@ namespace LinqPadless
             while (e.MoveNext())
             {
                 var line = e.Current;
-                line = Regex.Replace(line, @"\$([A-Z][A-Z_]*)\$", m =>
+                line = Regex.Replace(line, @"\$([A-Z][A-Z_]*)\$", m => m.Groups[1].Value switch
                 {
-                    switch (m.Groups[1].Value)
-                    {
-                        case "NAME": return name.Value;
-                        case "LOGO": return logo.Value;
-                        case "OPTIONS": return opts.Value;
-                        default: return string.Empty;
-                    }
+                    "NAME"    => name.Value,
+                    "LOGO"    => logo.Value,
+                    "OPTIONS" => opts.Value,
+                    _ => string.Empty
                 });
 
                 if (line.Length > 0 && line[line.Length - 1] == '\n')

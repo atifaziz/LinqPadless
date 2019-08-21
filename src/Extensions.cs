@@ -29,12 +29,12 @@ namespace LinqPadless
                    StringSplitOptions options = StringSplitOptions.None)
         {
             var tokens = input.Split(separator, 2, options);
-            switch (tokens.Length)
+            return tokens.Length switch
             {
-                case 0 : return default;
-                case 1 : return (tokens[0], default);
-                default: return (tokens[0], tokens[1]);
-            }
+                0 => default,
+                1 => (tokens[0], default),
+                _ => (tokens[0], tokens[1])
+            };
         }
 
         public static StringBuilder AppendLines(this StringBuilder builder, IEnumerable<string> lines)
