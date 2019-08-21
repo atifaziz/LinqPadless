@@ -260,7 +260,7 @@ namespace LinqPadless
             var dotnetPath =
                 dotnetSearchPaths
                     .If(verbose, ps => ps.Do(() => Console.Error.WriteLine(".NET Core CLI Searches:"))
-                        .WriteLine(Console.Error, p => "- " + p))
+                                         .WriteLine(Console.Error, p => "- " + p))
                     .FirstOrDefault(File.Exists) ?? "dotnet";
 
             {
