@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PackageId>LinqPadless</PackageId>
     <Title>LinqPadless</Title>
     <OutputType>Exe</OutputType>
     <VersionPrefix>2.0.0</VersionPrefix>
