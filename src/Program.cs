@@ -345,26 +345,24 @@ namespace LinqPadless
                 void LogRun(FormattableString str) =>
                     File.AppendAllLines(runLogPath, Seq.Return(FormattableString.Invariant(str)));
 
-                using (var runLogLock = ExternalLock.EnterLocal(runLogLockName, runLogLockTimeout))
-                using (var process = Process.Start(psi))
+                using var runLogLock = ExternalLock.EnterLocal(runLogLockName, runLogLockTimeout);
+                using var process = Process.Start(psi);
+                Debug.Assert(process != null);
+
+                var startTime = process.StartTime;
+                LogRun($"> {startTime:o} {process.Id}");
+                runLogLock.Dispose();
+
+                process.WaitForExit();
+                var endTime = DateTime.Now;
+
+                if (ExternalLock.TryEnterLocal(runLogLockName, runLogLockTimeout, out var mutex))
                 {
-                    Debug.Assert(process != null);
-
-                    var startTime = process.StartTime;
-                    LogRun($"> {startTime:o} {process.Id}");
-                    runLogLock.Dispose();
-
-                    process.WaitForExit();
-                    var endTime = DateTime.Now;
-
-                    if (ExternalLock.TryEnterLocal(runLogLockName, runLogLockTimeout, out var mutex))
-                    {
-                        using (mutex)
-                            LogRun($"< {endTime:o} {startTime:o}/{process.Id} {process.ExitCode}");
-                    }
-
-                    return process.ExitCode;
+                    using var _ = mutex;
+                    LogRun($"< {endTime:o} {startTime:o}/{process.Id} {process.ExitCode}");
                 }
+
+                return process.ExitCode;
             }
         }
 
@@ -429,177 +427,176 @@ namespace LinqPadless
                 return 1;
             }
 
-            using (var disposables = new CompositeDisposable())
+            using var disposables = new CompositeDisposable();
+
+            var http = Lazy.Create(() =>
             {
-                var http = Lazy.Create(() =>
+                var client = CreateHttpClient();
+                // ReSharper disable once AccessToDisposedClosure
+                disposables.Add(client); // add to disposables if ever created.
+                return client;
+            });
+
+            async Task Download(Uri fileUrl, string targetFilePath)
+            {
+                log?.WriteLine($"Downloading {fileUrl}...");
+
+                using (var content = await http.Value.GetStreamAsync(fileUrl))
+                using (var temp = File.Create(targetFilePath))
+                    await content.CopyToAsync(temp);
+
+                log?.WriteLine($"Downloaded {new FileInfo(targetFilePath).Length} bytes to: " + targetFilePath);
+            }
+
+            string zipPath;
+            var shouldDeleteNonTemplateZip = false;
+
+            if (Uri.TryCreate(source, UriKind.Absolute, out var url))
+            {
+                if (url.IsFile)
                 {
-                    var client = CreateHttpClient();
-                    // ReSharper disable once AccessToDisposedClosure
-                    disposables.Add(client); // add to disposables if ever created.
-                    return client;
-                });
-
-                async Task Download(Uri fileUrl, string targetFilePath)
-                {
-                    log?.WriteLine($"Downloading {fileUrl}...");
-
-                    using (var content = await http.Value.GetStreamAsync(fileUrl))
-                    using (var temp = File.Create(targetFilePath))
-                        await content.CopyToAsync(temp);
-
-                    log?.WriteLine($"Downloaded {new FileInfo(targetFilePath).Length} bytes to: " + targetFilePath);
+                    zipPath = url.LocalPath;
                 }
-
-                string zipPath;
-                var shouldDeleteNonTemplateZip = false;
-
-                if (Uri.TryCreate(source, UriKind.Absolute, out var url))
+                else if (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
                 {
-                    if (url.IsFile)
-                    {
-                        zipPath = url.LocalPath;
-                    }
-                    else if (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
-                    {
-                        zipPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
-                        disposables.Add(new TempFile(zipPath, LogTempFileDeletionError));
-                        await Download(url, zipPath);
-                    }
-                    else
-                    {
-                        throw new NotSupportedException("Unsupported URI scheme: " + url.Scheme);
-                    }
-                }
-                else if (Path.IsPathFullyQualified(source) || source.StartsWith(".", StringComparison.Ordinal))
-                {
-                    zipPath = source;
+                    zipPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
+                    disposables.Add(new TempFile(zipPath, LogTempFileDeletionError));
+                    await Download(url, zipPath);
                 }
                 else
                 {
-                    var (id, versionString) = source.Split2('@');
-                    if (!Regex.IsMatch(id, @"^\w+([_.-]\w+)*$"))
-                        throw new Exception("Invalid package name: " + (id.Length == 0 ? "(empty)" : id));
+                    throw new NotSupportedException("Unsupported URI scheme: " + url.Scheme);
+                }
+            }
+            else if (Path.IsPathFullyQualified(source) || source.StartsWith(".", StringComparison.Ordinal))
+            {
+                zipPath = source;
+            }
+            else
+            {
+                var (id, versionString) = source.Split2('@');
+                if (!Regex.IsMatch(id, @"^\w+([_.-]\w+)*$"))
+                    throw new Exception("Invalid package name: " + (id.Length == 0 ? "(empty)" : id));
 
-                    var version
-                        = !string.IsNullOrEmpty(versionString)
-                        ? NuGetVersion.Parse(versionString)
-                        : specificVersion;
+                var version
+                    = !string.IsNullOrEmpty(versionString)
+                    ? NuGetVersion.Parse(versionString)
+                    : specificVersion;
 
-                    if (specificVersion != null && version != specificVersion)
-                        throw new Exception($"Version specifications conflict ({version} <> {specificVersion}).");
+                if (specificVersion != null && version != specificVersion)
+                    throw new Exception($"Version specifications conflict ({version} <> {specificVersion}).");
 
-                    string localPackagePath = null;
+                string localPackagePath = null;
 
-                    if (version is null)
+                if (version is null)
+                {
+                    if (feedDirPath != null)
                     {
-                        if (feedDirPath != null)
-                        {
-                            (_, version, localPackagePath) =
-                                ListPackagesFromFileSystemFeed(feedDirPath)
-                                    .Where(p => (searchPrereleases || !p.Version.IsPrerelease)
-                                             && string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))
-                                    .DefaultIfEmpty()
-                                    .MaxBy(p => p.Version)
-                                    .First();
-                        }
-                        else
-                        {
-                            version = GetLatestPackageVersion(id, searchPrereleases, searchUrl =>
-                            {
-                                log?.WriteLine($"Searching latest version of {id}: {searchUrl.OriginalString}");
-                                return http.Value.GetStringAsync(searchUrl).GetAwaiter().GetResult();
-                            });
-                        }
-
-                        if (version is null)
-                            throw new Exception($"Package {id} does not exist or has not been released.");
-
-                        log?.WriteLine($"{id} -> {version}");
-                    }
-                    else if (feedDirPath != null)
-                    {
-                        (_, _, localPackagePath) =
+                        (_, version, localPackagePath) =
                             ListPackagesFromFileSystemFeed(feedDirPath)
-                                .FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)
-                                                  && p.Version == version);
-
-                        if (localPackagePath is null)
-                            throw new Exception($"Package {id} does not exist or does not have version {version}.");
-                    }
-
-                    if (localPackagePath != null)
-                    {
-                        zipPath = localPackagePath;
-                        log?.WriteLine("Using local package: " + zipPath);
+                                .Where(p => (searchPrereleases || !p.Version.IsPrerelease)
+                                         && string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))
+                                .DefaultIfEmpty()
+                                .MaxBy(p => p.Version)
+                                .First();
                     }
                     else
                     {
-                        var packageCacheDirPath = Path.Join(Path.GetTempPath(), "lpless", "nupkgs");
-                        zipPath = Path.Join(packageCacheDirPath, $"{id}@{version}.nupkg");
-
-                        if (File.Exists(zipPath) && ZipSignature.DoesFileHave(zipPath))
+                        version = GetLatestPackageVersion(id, searchPrereleases, searchUrl =>
                         {
-                            log?.WriteLine("Using cached package: " + zipPath);
-                        }
-                        else
-                        {
-                            var nupkgUrl = new Uri(new Uri("https://www.nuget.org/api/v2/package/"),
-                                                   Uri.EscapeDataString(id) + "/" + Uri.EscapeDataString(version.OriginalVersion));
-
-                            var tempPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
-                            disposables.Add(new TempFile(tempPath, LogTempFileDeletionError));
-                            await Download(nupkgUrl, tempPath);
-
-                            log?.WriteLine("Caching downloaded package at: " + zipPath);
-
-                            Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
-                            File.Move(tempPath, zipPath);
-                            shouldDeleteNonTemplateZip = true;
-                        }
+                            log?.WriteLine($"Searching latest version of {id}: {searchUrl.OriginalString}");
+                            return http.Value.GetStringAsync(searchUrl).GetAwaiter().GetResult();
+                        });
                     }
+
+                    if (version is null)
+                        throw new Exception($"Package {id} does not exist or has not been released.");
+
+                    log?.WriteLine($"{id} -> {version}");
+                }
+                else if (feedDirPath != null)
+                {
+                    (_, _, localPackagePath) =
+                        ListPackagesFromFileSystemFeed(feedDirPath)
+                            .FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)
+                                              && p.Version == version);
+
+                    if (localPackagePath is null)
+                        throw new Exception($"Package {id} does not exist or does not have version {version}.");
                 }
 
-                using (var zip = ZipFile.OpenRead(zipPath))
+                if (localPackagePath != null)
                 {
-                    var createdDirectories = new HashSet<string>();
+                    zipPath = localPackagePath;
+                    log?.WriteLine("Using local package: " + zipPath);
+                }
+                else
+                {
+                    var packageCacheDirPath = Path.Join(Path.GetTempPath(), "lpless", "nupkgs");
+                    zipPath = Path.Join(packageCacheDirPath, $"{id}@{version}.nupkg");
 
-                    var templateFiles =
-                        from e in zip.Entries
-                        where e.Name.Length > 0
-                        select new
-                        {
-                            ArchiveEntry = e,
-                            SourcePath   = e.FullName,
-                            TemplateFile = Regex.Match(e.FullName, @"(?<=([/\\]|^)\.lpless[/\\])templates[/\\]+.+").Value,
-                        }
-                        into e
-                        where !string.IsNullOrEmpty(e.TemplateFile)
-                        select new
-                        {
-                            e.ArchiveEntry, e.SourcePath,
-                            TargetPath = Path.Join(outputDirectoryPath, ".lpless", e.TemplateFile),
-                        };
-
-                    var count = 0;
-
-                    foreach (var e in templateFiles)
+                    if (File.Exists(zipPath) && ZipSignature.DoesFileHave(zipPath))
                     {
-                        log?.WriteLine($"Unarchived {e.TargetPath} ({e.SourcePath})");
-
-                        var dir = Path.GetDirectoryName(e.TargetPath);
-                        if (createdDirectories.Add(dir))
-                            Directory.CreateDirectory(dir);
-
-                        e.ArchiveEntry.ExtractToFile(e.TargetPath, true);
-                        count++;
+                        log?.WriteLine("Using cached package: " + zipPath);
                     }
-
-                    if (count == 0)
+                    else
                     {
-                        if (shouldDeleteNonTemplateZip)
-                            File.Delete(zipPath);
-                        throw new Exception("No templates found in the supplied source.");
+                        var nupkgUrl = new Uri(new Uri("https://www.nuget.org/api/v2/package/"),
+                                               Uri.EscapeDataString(id) + "/" + Uri.EscapeDataString(version.OriginalVersion));
+
+                        var tempPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
+                        disposables.Add(new TempFile(tempPath, LogTempFileDeletionError));
+                        await Download(nupkgUrl, tempPath);
+
+                        log?.WriteLine("Caching downloaded package at: " + zipPath);
+
+                        Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
+                        File.Move(tempPath, zipPath);
+                        shouldDeleteNonTemplateZip = true;
                     }
+                }
+            }
+
+            using (var zip = ZipFile.OpenRead(zipPath))
+            {
+                var createdDirectories = new HashSet<string>();
+
+                var templateFiles =
+                    from e in zip.Entries
+                    where e.Name.Length > 0
+                    select new
+                    {
+                        ArchiveEntry = e,
+                        SourcePath   = e.FullName,
+                        TemplateFile = Regex.Match(e.FullName, @"(?<=([/\\]|^)\.lpless[/\\])templates[/\\]+.+").Value,
+                    }
+                    into e
+                    where !string.IsNullOrEmpty(e.TemplateFile)
+                    select new
+                    {
+                        e.ArchiveEntry, e.SourcePath,
+                        TargetPath = Path.Join(outputDirectoryPath, ".lpless", e.TemplateFile),
+                    };
+
+                var count = 0;
+
+                foreach (var e in templateFiles)
+                {
+                    log?.WriteLine($"Unarchived {e.TargetPath} ({e.SourcePath})");
+
+                    var dir = Path.GetDirectoryName(e.TargetPath);
+                    if (createdDirectories.Add(dir))
+                        Directory.CreateDirectory(dir);
+
+                    e.ArchiveEntry.ExtractToFile(e.TargetPath, true);
+                    count++;
+                }
+
+                if (count == 0)
+                {
+                    if (shouldDeleteNonTemplateZip)
+                        File.Delete(zipPath);
+                    throw new Exception("No templates found in the supplied source.");
                 }
             }
 
@@ -663,40 +660,38 @@ namespace LinqPadless
 
             foreach (var nupkg in nupkgs)
             {
-                using (var zip = ZipFile.OpenRead(nupkg))
+                using var zip = ZipFile.OpenRead(nupkg);
+                var file = zip.Entries.SingleOrDefault(e => e.Name.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase) && e.FullName == e.Name);
+                if (file == null)
+                    continue;
+
+                XDocument nuspec;
+                using (var stream = file.Open())
                 {
-                    var file = zip.Entries.SingleOrDefault(e => e.Name.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase) && e.FullName == e.Name);
-                    if (file == null)
-                        continue;
-
-                    XDocument nuspec;
-                    using (var stream = file.Open())
+                    try
                     {
-                        try
-                        {
-                            nuspec = XDocument.Load(stream);
-                        }
-                        catch (XmlException)
-                        {
-                            continue;
-                        }
+                        nuspec = XDocument.Load(stream);
                     }
-
-                    var metadata =
-                        nuspec.Elements().SingleOrDefault(e => e.Name.LocalName == "package")
-                             ?.Elements().SingleOrDefault(e => e.Name.LocalName == "metadata");
-                    if (metadata == null)
+                    catch (XmlException)
+                    {
                         continue;
-
-                    var id = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "id"))?.Trim();
-                    if (id == null)
-                        continue;
-
-                    var versionString = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "version")).Trim();
-
-                    if (NuGetVersion.TryParse(versionString, out var version))
-                        yield return (id, version, nupkg);
+                    }
                 }
+
+                var metadata =
+                    nuspec.Elements().SingleOrDefault(e => e.Name.LocalName == "package")
+                        ?.Elements().SingleOrDefault(e => e.Name.LocalName == "metadata");
+                if (metadata == null)
+                    continue;
+
+                var id = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "id"))?.Trim();
+                if (id == null)
+                    continue;
+
+                var versionString = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "version")).Trim();
+
+                if (NuGetVersion.TryParse(versionString, out var version))
+                    yield return (id, version, nupkg);
             }
         }
 
@@ -1035,9 +1030,9 @@ namespace LinqPadless
                    && !f.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
                 select f)
             {
-                using (var s = content.Open())
-                using (var w = File.Create(Path.Combine(srcDirPath, name)))
-                    s.CopyTo(w);
+                using var s = content.Open();
+                using var w = File.Create(Path.Combine(srcDirPath, name));
+                s.CopyTo(w);
             }
 
             var publishArgs =
@@ -1241,28 +1236,26 @@ namespace LinqPadless
 
             args.ForEach(psi.ArgumentList.Add);
 
-            using (var process = Process.Start(psi))
+            using var process = Process.Start(psi);
+            Debug.Assert(process != null);
+
+            void OnStdDataReceived(object _, DataReceivedEventArgs e)
             {
-                Debug.Assert(process != null);
-
-                void OnStdDataReceived(object _, DataReceivedEventArgs e)
-                {
-                    if (e.Data == null)
-                        return;
-                    writer?.WriteLines(e.Data);
-                }
-
-                process.OutputDataReceived += OnStdDataReceived;
-                process.ErrorDataReceived  += OnStdDataReceived;
-
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-                process.WaitForExit();
-
-                var exitCode = process.ExitCode;
-                if (exitCode != 0)
-                    throw errorSelector(exitCode);
+                if (e.Data == null)
+                    return;
+                writer?.WriteLines(e.Data);
             }
+
+            process.OutputDataReceived += OnStdDataReceived;
+            process.ErrorDataReceived  += OnStdDataReceived;
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.WaitForExit();
+
+            var exitCode = process.ExitCode;
+            if (exitCode != 0)
+                throw errorSelector(exitCode);
         }
 
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
@@ -1277,9 +1270,10 @@ namespace LinqPadless
                                                                                  .TagFirstLast((s, _, l) => l ? s : s + "."))
                                                                .ToString());
 
-            using (var stream = GetManifestResourceStream("help.txt"))
-            using (var reader = new StreamReader(stream))
-            using (var e = reader.ReadLines())
+            using var stream = GetManifestResourceStream("help.txt");
+            using var reader = new StreamReader(stream);
+            using var e = reader.ReadLines();
+
             while (e.MoveNext())
             {
                 var line = e.Current;
@@ -1326,14 +1320,12 @@ namespace LinqPadless
 
         static string LoadTextResource(Type type, string name, Encoding encoding = null)
         {
-            using (var stream = type != null
-                              ? GetManifestResourceStream(type, name)
-                              : GetManifestResourceStream(null, name))
-            {
-                Debug.Assert(stream != null);
-                using (var reader = new StreamReader(stream, encoding ?? Encoding.UTF8))
-                    return reader.ReadToEnd();
-            }
+            using var stream = type != null
+                             ? GetManifestResourceStream(type, name)
+                             : GetManifestResourceStream(null, name);
+            Debug.Assert(stream != null);
+            using var reader = new StreamReader(stream, encoding ?? Encoding.UTF8);
+            return reader.ReadToEnd();
         }
 
         static Stream GetManifestResourceStream(string name) =>

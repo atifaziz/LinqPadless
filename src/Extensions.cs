@@ -49,11 +49,9 @@ namespace LinqPadless
             if (input == null) throw new ArgumentNullException(nameof(input));
             return _(); IEnumerable<string> _()
             {
-                using (var reader = new StringReader(input))
-                {
-                    while (reader.ReadLine() is string line)
-                        yield return line;
-                }
+                using var reader = new StringReader(input);
+                while (reader.ReadLine() is string line)
+                    yield return line;
             }
         }
     }
@@ -72,12 +70,10 @@ namespace LinqPadless
 
             return _(); IEnumerable<T> _()
             {
-                using (var e = source.GetEnumerator())
-                {
-                    action();
-                    while (e.MoveNext())
-                        yield return e.Current;
-                }
+                using var e = source.GetEnumerator();
+                action();
+                while (e.MoveNext())
+                    yield return e.Current;
             }
         }
 

@@ -49,9 +49,9 @@ namespace LinqPadless
             }
             else
             {
-                using (var line = new StringReader(value).ReadLines())
-                    while (line.MoveNext())
-                        WriteLine(line.Current);
+                using var line = new StringReader(value).ReadLines();
+                while (line.MoveNext())
+                    WriteLine(line.Current);
             }
         }
 

@@ -174,12 +174,10 @@ namespace LinqPadless
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
 
-            using (var stream = source.Open())
-            using (var reader = encoding != null ? new StreamReader(stream, encoding)
-                                                 : new StreamReader(stream))
-            {
-                return reader.ReadToEnd();
-            }
+            using var stream = source.Open();
+            using var reader = encoding != null ? new StreamReader(stream, encoding)
+                                                : new StreamReader(stream);
+            return reader.ReadToEnd();
         }
     }
 }

@@ -25,59 +25,54 @@ namespace LinqPadless
     {
         public static int GetEndOfMetaLineNumber(FileInfo file)
         {
-            using (var reader = new StreamReader(file.FullName))
-            {
-                return GetEndOfMetaLineNumber(reader,
-                           () => new Exception($"\"{file.FullName}\" does not appear to be a valid LINQPad file."));
-            }
+            using var reader = new StreamReader(file.FullName);
+            return GetEndOfMetaLineNumber(reader,
+                () => new Exception($"\"{file.FullName}\" does not appear to be a valid LINQPad file."));
         }
 
         public static int GetEndOfMetaLineNumber(string text)
         {
-            using (var reader = new StringReader(text))
-            {
-                return GetEndOfMetaLineNumber(reader,
-                           () => new Exception("Invalid LINQPad query source format."));
-            }
+            using var reader = new StringReader(text);
+            return GetEndOfMetaLineNumber(reader,
+                () => new Exception("Invalid LINQPad query source format."));
         }
 
         public static int GetEndOfMetaLineNumber(TextReader textReader, Func<Exception> errorSelector)
         {
-            using (var reader = XmlReader.Create(textReader, new XmlReaderSettings
+            using var reader = XmlReader.Create(textReader, new XmlReaderSettings
             {
                 IgnoreProcessingInstructions = true,
                 IgnoreWhitespace             = true,
                 IgnoreComments               = true,
                 CloseInput                   = true,
-            }))
+            });
+
+            // A LINQPad Query file has two parts: (1) a header in XML
+            // followed by (2) the query code content.
+
+            if (XmlNodeType.Element != reader.MoveToContent())
+                throw errorSelector();
+
+            if (!reader.IsStartElement("Query", string.Empty))
+                throw errorSelector();
+
+            try
             {
-                // A LINQPad Query file has two parts: (1) a header in XML
-                // followed by (2) the query code content.
+                // Skipping will throw at the point the XML header
+                // ends and code starts because the code part will be
+                // seen as invalid XML.
 
-                if (XmlNodeType.Element != reader.MoveToContent())
-                    throw errorSelector();
+                reader.Skip();
 
-                if (!reader.IsStartElement("Query", string.Empty))
-                    throw errorSelector();
+                // On the other hand, if Skip succeeds then it means
+                // there is not code and reader is probably sitting on
+                // EOF, so just return the line number.
 
-                try
-                {
-                    // Skipping will throw at the point the XML header
-                    // ends and code starts because the code part will be
-                    // seen as invalid XML.
-
-                    reader.Skip();
-
-                    // On the other hand, if Skip succeeds then it means
-                    // there is not code and reader is probably sitting on
-                    // EOF, so just return the line number.
-
-                    return ((IXmlLineInfo)reader).LineNumber;
-                }
-                catch (XmlException e)
-                {
-                    return e.LineNumber - 1;
-                }
+                return ((IXmlLineInfo)reader).LineNumber;
+            }
+            catch (XmlException e)
+            {
+                return e.LineNumber - 1;
             }
         }
 
