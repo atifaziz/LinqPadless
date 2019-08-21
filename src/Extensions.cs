@@ -33,7 +33,7 @@ namespace LinqPadless
             {
                 case 0 : return default;
                 case 1 : return (tokens[0], default);
-                default: return (tokens[0], tokens[2]);
+                default: return (tokens[0], tokens[1]);
             }
         }
 
