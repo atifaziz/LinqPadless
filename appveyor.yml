@@ -1,12 +1,20 @@
 version: '{build}'
 image:
-  - Visual Studio 2017
+  - Visual Studio 2019
   - Ubuntu
 skip_commits:
   files:
     - '*.md'
     - '*.txt'
 skip_tags: true
+install:
+- cmd: curl -O https://dot.net/v1/dotnet-install.ps1
+- sh: curl -O https://dot.net/v1/dotnet-install.sh
+- sh: chmod +x dotnet-install.sh
+- ps: |
+    $sdkVersion = (type .\global.json | ConvertFrom-Json).sdk.version
+    if ($isWindows) { ./dotnet-install.ps1 -Version $sdkVersion }
+    if ($isLinux)   { ./dotnet-install.sh --version $sdkVersion }
 before_build:
 - dotnet --info
 build_script:
