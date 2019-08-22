@@ -21,7 +21,7 @@ namespace LinqPadless
     using System.Linq;
     using System.IO;
     using System.Text;
-    using Optuple;
+    using static Optuple.OptionModule;
 
     static class StringExtensions
     {
@@ -92,7 +92,7 @@ namespace LinqPadless
         public static (bool, T)
             FindSingle<T>(this IEnumerable<T> source,
                           Func<T, bool> predicate) where T : class =>
-            Option.NoneWhen(source.SingleOrDefault(predicate), e => e is null);
+            NoneWhen(source.SingleOrDefault(predicate), e => e is null);
     }
 
     static class OptionSetExtensions

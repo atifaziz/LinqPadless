@@ -46,7 +46,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
     using static MoreLinq.Extensions.TagFirstLastExtension;
-    using static OptionModule;
+    using static Optuple.OptionModule;
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
     using static Minifier;

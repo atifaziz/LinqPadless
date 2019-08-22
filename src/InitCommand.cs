@@ -34,7 +34,7 @@ namespace LinqPadless
     using NuGet.Versioning;
     using Optuple.Linq;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
-    using static OptionModule;
+    using static Optuple.OptionModule;
 
     #endregion
 
