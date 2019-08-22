@@ -21,6 +21,7 @@ namespace LinqPadless
     using System.Linq;
     using System.IO;
     using System.Text;
+    using Optuple;
 
     static class StringExtensions
     {
@@ -87,6 +88,11 @@ namespace LinqPadless
             if (formatter == null) throw new ArgumentNullException(nameof(formatter));
             return source.Do(e => writer.WriteLine(formatter(e)));
         }
+
+        public static (bool, T)
+            FindSingle<T>(this IEnumerable<T> source,
+                          Func<T, bool> predicate) where T : class =>
+            Option.NoneWhen(source.SingleOrDefault(predicate), e => e is null);
     }
 
     static class OptionSetExtensions

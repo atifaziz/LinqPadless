@@ -32,7 +32,9 @@ namespace LinqPadless
     using System.Xml;
     using System.Xml.Linq;
     using NuGet.Versioning;
+    using Optuple.Linq;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using static OptionModule;
 
     #endregion
 
@@ -324,20 +326,16 @@ namespace LinqPadless
                     }
                 }
 
-                var metadata =
-                    nuspec.Elements().SingleOrDefault(e => e.Name.LocalName == "package")
-                         ?.Elements().SingleOrDefault(e => e.Name.LocalName == "metadata");
-                if (metadata == null)
-                    continue;
+                var (haveResult, result) =
+                    from p  in nuspec.Elements().FindSingle(e => e.Name.LocalName == "package")
+                    from md in p     .Elements().FindSingle(e => e.Name.LocalName == "metadata")
+                    from id in md    .Elements().FindSingle(e => e.Name.LocalName == "id")
+                    from vs in md    .Elements().FindSingle(e => e.Name.LocalName == "version")
+                    from v  in NuGetVersion.TryParse((string)vs, out var v) ? Some(v) : default
+                    select (((string)id).Trim(), v, nupkg);
 
-                var id = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "id"))?.Trim();
-                if (id == null)
-                    continue;
-
-                var versionString = ((string)metadata.Elements().SingleOrDefault(e => e.Name.LocalName == "version")).Trim();
-
-                if (NuGetVersion.TryParse(versionString, out var version))
-                    yield return (id, version, nupkg);
+                if (haveResult)
+                    yield return result;
             }
         }
 
