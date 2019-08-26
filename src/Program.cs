@@ -83,6 +83,7 @@ namespace LinqPadless
             var outDirPath = (string) null;
             var uncached = false;
             var template = (string) null;
+            var shouldJustHash = false;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -94,6 +95,7 @@ namespace LinqPadless
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
                 { "t|template="   , "template", v => template = v },
+                { "hash"          , "print hash and exit", _ => shouldJustHash = true },
             };
 
             var tail = options.Parse(args);
@@ -117,6 +119,7 @@ namespace LinqPadless
                 _ => // ...
                     DefaultCommand(command, args, template, outDirPath,
                                    uncached: uncached || outDirPath != null,
+                                   shouldJustHash: shouldJustHash,
                                    dontExecute: dontExecute,
                                    force: force, verbose: verbose)
             };
@@ -127,6 +130,7 @@ namespace LinqPadless
             IEnumerable<string> args,
             string template,
             string outDirPath,
+            bool shouldJustHash,
             bool uncached, bool dontExecute, bool force, bool verbose)
         {
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
@@ -224,6 +228,12 @@ namespace LinqPadless
                 hash = BitConverter.ToString(sha.ComputeHash(stream))
                                    .Replace("-", string.Empty)
                                    .ToLowerInvariant();
+            }
+
+            if (shouldJustHash)
+            {
+                Console.WriteLine(hash);
+                return 0;
             }
 
             string cacheId, cacheBaseDirPath;
