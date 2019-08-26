@@ -21,6 +21,8 @@ namespace LinqPadless
     using System.Linq;
     using System.IO;
     using System.Text;
+    using System.Text.RegularExpressions;
+    using System.Xml.Linq;
     using static Optuple.OptionModule;
 
     static class StringExtensions
@@ -89,10 +91,62 @@ namespace LinqPadless
             return source.Do(e => writer.WriteLine(formatter(e)));
         }
 
-        public static (bool, T)
-            FindSingle<T>(this IEnumerable<T> source,
-                          Func<T, bool> predicate) where T : class =>
-            NoneWhen(source.SingleOrDefault(predicate), e => e is null);
+        public static (bool, T) FindSingle<T>(this IEnumerable<T> source)
+        {
+            switch (source)
+            {
+                case null: throw new ArgumentNullException(nameof(source));
+                case IList<T> list: return list.Count == 1 ? Some(list[0]) : default;
+                case IReadOnlyList<T> list: return list.Count == 1 ? Some(list[0]) : default;
+                default:
+                {
+                    using var e = source.GetEnumerator();
+                    var item = e.MoveNext() ? Some(e.Current) : default;
+                    return !e.MoveNext() ? item : default;
+                }
+            }
+        }
+
+        public static (bool, T) FindSingle<T>(this IEnumerable<T> source, Func<T, bool> predicate) =>
+            source.Where(predicate).FindSingle();
+
+        public static (bool, T) FindFirst<T>(this IEnumerable<T> source)
+        {
+            switch (source)
+            {
+                case null: throw new ArgumentNullException(nameof(source));
+                case IList<T> list: return list.Count > 0 ? Some(list[0]) : default;
+                case IReadOnlyList<T> list: return list.Count > 0 ? Some(list[0]) : default;
+                default:
+                {
+                    using var e = source.GetEnumerator();
+                    return e.MoveNext() ? Some(e.Current) : default;
+                }
+            }
+        }
+
+        public static (bool, T) FindFirst<T>(this IEnumerable<T> source, Func<T, bool> predicate) =>
+            source.Where(predicate).FindFirst();
+    }
+
+    static class RegexExtensions
+    {
+        public static (bool Success, Match Match) Match(this string input, string pattern) =>
+            Match(input, pattern, RegexOptions.None);
+
+        public static (bool Success, Match Match) Match(this string input, string pattern, RegexOptions options)
+            => Regex.Match(input, pattern, options).ToOption();
+
+        public static (bool Success, Match Match) ToOption(this Match match)
+            => match == null ? throw new ArgumentNullException(nameof(match))
+             : match.Success ? Some(match)
+             : default;
+    }
+
+    static class XmlExtensions
+    {
+        public static (bool Found, XElement Element) FindElement(this XContainer element, XName name) =>
+            element.Element(name) switch { null => default, var e => Some(e) };
     }
 
     static class OptionSetExtensions

@@ -32,9 +32,11 @@ namespace LinqPadless
     using System.Xml;
     using System.Xml.Linq;
     using NuGet.Versioning;
+    using Optuple;
     using Optuple.Linq;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static Optuple.OptionModule;
+    using static TryModule;
 
     #endregion
 
@@ -69,7 +71,7 @@ namespace LinqPadless
             if (tail.Count > 1)
                 throw new Exception("Invalid argument: " + tail[1]);
 
-            var source = tail.FirstOrDefault() ?? "LinqPadless.Templates.Template";
+            var source = tail.FindFirst().Or("LinqPadless.Templates.Template");
 
             var log = verbose ? Console.Error : null;
             if (log != null)
@@ -178,13 +180,14 @@ namespace LinqPadless
                 }
                 else if (feedDirPath != null)
                 {
-                    (_, _, localPackagePath) =
+                    localPackagePath =
                         ListPackagesFromFileSystemFeed(feedDirPath)
-                            .FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)
-                                              && p.Version == version);
-
-                    if (localPackagePath is null)
-                        throw new Exception($"Package {id} does not exist or does not have version {version}.");
+                            .FindFirst(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)
+                                            && p.Version == version) switch
+                            {
+                                (true, var (_, _, lpp)) => lpp,
+                                _ => throw new Exception($"Package {id} does not exist or does not have version {version}."),
+                            };
                 }
 
                 if (localPackagePath != null)
@@ -309,29 +312,21 @@ namespace LinqPadless
             foreach (var nupkg in nupkgs)
             {
                 using var zip = ZipFile.OpenRead(nupkg);
-                var file = zip.Entries.SingleOrDefault(e => e.Name.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase) && e.FullName == e.Name);
+
+                var (_, file) =
+                    zip.Entries.FindSingle(e => e.Name.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase)
+                                             && e.FullName == e.Name);
+
                 if (file == null)
                     continue;
 
-                XDocument nuspec;
-                using (var stream = file.Open())
-                {
-                    try
-                    {
-                        nuspec = XDocument.Load(stream);
-                    }
-                    catch (XmlException)
-                    {
-                        continue;
-                    }
-                }
-
                 var (haveResult, result) =
-                    from p  in nuspec.Elements().FindSingle(e => e.Name.LocalName == "package")
-                    from md in p     .Elements().FindSingle(e => e.Name.LocalName == "metadata")
-                    from id in md    .Elements().FindSingle(e => e.Name.LocalName == "id")
-                    from vs in md    .Elements().FindSingle(e => e.Name.LocalName == "version")
-                    from v  in NuGetVersion.TryParse((string)vs, out var v) ? Some(v) : default
+                    from nuspec in Try(file, f => f.Open(), XDocument.Load, (XmlException e) => true)
+                    from p      in nuspec.Elements().FindSingle(e => e.Name.LocalName == "package")
+                    from md     in p     .Elements().FindSingle(e => e.Name.LocalName == "metadata")
+                    from id     in md    .Elements().FindSingle(e => e.Name.LocalName == "id")
+                    from vs     in md    .Elements().FindSingle(e => e.Name.LocalName == "version")
+                    from v      in NuGetVersion.TryParse((string)vs, out var v) ? Some(v) : default
                     select (((string)id).Trim(), v, nupkg);
 
                 if (haveResult)

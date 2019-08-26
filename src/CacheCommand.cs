@@ -46,7 +46,7 @@ namespace LinqPadless
             };
 
             var tail = options.Parse(args);
-            if (tail.FirstOrDefault() is string arg)
+            if (tail.FindFirst() is (true, var arg))
                 throw new Exception("Invalid argument: " + arg);
 
             if (verbose)

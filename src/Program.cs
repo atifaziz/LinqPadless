@@ -37,6 +37,8 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
+    using Optuple;
+    using Optuple.Linq;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.ChooseExtension;
@@ -139,37 +141,43 @@ namespace LinqPadless
             if (template?.Length == 0)
                 throw new Exception("Template name cannot be empty.");
 
-            var whackBang
-                = query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FirstOrDefault() is string firstNonBlankLine
-                ? Regex.Match(firstNonBlankLine, @"(?<=//#?![\x20\t]*).+").Value.Trim()
-                : default;
-
             var templateOverride = template != null;
             if (!templateOverride)
             {
-                template = whackBang.Split2(' ', StringSplitOptions.RemoveEmptyEntries)
-                                    .Fold((t, _) => t ?? "template");
+                template = (
+                    from firstNonBlankLine in query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FindFirst()
+                    from m in firstNonBlankLine.Match(/* language=regex */ @"(?<=//#?![\x20\t]*).+")
+                    select m.Value.Trim().Split2(' ', StringSplitOptions.RemoveEmptyEntries))
+                    switch
+                    {
+                        (true, var (t, _)) => t,
+                        _ => "template"
+                    };
             }
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
             var searchPaths = GetSearchPaths(queryDir).ToArray();
 
-            IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles
-                = searchPaths
-                    .Select(d => Path.Combine(d, "templates", template))
-                    .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
-                                         .WriteLine(Console.Error, s => "- " + s))
-                    .FirstOrDefault(Directory.Exists) is string templateProjectPath
-                ? Directory.GetFiles(templateProjectPath)
-                           .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                                    || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                                    || "global.json".Equals(Path.GetFileName(f), StringComparison.OrdinalIgnoreCase))
-                           .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
-                           .ToArray()
-                : default;
-
-            if (templateFiles == null || templateFiles.Count == 0)
-                throw new Exception("No template for running query.");
+            IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles = (
+                from templateProjectPath in
+                    searchPaths
+                        .Select(d => Path.Combine(d, "templates", template))
+                        .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
+                                             .WriteLine(Console.Error, s => "- " + s))
+                        .FindFirst(Directory.Exists)
+                select
+                    Directory
+                        .GetFiles(templateProjectPath)
+                        .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                                 || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                                 || "global.json".Equals(Path.GetFileName(f), StringComparison.OrdinalIgnoreCase))
+                        .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
+                        .ToArray())
+                switch
+                {
+                    (true, var tfs) when tfs.Length > 0 => tfs,
+                    _ => throw new Exception("No template for running query.")
+                };
 
             static string MinifyLinqPadQuery(string text)
             {
@@ -255,7 +263,7 @@ namespace LinqPadless
                 dotnetSearchPaths
                     .If(verbose, ps => ps.Do(() => Console.Error.WriteLine(".NET Core CLI Searches:"))
                                          .WriteLine(Console.Error, p => "- " + p))
-                    .FirstOrDefault(File.Exists) ?? "dotnet";
+                    .FindFirst(File.Exists).Or("dotnet");
 
             {
                 if (!force && Run() is int exitCode)
@@ -298,11 +306,12 @@ namespace LinqPadless
 
                 const string depsJsonSuffix = ".deps.json";
 
-                var binPath =
+                var (_, binPath) =
                     Directory.GetFiles(binDirPath, "*.json")
                              .Where(p => p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase))
                              .Select(p => p.Substring(0, p.Length - depsJsonSuffix.Length))
-                             .FirstOrDefault(p => p != null) is string s ? s + ".dll" : null;
+                             .FindFirst()
+                             .Select(s => s + ".dll");
 
                 if (binPath == null)
                     return null;
@@ -768,19 +777,14 @@ namespace LinqPadless
 
             var xml = downloader(new Uri(url));
 
-            var versions =
-                from e in XDocument.Parse(xml)
-                                   .Element(atom + "feed")?
-                                   .Elements(atom + "entry")
-                                   ?? throw Error()
-                select NuGetVersion.Parse((string) e.Element(m + "properties")?
-                                                    .Element(d + "Version")
-                                                    ?? throw Error());
+            var (_, version) =
+                from f in XDocument.Parse(xml).FindElement(atom + "feed")
+                from e in f.Elements(atom + "entry").FindSingle()
+                from p in e.FindElement(m + "properties")
+                from v in p.FindElement(d + "Version")
+                select NuGetVersion.Parse((string)v);
 
-            return versions.SingleOrDefault();
-
-            Exception Error() =>
-                new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
+            return version ?? throw new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
         }
 
         static void Spawn(string path, IEnumerable<string> args,
