@@ -38,7 +38,9 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
     using Optuple;
+    using Optuple.Collections;
     using Optuple.Linq;
+    using Optuple.RegularExpressions;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.ChooseExtension;
@@ -52,6 +54,7 @@ namespace LinqPadless
     using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
     using static Minifier;
+    using static OptionTag;
 
     #endregion
 
@@ -149,12 +152,12 @@ namespace LinqPadless
             if (!templateOverride)
             {
                 template = (
-                    from firstNonBlankLine in query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FindFirst()
-                    from m in firstNonBlankLine.Match(/* language=regex */ @"(?<=//#?![\x20\t]*).+")
+                    from firstNonBlankLine in query.Code.Lines().SkipWhile(string.IsNullOrWhiteSpace).FirstOrNone()
+                    from m in Regex.Match(firstNonBlankLine, @"(?<=//#?![\x20\t]*).+").ToOption()
                     select m.Value.Trim().Split2(' ', StringSplitOptions.RemoveEmptyEntries))
                     switch
                     {
-                        (true, var (t, _)) => t,
+                        (SomeT, var (t, _)) => t,
                         _ => "template"
                     };
             }
@@ -168,7 +171,7 @@ namespace LinqPadless
                         .Select(d => Path.Combine(d, "templates", template))
                         .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
                                              .WriteLine(Console.Error, s => "- " + s))
-                        .FindFirst(Directory.Exists)
+                        .FirstOrNone(Directory.Exists)
                 select
                     Directory
                         .GetFiles(templateProjectPath)
@@ -179,7 +182,7 @@ namespace LinqPadless
                         .ToArray())
                 switch
                 {
-                    (true, var tfs) when tfs.Length > 0 => tfs,
+                    (SomeT, var tfs) when tfs.Length > 0 => tfs,
                     _ => throw new Exception("No template for running query.")
                 };
 
@@ -273,7 +276,7 @@ namespace LinqPadless
                 dotnetSearchPaths
                     .If(verbose, ps => ps.Do(() => Console.Error.WriteLine(".NET Core CLI Searches:"))
                                          .WriteLine(Console.Error, p => "- " + p))
-                    .FindFirst(File.Exists).Or("dotnet");
+                    .FirstOrNone(File.Exists).Or("dotnet");
 
             {
                 if (!force && Run() is int exitCode)
@@ -320,7 +323,7 @@ namespace LinqPadless
                     Directory.GetFiles(binDirPath, "*.json")
                              .Where(p => p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase))
                              .Select(p => p.Substring(0, p.Length - depsJsonSuffix.Length))
-                             .FindFirst()
+                             .FirstOrNone()
                              .Select(s => s + ".dll");
 
                 if (binPath == null)
@@ -789,7 +792,7 @@ namespace LinqPadless
 
             var (_, version) =
                 from f in XDocument.Parse(xml).FindElement(atom + "feed")
-                from e in f.Elements(atom + "entry").FindSingle()
+                from e in f.Elements(atom + "entry").SingleOrNone()
                 from p in e.FindElement(m + "properties")
                 from v in p.FindElement(d + "Version")
                 select NuGetVersion.Parse((string)v);

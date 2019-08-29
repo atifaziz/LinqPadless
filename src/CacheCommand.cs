@@ -26,8 +26,10 @@ namespace LinqPadless
     using System.Linq;
     using System.Text.RegularExpressions;
     using Choices;
+    using Optuple.Collections;
     using static MoreLinq.Extensions.AggregateExtension;
     using static MoreLinq.Extensions.FoldExtension;
+    using static OptionTag;
 
     #endregion
 
@@ -46,7 +48,7 @@ namespace LinqPadless
             };
 
             var tail = options.Parse(args);
-            if (tail.FindFirst() is (true, var arg))
+            if (tail.FirstOrNone() is (SomeT, var arg))
                 throw new Exception("Invalid argument: " + arg);
 
             if (verbose)
