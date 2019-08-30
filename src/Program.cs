@@ -103,8 +103,9 @@ namespace LinqPadless
 
             var tail = options.Parse(args);
 
-            if (verbose)
-                Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
+            var log = verbose ? Console.Error : null;
+            if (log != null)
+                Trace.Listeners.Add(new TextWriterTraceListener(log));
 
             if (help || tail.Count == 0)
             {
@@ -124,7 +125,8 @@ namespace LinqPadless
                                    uncached: uncached || outDirPath != null,
                                    shouldJustHash: shouldJustHash,
                                    dontExecute: dontExecute,
-                                   force: force, verbose: verbose)
+                                   force: force,
+                                   log: log)
             };
         }
 
@@ -134,7 +136,8 @@ namespace LinqPadless
             string template,
             string outDirPath,
             bool shouldJustHash,
-            bool uncached, bool dontExecute, bool force, bool verbose)
+            bool uncached, bool dontExecute, bool force,
+            TextWriter log)
         {
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
 
@@ -169,8 +172,8 @@ namespace LinqPadless
                 from templateProjectPath in
                     searchPaths
                         .Select(d => Path.Combine(d, "templates", template))
-                        .If(verbose, ss => ss.Do(() => Console.Error.WriteLine("Template searches:"))
-                                             .WriteLine(Console.Error, s => "- " + s))
+                        .If(log, (ss, log) => ss.Do(() => log.WriteLine("Template searches:"))
+                                                .Do(s => log.WriteLine("- " + s)))
                         .FirstOrNone(Directory.Exists)
                 select
                     Directory
@@ -274,8 +277,8 @@ namespace LinqPadless
             var dotnetSearchPaths = GetDotnetExecutableSearchPaths(searchPaths);
             var dotnetPath =
                 dotnetSearchPaths
-                    .If(verbose, ps => ps.Do(() => Console.Error.WriteLine(".NET Core CLI Searches:"))
-                                         .WriteLine(Console.Error, p => "- " + p))
+                    .If(log, (ps, log) => ps.Do(() => log.WriteLine(".NET Core CLI Searches:"))
+                                            .Do(p => log.WriteLine("- " + p)))
                     .FirstOrNone(File.Exists).Or("dotnet");
 
             {
@@ -285,7 +288,7 @@ namespace LinqPadless
 
             try
             {
-                Compile(query, srcDirPath, tmpDirPath, templateFiles, dotnetPath, verbose);
+                Compile(query, srcDirPath, tmpDirPath, templateFiles, dotnetPath, log);
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -341,14 +344,13 @@ namespace LinqPadless
                 string FormatCommandLine() =>
                     PasteArguments.Paste(psi.ArgumentList.Prepend(psi.FileName));
 
-                if (verbose && !dontExecute)
-                    Console.Error.WriteLine(FormatCommandLine());
-
                 if (dontExecute)
                 {
                     Console.WriteLine(FormatCommandLine());
                     return 0;
                 }
+
+                log?.WriteLine(FormatCommandLine());
 
                 const string runLogFileName = "runs.log";
                 var runLogPath = Path.Combine(binDirPath, runLogFileName);
@@ -396,95 +398,92 @@ namespace LinqPadless
         static void Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, bool verbose = false)
+            string dotnetPath, TextWriter log)
         {
-            var writer = IndentingLineWriter.Create(Console.Error);
+            _(IndentingLineWriter.CreateUnlessNull(log));
 
-            if (verbose)
+            void _(IndentingLineWriter log)
             {
-                writer.Write(query.MetaElement);
+                log?.Write(query.MetaElement);
+                log?.WriteLines(from r in query.MetaElement.Elements("Reference")
+                                select "Warning! Reference will be ignored: " + (string)r);
 
-                foreach (var r in query.MetaElement.Elements("Reference"))
-                    writer.WriteLine("Warning! Reference will be ignored: " + (string) r);
-            }
+                var wc = new WebClient();
 
-            var wc = new WebClient();
-
-            NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
-            {
-                var latestVersion = Program.GetLatestPackageVersion(id, isPrereleaseAllowed, url =>
+                NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
                 {
-                    if (verbose)
-                        writer.WriteLine(url.OriginalString);
-                    return wc.DownloadString(url);
-                });
-                if (verbose)
-                    writer.WriteLine($"{id} -> {latestVersion}");
-                return latestVersion;
-            }
+                    var latestVersion = Program.GetLatestPackageVersion(id, isPrereleaseAllowed, url =>
+                    {
+                        log?.WriteLine(url.OriginalString);
+                        return wc.DownloadString(url);
+                    });
+                    log?.WriteLine($"{id} -> {latestVersion}");
+                    return latestVersion;
+                }
 
-            var nrs =
-                from nr in query.PackageReferences
-                select new
-                {
-                    nr.Id,
-                    nr.Version,
-                    ActualVersion = nr.HasVersion
-                                  ? Lazy.Value(nr.Version)
-                                  : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
-                    nr.IsPrereleaseAllowed,
-                    Title = Seq.Return(Some(nr.Id),
-                                       Some(nr.Version?.ToString()),
-                                       nr.IsPrereleaseAllowed ? Some("(pre-release)") : default)
-                               .Choose(e => e)
-                               .ToDelimitedString(" "),
-                };
-
-            nrs = nrs.ToArray();
-
-            var namespaces =
-                from nss in new[]
-                {
-                    from ns in LinqPad.DefaultNamespaces
+                var nrs =
+                    from nr in query.PackageReferences
                     select new
                     {
-                        Name = ns,
-                        IsDefaulted = true,
-                    },
-                    from ns in query.Namespaces
-                    select new
+                        nr.Id,
+                        nr.Version,
+                        ActualVersion = nr.HasVersion
+                                      ? Lazy.Value(nr.Version)
+                                      : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
+                        nr.IsPrereleaseAllowed,
+                        Title = Seq.Return(Some(nr.Id),
+                                           Some(nr.Version?.ToString()),
+                                           nr.IsPrereleaseAllowed ? Some("(pre-release)") : default)
+                                   .Choose(e => e)
+                                   .ToDelimitedString(" "),
+                    };
+
+                nrs = nrs.ToArray();
+
+                var namespaces =
+                    from nss in new[]
                     {
-                        Name = ns,
-                        IsDefaulted = false,
-                    },
-                }
-                from ns in nss
-                select ns;
+                        from ns in LinqPad.DefaultNamespaces
+                        select new
+                        {
+                            Name = ns,
+                            IsDefaulted = true,
+                        },
+                        from ns in query.Namespaces
+                        select new
+                        {
+                            Name = ns,
+                            IsDefaulted = false,
+                        },
+                    }
+                    from ns in nss
+                    select ns;
 
-            namespaces = namespaces.ToArray();
+                namespaces = namespaces.ToArray();
 
-            if (verbose)
-            {
-                if (nrs.Any())
+                if (log != null)
                 {
-                    writer.WriteLine($"Packages ({nrs.Count():N0}):");
-                    writer.WriteLines(from nr in nrs select "- " + nr.Title);
+                    if (nrs.Any())
+                    {
+                        log.WriteLine($"Packages ({nrs.Count():N0}):");
+                        log.WriteLines(from nr in nrs select "- " + nr.Title);
+                    }
+
+                    if (namespaces.Any())
+                    {
+                        log.WriteLine($"Imports ({query.Namespaces.Count:N0}):");
+                        log.WriteLines(from ns in namespaces select "- " + ns.Name + (ns.IsDefaulted ? "*" : null));
+                    }
                 }
 
-                if (namespaces.Any())
-                {
-                    writer.WriteLine($"Imports ({query.Namespaces.Count:N0}):");
-                    writer.WriteLines(from ns in namespaces select "- " + ns.Name + (ns.IsDefaulted ? "*" : null));
-                }
+                var references =
+                    from r in nrs
+                    select new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed);
+
+                GenerateExecutable(srcDirPath, binDirPath, query,
+                                   from ns in namespaces select ns.Name,
+                                   references, templateFiles, dotnetPath, log);
             }
-
-            var references =
-                from r in nrs
-                select new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed);
-
-            GenerateExecutable(srcDirPath, binDirPath, query,
-                               from ns in namespaces select ns.Name,
-                               references, templateFiles, dotnetPath, verbose, writer);
         }
 
         [Flags]
@@ -502,7 +501,7 @@ namespace LinqPadless
             LinqPadQuery query, IEnumerable<string> imports,
             IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, bool verbose, IndentingLineWriter writer)
+            string dotnetPath, IndentingLineWriter log)
         {
             // TODO error handling in generated code
 
@@ -619,23 +618,24 @@ namespace LinqPadless
                 s.CopyTo(w);
             }
 
+            var quiet = log == null;
+
             var publishArgs =
                 Seq.Return(Some("publish"),
-                           !verbose ? Some("-nologo") : default,
-                           Some("-v"), Some(verbose ? "m" : "q"),
-                           !verbose ? Some("-clp:ErrorsOnly") : default,
+                           quiet ? Some("-nologo") : default,
+                           Some("-v"), Some(quiet ? "q" : "m"),
+                           quiet ? Some("-clp:ErrorsOnly") : default,
                            Some("-c"), Some("Release"),
                            Some($"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}"),
                            Some("-o"), Some(binDirPath))
                    .Choose(e => e)
                    .ToArray();
 
-            if (verbose)
-                writer.WriteLine(PasteArguments.Paste(publishArgs.Prepend(dotnetPath)));
+            log?.WriteLine(PasteArguments.Paste(publishArgs.Prepend(dotnetPath)));
 
             Spawn(dotnetPath,
                   publishArgs,
-                  workingDirPath, writer.Indent(),
+                  workingDirPath, log?.Indent(),
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 

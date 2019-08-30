@@ -16,6 +16,7 @@
 
 namespace LinqPadless
 {
+    using System;
     using System.Collections.Generic;
     using System.IO;
     using Mannex.IO;
@@ -28,8 +29,14 @@ namespace LinqPadless
 
         static readonly string DefaultIndent = new string('\x20', 2);
 
-        public static IndentingLineWriter Create(TextWriter writer) =>
-            new IndentingLineWriter(null, DefaultIndent, writer);
+        public static IndentingLineWriter CreateUnlessNull(TextWriter writer) =>
+            writer switch { null => null, var w => Create(w) };
+
+        public static IndentingLineWriter Create(TextWriter writer)
+        {
+            if (writer == null) throw new ArgumentNullException(nameof(writer));
+            return new IndentingLineWriter(null, DefaultIndent, writer);
+        }
 
         IndentingLineWriter(string margin, string indent, TextWriter writer)
         {

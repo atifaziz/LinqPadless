@@ -61,10 +61,14 @@ namespace LinqPadless
 
     static class EnumerableExtensions
     {
-        public static IEnumerable<T> If<T>(this IEnumerable<T> source, bool flag, Func<IEnumerable<T>, IEnumerable<T>> then)
+        public static IEnumerable<T> If<T, TArg>(this IEnumerable<T> source, TArg arg,
+                                                 Func<IEnumerable<T>, TArg, IEnumerable<T>> then)
+            where TArg : class
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
-            return flag ? then(source) : source;
+            if (then == null) throw new ArgumentNullException(nameof(then));
+
+            return arg != null ? then(source, arg) : source;
         }
 
         public static IEnumerable<T> Do<T>(this IEnumerable<T> source, Action action)
@@ -82,14 +86,6 @@ namespace LinqPadless
 
         public static IEnumerable<TValue> Values<TKey, TValue>(this IEnumerable<KeyValuePair<TKey, TValue>> source) =>
             from e in source select e.Value;
-
-        public static IEnumerable<T> WriteLine<T>(this IEnumerable<T> source, TextWriter writer, Func<T, string> formatter)
-        {
-            if (source == null) throw new ArgumentNullException(nameof(source));
-            if (writer == null) throw new ArgumentNullException(nameof(writer));
-            if (formatter == null) throw new ArgumentNullException(nameof(formatter));
-            return source.Do(e => writer.WriteLine(formatter(e)));
-        }
     }
 
     static class XmlExtensions
