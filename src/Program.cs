@@ -33,28 +33,28 @@ namespace LinqPadless
     using System.Xml;
     using System.Xml.Linq;
     using Mannex.IO;
+    using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
-    using Microsoft.CodeAnalysis;
     using NuGet.Versioning;
     using Optuple;
     using Optuple.Collections;
     using Optuple.Linq;
     using Optuple.RegularExpressions;
-    using MoreEnumerable = MoreLinq.MoreEnumerable;
-    using static MoreLinq.Extensions.IndexExtension;
+    using static Minifier;
     using static MoreLinq.Extensions.ChooseExtension;
-    using static MoreLinq.Extensions.PartitionExtension;
-    using static MoreLinq.Extensions.TakeUntilExtension;
-    using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ForEachExtension;
-    using static MoreLinq.Extensions.ToDictionaryExtension;
+    using static MoreLinq.Extensions.IndexExtension;
+    using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TagFirstLastExtension;
-    using static Optuple.OptionModule;
-    using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
-    using static Minifier;
+    using static MoreLinq.Extensions.TakeUntilExtension;
+    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using static MoreLinq.Extensions.ToDictionaryExtension;
     using static OptionTag;
+    using static Optuple.OptionModule;
+    using MoreEnumerable = MoreLinq.MoreEnumerable;
+    using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
 
     #endregion
 

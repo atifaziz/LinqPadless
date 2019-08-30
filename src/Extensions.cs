@@ -21,7 +21,6 @@ namespace LinqPadless
     using System.Linq;
     using System.IO;
     using System.Text;
-    using System.Text.RegularExpressions;
     using System.Xml.Linq;
     using static MoreLinq.Extensions.PipeExtension;
     using static Optuple.OptionModule;
