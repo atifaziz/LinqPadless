@@ -273,7 +273,7 @@ namespace LinqPadless
 
             if (example)
             {
-                File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8BomlessEncoding, contents: new []
+                File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8.BomlessEncoding, contents: new []
                 {
                     @"<Query Kind=""Expression"" />",
                     string.Empty,

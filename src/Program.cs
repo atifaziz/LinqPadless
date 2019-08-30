@@ -218,7 +218,7 @@ namespace LinqPadless
                             into content
                             select content.Open())
                     .Concat(Ix.If(() => templateOverride,
-                                  MoreEnumerable.From(() => new MemoryStream(Utf8BomlessEncoding.GetBytes(template)))))
+                                  MoreEnumerable.From(() => new MemoryStream(Utf8.BomlessEncoding.GetBytes(template)))))
                     .Concat(MoreEnumerable.From(() => Streamable.ReadFile(query.FilePath)
                                                                 .MapText(MinifyLinqPadQuery)
                                                                 .Open()))
@@ -487,8 +487,6 @@ namespace LinqPadless
                                references, templateFiles, dotnetPath, verbose, writer);
         }
 
-        static readonly Encoding Utf8BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
         [Flags]
         enum MainReturnTypeTraits
         {
@@ -544,7 +542,7 @@ namespace LinqPadless
 
             using (var xw = XmlWriter.Create(Path.Combine(workingDirPath, queryName + ".csproj"), new XmlWriterSettings
             {
-                Encoding           = Utf8BomlessEncoding,
+                Encoding           = Utf8.BomlessEncoding,
                 Indent             = true,
                 OmitXmlDeclaration = true,
             }))
