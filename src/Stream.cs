@@ -18,6 +18,7 @@ namespace LinqPadless
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Text;
 
@@ -84,10 +85,10 @@ namespace LinqPadless
 
             public override void Close()
             {
-                if (_streams is IEnumerator<Stream> streams)
+                switch (Assignment.Reset(ref _streams))
                 {
-                    _streams = null;
-                    streams.Dispose();
+                    case null: break;
+                    case var streams: streams.Dispose(); break;
                 }
                 base.Close();
             }
@@ -115,8 +116,8 @@ namespace LinqPadless
 
             void OnEndOfStream()
             {
-                var stream = _stream;
-                _stream = null;
+                var stream = Assignment.Reset(ref _stream);
+                Debug.Assert(stream != null);
                 stream.Close();
             }
 

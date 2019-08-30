@@ -75,12 +75,14 @@ namespace LinqPadless
 
             public void Dispose()
             {
-                var mutex = _mutex;
-                if (mutex == null)
-                    return;
-                _mutex = null;
-                mutex.ReleaseMutex();
-                mutex.Close();
+                switch (Assignment.Reset(ref _mutex))
+                {
+                    case null: break;
+                    case var mutex:
+                        mutex.ReleaseMutex();
+                        mutex.Close();
+                        break;
+                }
             }
         }
     }
