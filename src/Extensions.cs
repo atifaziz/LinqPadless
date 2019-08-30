@@ -23,6 +23,7 @@ namespace LinqPadless
     using System.Text;
     using System.Text.RegularExpressions;
     using System.Xml.Linq;
+    using static MoreLinq.Extensions.PipeExtension;
     using static Optuple.OptionModule;
 
     static class StringExtensions
@@ -61,6 +62,9 @@ namespace LinqPadless
 
     static class EnumerableExtensions
     {
+        public static IEnumerable<T> Do<T>(this IEnumerable<T> source, Action<T> action) =>
+            source.Pipe(action);
+
         public static IEnumerable<T> If<T, TArg>(this IEnumerable<T> source, TArg arg,
                                                  Func<IEnumerable<T>, TArg, IEnumerable<T>> then)
             where TArg : class
@@ -69,6 +73,15 @@ namespace LinqPadless
             if (then == null) throw new ArgumentNullException(nameof(then));
 
             return arg != null ? then(source, arg) : source;
+        }
+
+        public static IEnumerable<T> If<T>(this IEnumerable<T> source, bool flag,
+                                           Func<IEnumerable<T>, IEnumerable<T>> then)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (then == null) throw new ArgumentNullException(nameof(then));
+
+            return flag ? then(source) : source;
         }
 
         public static IEnumerable<T> Do<T>(this IEnumerable<T> source, Action action)

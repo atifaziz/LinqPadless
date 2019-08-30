@@ -54,7 +54,6 @@
     <PackageReference Include="morelinq" Version="3.2.0" />
     <PackageReference Include="NuGet.Versioning" Version="5.2.0" />
     <PackageReference Include="Optuple" Version="2.1.0" />
-    <PackageReference Include="System.Interactive" Version="3.2.0" />
   </ItemGroup>
 
   <ItemGroup>

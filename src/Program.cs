@@ -48,10 +48,10 @@ namespace LinqPadless
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.FoldExtension;
+    using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
     using static MoreLinq.Extensions.TagFirstLastExtension;
     using static Optuple.OptionModule;
-    using Ix = System.Linq.EnumerableEx;
     using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
     using static Minifier;
     using static OptionTag;
@@ -220,8 +220,7 @@ namespace LinqPadless
                                  : rn.Content
                             into content
                             select content.Open())
-                    .Concat(Ix.If(() => templateOverride,
-                                  MoreEnumerable.From(() => new MemoryStream(Utf8.BomlessEncoding.GetBytes(template)))))
+                    .If(templateOverride, ss => ss.Concat(MoreEnumerable.From(() => new MemoryStream(Utf8.BomlessEncoding.GetBytes(template)))))
                     .Concat(MoreEnumerable.From(() => Streamable.ReadFile(query.FilePath)
                                                                 .MapText(MinifyLinqPadQuery)
                                                                 .Open()))
@@ -741,11 +740,11 @@ namespace LinqPadless
             return (
                 program,
                 Enumerable.Empty<string>()
-                          .Concat(Ix.If(() => hasArgs , Seq.Return("ARGS")))
-                          .Concat(Ix.If(() => isVoid  , Seq.Return("VOID")))
-                          .Concat(Ix.If(() => isTask  , Seq.Return("TASK")))
-                          .Concat(Ix.If(() => isAsync , Seq.Return("ASYNC")))
-                          .Concat(Ix.If(() => isStatic, Seq.Return("STATIC"))));
+                          .If(hasArgs , ss => ss.Append("ARGS"))
+                          .If(isVoid  , ss => ss.Append("VOID"))
+                          .If(isTask  , ss => ss.Append("TASK"))
+                          .If(isAsync , ss => ss.Append("ASYNC"))
+                          .If(isStatic, ss => ss.Append("STATIC")));
         }
 
         static string Detemplate(string template, string name, string replacement) =>
