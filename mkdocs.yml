@@ -1,0 +1,10 @@
+site_name: LINQPadless
+nav:
+- 'index.md'
+- 'motivation.md'
+- 'usage.md'
+- 'limitations.md'
+theme:
+  name: material
+markdown_extensions:
+  - codehilite
