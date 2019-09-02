@@ -50,11 +50,12 @@ namespace LinqPadless
             var help = Ref.Create(false);
             var verbose = Ref.Create(false);
             var force = false;
-            var outputDirectoryPath = ".";
+            var outputDirectoryPath = (string)null;
             var example = false;
             var specificVersion = (NuGetVersion)null;
             var feedDirPath = (string)null;
             var searchPrereleases = false;
+            var isGlobalSetup = false;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -67,6 +68,7 @@ namespace LinqPadless
                 { "version=", "use package {VERSION}", v => specificVersion = NuGetVersion.Parse(v) },
                 { "feed=", "use {PATH} as package feed", v => feedDirPath = v },
                 { "pre|prerelease", "include pre-releases in searches", _ => searchPrereleases = true },
+                { "g|global", "set-up globally/user-wide", _ => isGlobalSetup = true },
             };
 
             var tail = options.Parse(args);
@@ -84,6 +86,17 @@ namespace LinqPadless
             {
                 Help(options);
                 return 0;
+            }
+
+            if (isGlobalSetup)
+            {
+                if (!(outputDirectoryPath is null))
+                    throw new Exception(@"The ""global"" and ""output"" options are mutually exclusive.");
+                outputDirectoryPath = GlobalPath;
+            }
+            else if (outputDirectoryPath is null)
+            {
+                outputDirectoryPath = Environment.CurrentDirectory;
             }
 
             Directory.CreateDirectory(outputDirectoryPath);

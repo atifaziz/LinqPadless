@@ -67,9 +67,13 @@ namespace LinqPadless
                 : Seq.Return(string.Empty)
             select Path.Join(sp, "dotnet" + ext);
 
+        static string GlobalPath =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "lpless");
+
         static IEnumerable<string> GetSearchPaths(DirectoryInfo baseDir) =>
             baseDir
                 .SelfAndParents()
+                .Append(new DirectoryInfo(GlobalPath))
                 .TakeUntil(d => File.Exists(Path.Combine(d.FullName, ".lplessroot")))
                 .Select(d => Path.Combine(d.FullName, ".lpless"));
 
