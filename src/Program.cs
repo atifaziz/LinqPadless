@@ -236,20 +236,25 @@ namespace LinqPadless
                     if (length == 0)
                         break;
 
+                    var span = buffer.AsSpan(0, length);
+
                     // Normalize line endings by removing CR, assuming only LF remain
 
-                    for (var si = 0; si < length;)
+                    while (true)
                     {
-                        si = Array.IndexOf(buffer, (byte)'\r', si, length - si);
+                        var si = span.IndexOf((byte)'\r');
                         if (si < 0)
                             break;
                         var ei = si + 1;
-                        while (ei < length && buffer[ei] == '\r')
+                        while (ei < span.Length && span[ei] == '\r')
                             ei++;
-                        var span = ei - si;
-                        Array.Copy(buffer, ei, buffer, si, length - ei);
-                        si++;
-                        length -= span;
+                        var clen = ei - si;
+                        length -= clen;
+                        span.Slice(ei).CopyTo(span.Slice(si));
+                        span = span.Slice(si + 1);
+                        if (span.Length == 0)
+                            break;
+                        span = span.Slice(span.Length - clen);
                     }
 
                     sha.AppendData(buffer, 0, length);
