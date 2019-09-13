@@ -49,21 +49,21 @@ namespace LinqPadless
     static class StreamExtensions
     {
         public static IStreamable MapText(this IStreamable streamable,
-                                          Func<string, string> selector) =>
-            MapText(streamable, Utf8.BomlessEncoding, selector);
+                                          Func<string, string> mapper) =>
+            MapText(streamable, Utf8.BomlessEncoding, mapper);
 
         public static IStreamable MapText(this IStreamable streamable,
                                           Encoding outputEncoding,
-                                          Func<string, string> selector)
+                                          Func<string, string> mapper)
         {
             if (streamable == null) throw new ArgumentNullException(nameof(streamable));
             if (outputEncoding == null) throw new ArgumentNullException(nameof(outputEncoding));
-            if (selector == null) throw new ArgumentNullException(nameof(selector));
+            if (mapper == null) throw new ArgumentNullException(nameof(mapper));
 
             return Streamable.Create(() =>
             {
-                var minified = selector(streamable.ReadText());
-                return new MemoryStream(outputEncoding.GetBytes(minified));
+                var mapped = mapper(streamable.ReadText());
+                return new MemoryStream(outputEncoding.GetBytes(mapped));
             });
         }
 
