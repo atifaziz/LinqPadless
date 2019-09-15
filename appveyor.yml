@@ -4,6 +4,8 @@ image:
   - Ubuntu
 skip_commits:
   files:
+    - Dockerfile
+    - .dockerignore
     - '*.md'
     - '*.txt'
 skip_tags: true
