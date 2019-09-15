@@ -236,21 +236,28 @@ namespace LinqPadless
                     if (length == 0)
                         break;
 
-                    // Normalize line endings by removing CR, assuming only LF remain
-
                     var span = buffer.AsSpan(0, length);
 
-                    while (span.Length > 0)
+                    // Normalize line endings by removing CR, assuming only LF remain
+
+                    do
                     {
-                        var si = span.IndexOf((byte)'\r');
+                        const byte nul = 0, cr  = (byte)'\r';
+                        var si = span.IndexOfAny(cr, nul);
+
                         if (si < 0)
                         {
                             sha.AppendData(span);
                             break;
                         }
+
+                        if (span[si] == nul)
+                            throw new NotSupportedException("Binary data is not yet supported.");
+
                         sha.AppendData(span.Slice(0, si));
                         span = span.Slice(si + 1);
                     }
+                    while (span.Length > 0);
                 }
 
                 hash = BitConverter.ToString(sha.GetHashAndReset())
