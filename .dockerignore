@@ -1,0 +1,8 @@
+*
+!src
+!*.sln
+!*.sh
+!global.json
+!COPYING.txt
+!COPYING
+!LICENSE
