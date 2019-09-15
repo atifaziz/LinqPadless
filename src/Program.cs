@@ -227,10 +227,33 @@ namespace LinqPadless
                     .ToStreamable();
 
             string hash;
-            using (var sha = SHA1.Create())
+            using (var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1))
             using (var stream = hashSource.Open())
             {
-                hash = BitConverter.ToString(sha.ComputeHash(stream))
+                for (var buffer = new byte[4096]; ;)
+                {
+                    var length = stream.Read(buffer, 0, buffer.Length);
+                    if (length == 0)
+                        break;
+
+                    // Normalize line endings by removing CR, assuming only LF remain
+
+                    var span = buffer.AsSpan(0, length);
+
+                    while (span.Length > 0)
+                    {
+                        var si = span.IndexOf((byte)'\r');
+                        if (si < 0)
+                        {
+                            sha.AppendData(span);
+                            break;
+                        }
+                        sha.AppendData(span.Slice(0, si));
+                        span = span.Slice(si + 1);
+                    }
+                }
+
+                hash = BitConverter.ToString(sha.GetHashAndReset())
                                    .Replace("-", string.Empty)
                                    .ToLowerInvariant();
             }
