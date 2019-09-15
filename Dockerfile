@@ -27,4 +27,4 @@ RUN mkdir /scripts/linq
 
 WORKDIR /scripts/linq
 
-ENTRYPOINT [ "dotnet", "/app/lpless.dll" ]
+ENTRYPOINT [ "/app/lpless" ]
