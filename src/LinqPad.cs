@@ -82,7 +82,6 @@ namespace LinqPadless
             "System.Collections",
             "System.Collections.Generic",
             "System.Data",
-            "System.Data.SqlClient",
             "System.Diagnostics",
             "System.IO",
             "System.Linq",
