@@ -217,7 +217,7 @@ namespace LinqPadless
 
             var hashSource =
                 MoreEnumerable
-                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("1.0")))
+                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("2")))
                     .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
                             select minifierByExtension.TryGetValue(Path.GetExtension(rn.Name), out var minifier)
                                  ? rn.Content.MapText(minifier)
@@ -691,22 +691,27 @@ namespace LinqPadless
                         LineNumber = syntaxTree.GetLineSpan(n.FullSpan).StartLinePosition.Line,
                         Node = n,
                     })
-                    .Partition(e => e.Node is TypeDeclarationSyntax, (tds, etc) => new
-                    {
-                        Types  = from e in tds
-                                 select new
-                                 {
-                                     e.LineNumber,
-                                     Node = (TypeDeclarationSyntax) e.Node
-                                 },
-                        // ReSharper disable PossibleMultipleEnumeration
-                        Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
-                                               ? Some(new { e.LineNumber, Node = md })
-                                               : default)
-                                    .Single(),
-                        Others = etc,
-                        // ReSharper restore PossibleMultipleEnumeration
-                    });
+                    .Partition(
+                        e => e.Node is ClassDeclarationSyntax cds
+                          && cds.Members.OfType<MethodDeclarationSyntax>()
+                                        .Any(mds => mds.ParameterList.Parameters.Count > 0
+                                                 && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))),
+                        (tds, etc) => new
+                        {
+                            Types  = from e in tds
+                                     select new
+                                     {
+                                         e.LineNumber,
+                                         Node = (TypeDeclarationSyntax) e.Node
+                                     },
+                            // ReSharper disable PossibleMultipleEnumeration
+                            Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
+                                                   ? Some(new { e.LineNumber, Node = md })
+                                                   : default)
+                                        .Single(),
+                            Others = etc,
+                            // ReSharper restore PossibleMultipleEnumeration
+                        });
 
             string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, int> lf, Func<T, SyntaxNode> nf) =>
                 nns.Select(e => "#line " + lf(e).ToString(CultureInfo.InvariantCulture) + eol
