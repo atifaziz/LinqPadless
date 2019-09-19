@@ -473,10 +473,14 @@ namespace LinqPadless
 
                 nrs = nrs.ToArray();
 
+                var defaultNamespaceUndoSet =
+                    query.NamespaceRemovals.ToHashSet(StringComparer.Ordinal);
+
                 var namespaces =
                     from nss in new[]
                     {
                         from ns in LinqPad.DefaultNamespaces
+                        where !defaultNamespaceUndoSet.Contains(ns)
                         select new
                         {
                             Name = ns,

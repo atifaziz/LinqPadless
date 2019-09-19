@@ -52,6 +52,7 @@ namespace LinqPadless
         readonly Lazy<XElement> _metaElement;
         readonly Lazy<LinqPadQueryLanguage> _language;
         readonly Lazy<ReadOnlyCollection<string>> _namespaces;
+        readonly Lazy<ReadOnlyCollection<string>> _namespaceRemovals;
         readonly Lazy<ReadOnlyCollection<PackageReference>> _packageReferences;
         readonly Lazy<string> _code;
 
@@ -60,6 +61,7 @@ namespace LinqPadless
         public LinqPadQueryLanguage Language => _language.Value;
         public XElement MetaElement => _metaElement.Value;
         public IReadOnlyCollection<string> Namespaces => _namespaces.Value;
+        public IReadOnlyCollection<string> NamespaceRemovals => _namespaceRemovals.Value;
         public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
         public string Code => _code.Value;
 
@@ -96,7 +98,12 @@ namespace LinqPadless
             _namespaces = Lazy.Create(() =>
                 ReadOnlyCollection(
                     from ns in MetaElement.Elements("Namespace")
-                    select (string) ns));
+                    select (string)ns));
+
+            _namespaceRemovals = Lazy.Create(() =>
+                ReadOnlyCollection(
+                    from ns in MetaElement.Elements("RemoveNamespace")
+                    select (string)ns));
 
             _packageReferences = Lazy.Create(() =>
                 ReadOnlyCollection(
