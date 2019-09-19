@@ -728,7 +728,9 @@ namespace LinqPadless
                                 Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
                                                        ? Some(new { e.LineNumber, Node = md })
                                                        : default)
-                                            .Single(),
+                                            .SingleOrNone()
+                                            .Match(some: some => some,
+                                                   none: () => throw new Exception("Program entry-point method (Main) not found.")),
                                 Others = etc,
                                 // ReSharper restore PossibleMultipleEnumeration
                             });
