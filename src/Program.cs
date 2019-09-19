@@ -672,46 +672,62 @@ namespace LinqPadless
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
+        enum QueryPartKind { Type, Namespace, Other }
+
         static (string Source, IEnumerable<string> CompilationSymbols)
             GenerateProgram(string source, string template)
         {
             var eol = Environment.NewLine;
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(
-                "class UserQuery {" + eol + source + eol + "}");
+            var syntaxTree =
+                CSharpSyntaxTree.ParseText(source,
+                                           CSharpParseOptions.Default.WithKind(SourceCodeKind.Script));
 
             var parts =
                 syntaxTree
                     .GetRoot()
                     .ChildNodes()
-                    .OfType<ClassDeclarationSyntax>().Single()
-                    .ChildNodes()
                     .Select(n => new
                     {
-                        LineNumber = syntaxTree.GetLineSpan(n.FullSpan).StartLinePosition.Line,
+                        LineNumber = syntaxTree.GetLineSpan(n.FullSpan).StartLinePosition.Line + 1,
                         Node = n,
                     })
-                    .Partition(
-                        e => e.Node is ClassDeclarationSyntax cds
-                          && cds.Members.OfType<MethodDeclarationSyntax>()
-                                        .Any(mds => mds.ParameterList.Parameters.Count > 0
-                                                 && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))),
-                        (tds, etc) => new
+                    .GroupBy(e =>
+                        e.Node switch
                         {
-                            Types  = from e in tds
-                                     select new
-                                     {
-                                         e.LineNumber,
-                                         Node = (TypeDeclarationSyntax) e.Node
-                                     },
-                            // ReSharper disable PossibleMultipleEnumeration
-                            Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
-                                                   ? Some(new { e.LineNumber, Node = md })
-                                                   : default)
-                                        .Single(),
-                            Others = etc,
-                            // ReSharper restore PossibleMultipleEnumeration
-                        });
+                            ClassDeclarationSyntax cds
+                                when cds.Members.OfType<MethodDeclarationSyntax>()
+                                                .Any(mds => mds.ParameterList.Parameters.Count > 0
+                                                         && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))) =>
+                                QueryPartKind.Type,
+                            NamespaceDeclarationSyntax _ => QueryPartKind.Namespace,
+                            _ => QueryPartKind.Other
+                        })
+                    .Partition(QueryPartKind.Type, QueryPartKind.Namespace, QueryPartKind.Other,
+                        (tds, nsds, etc, _) => _.Any() ? throw new NotSupportedException() :
+                            new
+                            {
+                                Types  = from e in tds
+                                         select new
+                                         {
+                                             e.LineNumber,
+                                             Node = (TypeDeclarationSyntax) e.Node
+                                         },
+                                Namespaces =
+                                         from e in nsds
+                                         select new
+                                         {
+                                             e.LineNumber,
+                                             Node = (NamespaceDeclarationSyntax) e.Node
+                                         },
+                                // ReSharper disable PossibleMultipleEnumeration
+                                Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
+                                                       ? Some(new { e.LineNumber, Node = md })
+                                                       : default)
+                                            .Single(),
+                                Others = etc,
+                                // ReSharper restore PossibleMultipleEnumeration
+                            });
 
             string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, int> lf, Func<T, SyntaxNode> nf) =>
                 nns.Select(e => "#line " + lf(e).ToString(CultureInfo.InvariantCulture) + eol
@@ -720,7 +736,11 @@ namespace LinqPadless
                    .ToDelimitedString(string.Empty);
 
             var program =
-                Detemplate(template, "program-types",
+                Detemplate(template, "program-namespaces",
+                    FullSourceWithLineDirective(parts.Namespaces, e => e.LineNumber, e => e.Node));
+
+            program =
+                Detemplate(program, "program-types",
                     FullSourceWithLineDirective(parts.Types, e => e.LineNumber, e => e.Node));
 
             var main = parts.Main.Node;
