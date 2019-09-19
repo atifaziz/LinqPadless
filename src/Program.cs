@@ -795,9 +795,9 @@ namespace LinqPadless
         static string Detemplate(string template, string name, Lazy<string> replacement) =>
             Regex.Matches(template, @"
                      (?<= ^ | \r?\n )
-                     [\x20\t]* // [\x20\t]* {% [\x20\t]*([a-z-]+)
+                     [\x20\t]* // !? [\x20\t]* {% [\x20\t]*([a-z-]+)
                      (?: [\x20\t]* %}
-                       | \s.*? // [\x20\t]* %}
+                       | \s.*? // !? [\x20\t]* %}
                        )
                      [\x20\t]* (?=\r?\n)"
                      , RegexOptions.Singleline
