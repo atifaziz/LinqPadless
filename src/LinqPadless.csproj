@@ -49,8 +49,8 @@
 
   <ItemGroup>
     <PackageReference Include="Choices" Version="1.0.1" />
-    <PackageReference Include="CSharpMinifier" Version="1.1.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.2.1" />
+    <PackageReference Include="CSharpMinifier" Version="1.2.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.3.1" />
     <PackageReference Include="morelinq" Version="3.2.0" />
     <PackageReference Include="NuGet.Versioning" Version="5.2.0" />
     <PackageReference Include="Optuple" Version="2.1.0" />
