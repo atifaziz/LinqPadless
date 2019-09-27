@@ -1,7 +1,7 @@
 ARG DOTNET_SDK_VERSION=2.2.402
 ARG PLATFORM=alpine3.9
 
-FROM mcr.microsoft.com/dotnet/core/sdk:2.2.402-${PLATFORM} AS build
+FROM mcr.microsoft.com/dotnet/core/sdk:3.0.100-${PLATFORM} AS build
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
