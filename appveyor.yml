@@ -31,16 +31,8 @@ build_script:
 
     if ($isWindows) { .\pack.cmd ci-$id } else { ./pack.sh ci-$id }
 test_script:
-- sh: >-
-    for v in 2.1 2.2 3.0; do
-      docker run --rm \
-        -v "$PWD/dist:/dist" \
-        --entrypoint sh \
-        mcr.microsoft.com/dotnet/core/sdk:$v-alpine3.9 \
-        -c "dotnet tool install -g --add-source dist -v n LinqPadless --version 2.0.0 \
-            && export PATH=$PATH:/root/.dotnet/tools \
-            && lpless"
-    done
+- sh: docker build -t lpless .
+- sh: docker run --rm lpless
 artifacts:
 - path: dist\*.nupkg
 deploy:
