@@ -12,7 +12,7 @@ COPY . /project
 
 RUN mv project/src/LinqPadless.csproj tmp \
  && cat tmp/LinqPadless.csproj | grep -v PackAsTool > project/src/LinqPadless.csproj \
- && dotnet publish -c Release --self-contained -r linux-musl-x64 -o /app project/src \
+ && dotnet publish -c Release -f netcoreapp3.0 --self-contained -r linux-musl-x64 -o /app project/src \
  && mkdir download \
  && wget -O - https://github.com/atifaziz/LinqPadlessProgramTemplate/tarball/master | tar -xz -C download \
  && mv download/* tmpl
