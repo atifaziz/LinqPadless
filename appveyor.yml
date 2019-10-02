@@ -30,6 +30,9 @@ build_script:
     $id = $id.Substring(0, 13)
 
     if ($isWindows) { .\pack.cmd ci-$id } else { ./pack.sh ci-$id }
+test_script:
+- sh: docker build -t lpless .
+- sh: docker run --rm lpless
 artifacts:
 - path: dist\*.nupkg
 deploy:
