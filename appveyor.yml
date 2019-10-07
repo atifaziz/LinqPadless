@@ -33,7 +33,7 @@ before_build:
 - dotnet --info
 build_script:
 - ps: >-
-    $id = $env:APPVEYOR_REPO_COMMIT_TIMESTAMP -replace '([-:]|\.0+Z)', ''
+    $id = ([datetimeoffset]$env:APPVEYOR_REPO_COMMIT_TIMESTAMP).ToUniversalTime().ToString('yyyyMMdd''t''HHmm')
 
     $id = $id.Substring(0, 13)
 
