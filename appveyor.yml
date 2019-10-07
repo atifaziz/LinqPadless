@@ -8,6 +8,9 @@ skip_commits:
     - .dockerignore
     - '*.md'
     - '*.txt'
+branches:
+  only:
+    - master
 pull_requests:
   do_not_increment_build_number: true
 skip_tags: true
