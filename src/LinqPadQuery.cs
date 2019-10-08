@@ -92,7 +92,7 @@ namespace LinqPadless
             _language = Lazy.Create(() =>
                 Enum.TryParse((string) MetaElement.Attribute("Kind"), true, out LinqPadQueryLanguage queryKind) ? queryKind : LinqPadQueryLanguage.Unknown);
 
-            ReadOnlyCollection<T> ReadOnlyCollection<T>(IEnumerable<T> items) =>
+            static ReadOnlyCollection<T> ReadOnlyCollection<T>(IEnumerable<T> items) =>
                 new ReadOnlyCollection<T>(items.ToList());
 
             _namespaces = Lazy.Create(() =>
