@@ -20,6 +20,7 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
+    using System.Collections.Immutable;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
@@ -32,6 +33,7 @@ namespace LinqPadless
     using System.Text.RegularExpressions;
     using System.Xml;
     using System.Xml.Linq;
+    using KeyValuePairs;
     using Mannex.IO;
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
@@ -170,6 +172,7 @@ namespace LinqPadless
             }
 
             var queryDir = new DirectoryInfo(Path.GetDirectoryName(query.FilePath));
+
             var searchPaths = GetSearchPaths(queryDir).ToArray();
 
             IReadOnlyCollection<(string Name, IStreamable Content)> templateFiles = (
@@ -225,6 +228,10 @@ namespace LinqPadless
                             into content
                             select content.Open())
                     .If(templateOverride, ss => ss.Concat(MoreEnumerable.From(() => new MemoryStream(Utf8.BomlessEncoding.GetBytes(template)))))
+                    .Concat(from load in query.Loads
+                            select Streamable.ReadFile(load.Path)
+                                             .MapText(MinifyLinqPadQuery)
+                                             .Open())
                     .Concat(MoreEnumerable.From(() => Streamable.ReadFile(query.FilePath)
                                                                 .MapText(MinifyLinqPadQuery)
                                                                 .Open()))
@@ -455,48 +462,83 @@ namespace LinqPadless
                 }
 
                 var nrs =
-                    from nr in query.PackageReferences
+                    from nr in
+                        query.PackageReferences
+                            .Select(r => new
+                            {
+                                r.Id,
+                                Version = Option.From(r.HasVersion, r.Version),
+                                r.IsPrereleaseAllowed,
+                                Source = None<string>(),
+                            })
+                            .Concat(from lq in query.Loads
+                                    from r in lq.PackageReferences
+                                    select new
+                                    {
+                                        r.Id,
+                                        Version = Option.From(r.HasVersion, r.Version),
+                                        r.IsPrereleaseAllowed,
+                                        Source = Some(lq.LoadPath),
+                                    })
                     select new
                     {
                         nr.Id,
                         nr.Version,
-                        ActualVersion = nr.HasVersion
-                                      ? Lazy.Value(nr.Version)
-                                      : Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed)),
+                        ActualVersion =
+                            nr.Version.Match(
+                                some: Lazy.Value,
+                                none: () => Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed))),
                         nr.IsPrereleaseAllowed,
                         Title = Seq.Return(Some(nr.Id),
-                                           Some(nr.Version?.ToString()),
-                                           nr.IsPrereleaseAllowed ? Some("(pre-release)") : default)
+                                           nr.Version.Map(v => v.ToString()),
+                                           nr.IsPrereleaseAllowed ? Some("(pre-release)") : default,
+                                           nr.Source.Map(s => $"<{s}>"))
                                    .Choose(e => e)
                                    .ToDelimitedString(" "),
                     };
 
                 nrs = nrs.ToArray();
 
-                var defaultNamespaceUndoSet =
-                    query.NamespaceRemovals.ToHashSet(StringComparer.Ordinal);
+                var allQueries =
+                    query.Loads
+                         .Select(q => new
+                         {
+                             q.GetQuery().Namespaces,
+                             q.GetQuery().NamespaceRemovals,
+                             Path = Some(q.LoadPath)
+                         })
+                         .Append(new
+                         {
+                             query.Namespaces,
+                             query.NamespaceRemovals,
+                             Path = None<string>()
+                         })
+                         .ToImmutableArray();
 
-                var namespaces =
+                var namespaces = ImmutableArray.CreateRange(
                     from nss in new[]
                     {
+                        from q in allQueries
+                        let nsrs = q.NamespaceRemovals.ToHashSet(StringComparer.Ordinal)
                         from ns in LinqPad.DefaultNamespaces
-                        where !defaultNamespaceUndoSet.Contains(ns)
+                        where !nsrs.Contains(ns)
                         select new
                         {
                             Name = ns,
                             IsDefaulted = true,
+                            QueryPath = q.Path,
                         },
-                        from ns in query.Namespaces
+                        from q in allQueries
+                        from ns in q.Namespaces
                         select new
                         {
                             Name = ns,
                             IsDefaulted = false,
+                            QueryPath = q.Path,
                         },
                     }
                     from ns in nss
-                    select ns;
-
-                namespaces = namespaces.ToArray();
+                    select ns);
 
                 if (log != null)
                 {
@@ -508,8 +550,12 @@ namespace LinqPadless
 
                     if (namespaces.Any())
                     {
-                        log.WriteLine($"Imports ({query.Namespaces.Count:N0}):");
-                        log.WriteLines(from ns in namespaces select "- " + ns.Name + (ns.IsDefaulted ? "*" : null));
+                        log.WriteLine($"Imports ({namespaces.Length:N0}):");
+                        log.WriteLines(from ns in namespaces
+                                       select "- "
+                                            + ns.Name
+                                            + (ns.IsDefaulted ? "*" : null)
+                                            + ns.QueryPath.Map(p =>  $" <{p}>").OrDefault());
                     }
                 }
 
@@ -535,7 +581,8 @@ namespace LinqPadless
         }
 
         static void GenerateExecutable(string srcDirPath, string binDirPath,
-            LinqPadQuery query, IEnumerable<string> imports,
+            LinqPadQuery query,
+            IEnumerable<string> imports,
             IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             string dotnetPath, IndentingLineWriter log)
@@ -609,7 +656,6 @@ namespace LinqPadless
 
             var source = query.Code;
 
-
             program =
                 Detemplate(program, "path-string",
                     SyntaxFactory.Literal(query.FilePath).ToString());
@@ -622,10 +668,10 @@ namespace LinqPadless
 
             var (body, symbols)
                 = query.Language == LinqPadQueryLanguage.Expression
-                ? (Detemplate(program, "expression", "#line 1" + eol + source), noSymbols)
+                ? (GenerateExpressionProgram(query, program), noSymbols)
                 : query.Language == LinqPadQueryLanguage.Program
                 ? GenerateProgram(source, program)
-                : (Detemplate(program, "statements", "#line 1" + eol + source), noSymbols);
+                : (Detemplate(program, "statements", "#line 1" + eol + query.GetMergedCode()), noSymbols);
 
             var baseCompilationSymbol = "LINQPAD_" +
                 ( query.Language == LinqPadQueryLanguage.Expression ? "EXPRESSION"
@@ -676,88 +722,109 @@ namespace LinqPadless
                   exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
         }
 
-        enum QueryPartKind { Type, Namespace, Other }
+        static readonly (string Name, Func<ProgramQuery, MethodDeclarationSyntax> Getter)[] Hooks =
+        {
+            ("init"  , ld => ld.OnInit  ),
+            ("start" , ld => ld.OnStart ),
+            ("finish", ld => ld.OnFinish),
+        };
+
+        static string GenerateExpressionProgram(LinqPadQuery query, string template)
+        {
+            var eol = Environment.NewLine;
+            var code = query.Code;
+
+            if (query.Loads.Any())
+            {
+                var lns = query.Loads.Select(e => e.LineNumber).ToHashSet();
+                code = code.Lines()
+                            .Index(1)
+                            .Where(e => !lns.Contains(e.Key))
+                            .Select(e => e.Value)
+                            .ToDelimitedString(eol);
+            }
+
+            var program = Detemplate(template, "expression", "#line 1" + eol + code);
+
+            var loads =
+                ImmutableArray.CreateRange(
+                    from load in query.Loads
+                    where load.Language == LinqPadQueryLanguage.Program
+                    select ProgramQuery.Parse(load.Code));
+
+            var namespaces = new StringBuilder();
+            var types = new StringBuilder();
+            var others = new StringBuilder();
+
+            foreach (var (n, load) in loads.Index(1)
+                                           .MapKey(k => k.ToString(CultureInfo.InvariantCulture)))
+            {
+                namespaces.Append(FullSourceWithLineDirective(load.Namespaces, e => e));
+                types.Append(FullSourceWithLineDirective(load.Types, e => e));
+
+                others.Append(
+                    FullSourceWithLineDirective(
+                        load.Others,
+                        e => e is MethodDeclarationSyntax md && (   md == load.OnInit
+                                                                 || md == load.OnStart
+                                                                 || md == load.OnFinish
+                                                                 || md == load.Main)
+                           ? md.WithIdentifier(SyntaxFactory.Identifier(md.Identifier.ValueText + n))
+                           : e));
+            }
+
+            program =
+                Hooks.Aggregate(program, (p, h) =>
+                    Detemplate(p, "expression-hook-" + h.Name,
+                               Lazy.Create(() =>
+                               loads.Select(h.Getter)
+                                    .Index(1)
+                                    .Choose(e => e.Value is MethodDeclarationSyntax md
+                                                ? Some(FormattableString.Invariant($"{md.Identifier}{e.Key}();"))
+                                                : default)
+                                    .ToDelimitedString(eol))));
+
+            program = Detemplate(program, "expression-namespaces", namespaces.ToString());
+            program = Detemplate(program, "expression-types", types.ToString());
+            return Detemplate(program, "expression-others", others.ToString());
+        }
+
+        static string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, SyntaxNode> nf)
+            where T : SyntaxNode
+        {
+            return nns.Select(e => "#line " +
+                                   GetLineNumber(e).ToString(CultureInfo.InvariantCulture)
+                                 + Environment.NewLine
+                                 + nf(e).ToFullString())
+                      .Append(Environment.NewLine)
+                      .ToDelimitedString(string.Empty);
+
+            static int GetLineNumber(SyntaxNode node) =>
+                node.SyntaxTree.GetLineSpan(node.FullSpan).StartLinePosition.Line + 1;
+        }
+
 
         static (string Source, IEnumerable<string> CompilationSymbols)
             GenerateProgram(string source, string template)
         {
-            var eol = Environment.NewLine;
-
-            var syntaxTree =
-                CSharpSyntaxTree.ParseText(source,
-                                           CSharpParseOptions.Default.WithKind(SourceCodeKind.Script));
-
-            var parts =
-                syntaxTree
-                    .GetRoot()
-                    .ChildNodes()
-                    .Select(n => new
-                    {
-                        LineNumber = syntaxTree.GetLineSpan(n.FullSpan).StartLinePosition.Line + 1,
-                        Node = n,
-                    })
-                    .GroupBy(e =>
-                        e.Node switch
-                        {
-                            ClassDeclarationSyntax cds
-                                when cds.Members.OfType<MethodDeclarationSyntax>()
-                                                .Any(mds => mds.ParameterList.Parameters.Count > 0
-                                                         && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))) =>
-                                QueryPartKind.Type,
-                            NamespaceDeclarationSyntax _ => QueryPartKind.Namespace,
-                            _ => QueryPartKind.Other
-                        })
-                    .Partition(QueryPartKind.Type, QueryPartKind.Namespace, QueryPartKind.Other,
-                        (tds, nsds, etc, _) => _.Any() ? throw new NotSupportedException() :
-                            new
-                            {
-                                Types  = from e in tds
-                                         select new
-                                         {
-                                             e.LineNumber,
-                                             Node = (TypeDeclarationSyntax) e.Node
-                                         },
-                                Namespaces =
-                                         from e in nsds
-                                         select new
-                                         {
-                                             e.LineNumber,
-                                             Node = (NamespaceDeclarationSyntax) e.Node
-                                         },
-                                // ReSharper disable PossibleMultipleEnumeration
-                                Main   = etc.Choose(e => e.Node is MethodDeclarationSyntax md && "Main" == md.Identifier.Text
-                                                       ? Some(new { e.LineNumber, Node = md })
-                                                       : default)
-                                            .SingleOrNone()
-                                            .Match(some: some => some,
-                                                   none: () => throw new Exception("Program entry-point method (Main) not found.")),
-                                Others = etc,
-                                // ReSharper restore PossibleMultipleEnumeration
-                            });
-
-            string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, int> lf, Func<T, SyntaxNode> nf) =>
-                nns.Select(e => "#line " + lf(e).ToString(CultureInfo.InvariantCulture) + eol
-                              + nf(e).ToFullString())
-                   .Append(eol)
-                   .ToDelimitedString(string.Empty);
+            var parts = ProgramQuery.Parse(source);
 
             var program =
                 Detemplate(template, "program-namespaces",
-                    FullSourceWithLineDirective(parts.Namespaces, e => e.LineNumber, e => e.Node));
+                    FullSourceWithLineDirective(parts.Namespaces, e => e));
 
             program =
                 Detemplate(program, "program-types",
-                    FullSourceWithLineDirective(parts.Types, e => e.LineNumber, e => e.Node));
+                    FullSourceWithLineDirective(parts.Types, e => e));
 
-            var main = parts.Main.Node;
+            var main = parts.Main;
 
             program =
                 Detemplate(program, "program",
                     FullSourceWithLineDirective(parts.Others,
-                        e => e.LineNumber,
-                        e => e.Node == main
+                        e => e == main
                            ? main.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
-                           : e.Node));
+                           : e));
 
             var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
             var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
@@ -978,5 +1045,116 @@ namespace LinqPadless
     static class Utf8
     {
         public static readonly Encoding BomlessEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    }
+}
+
+namespace LinqPadless
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Collections.Immutable;
+    using System.Linq;
+    using Microsoft.CodeAnalysis;
+    using Microsoft.CodeAnalysis.CSharp;
+    using Microsoft.CodeAnalysis.CSharp.Syntax;
+    using Optuple.Collections;
+    using Optuple;
+    using static MoreLinq.Extensions.ChooseExtension;
+    using static MoreLinq.Extensions.PartitionExtension;
+    using static Optuple.OptionModule;
+
+    sealed class ProgramQuery
+    {
+        public MethodDeclarationSyntax Main { get; }
+        public MethodDeclarationSyntax OnInit { get; }
+        public MethodDeclarationSyntax OnStart { get; }
+        public MethodDeclarationSyntax OnFinish { get; }
+        public MethodDeclarationSyntax Hijack { get; }
+        public ImmutableArray<SyntaxNode> Others { get; }
+        public ImmutableArray<TypeDeclarationSyntax> Types { get; }
+        public ImmutableArray<NamespaceDeclarationSyntax> Namespaces { get; }
+
+        ProgramQuery(MethodDeclarationSyntax main,
+                     MethodDeclarationSyntax onInit,
+                     MethodDeclarationSyntax onStart,
+                     MethodDeclarationSyntax onFinish,
+                     MethodDeclarationSyntax hijack,
+                     ImmutableArray<SyntaxNode> others,
+                     ImmutableArray<TypeDeclarationSyntax> types,
+                     ImmutableArray<NamespaceDeclarationSyntax> namespaces)
+        {
+            Main = main;
+            OnInit = onInit;
+            OnStart = onStart;
+            OnFinish = onFinish;
+            Hijack = hijack;
+            Others = others;
+            Types = types;
+            Namespaces = namespaces;
+        }
+
+        enum QueryPartKind { Type, Namespace, Other }
+
+        public static ProgramQuery Parse(string source)
+        {
+            var syntaxTree =
+                CSharpSyntaxTree.ParseText(source,
+                                           CSharpParseOptions.Default.WithKind(SourceCodeKind.Script));
+
+            var parts =
+                syntaxTree
+                    .GetRoot()
+                    .ChildNodes()
+                    .GroupBy(e =>
+                        e switch
+                        {
+                            ClassDeclarationSyntax cds
+                                when cds.Members.OfType<MethodDeclarationSyntax>()
+                                                .Any(mds => mds.ParameterList.Parameters.Count > 0
+                                                         && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))) =>
+                                QueryPartKind.Type,
+                            NamespaceDeclarationSyntax _ => QueryPartKind.Namespace,
+                            _ => QueryPartKind.Other
+                        })
+                    .Partition(QueryPartKind.Type, QueryPartKind.Namespace, QueryPartKind.Other,
+                        (tds, nsds, etc, _) => _.Any() ? throw new NotSupportedException() :
+                            new
+                            {
+                                Types    = tds.Cast<TypeDeclarationSyntax>(),
+                                Namespaces = nsds.Cast<NamespaceDeclarationSyntax>(),
+                                // ReSharper disable PossibleMultipleEnumeration
+                                OnInit   = FindMethod(etc, "OnInit"  , IsSimpleMethod).OrDefault(),
+                                OnStart  = FindMethod(etc, "OnStart" , IsSimpleMethod).OrDefault(),
+                                OnFinish = FindMethod(etc, "OnFinish", IsSimpleMethod).OrDefault(),
+                                Hijack   = FindMethod(etc, "Hijack"  , IsSimpleMethod).OrDefault(),
+                                Main     = FindMethod(etc, "Main")
+                                               .Match(some: some => some,
+                                                      none: () => throw new Exception("Program entry-point method (Main) not found.")),
+                                Others   = etc,
+                                // ReSharper restore PossibleMultipleEnumeration
+                            });
+
+            if (parts.Hijack != null)
+                throw new NotSupportedException("The Hijack hook method is not yet supported.");
+
+           return new ProgramQuery(parts.Main, parts.OnInit, parts.OnStart, parts.OnFinish, parts.Hijack,
+                                    ImmutableArray.CreateRange(parts.Others),
+                                    ImmutableArray.CreateRange(parts.Types),
+                                    ImmutableArray.CreateRange(parts.Namespaces));
+
+            static bool IsSimpleMethod(MethodDeclarationSyntax md)
+                => md.ReturnType is PredefinedTypeSyntax pts
+                && pts.Keyword.IsKind(SyntaxKind.VoidKeyword)
+                && md.ParameterList.Parameters.Count == 0;
+
+            static (bool, MethodDeclarationSyntax)
+                FindMethod(IEnumerable<SyntaxNode> etc, string name, Func<MethodDeclarationSyntax, bool> predicate = null) =>
+                    etc.Choose(e => e is MethodDeclarationSyntax md
+                                    && name == md.Identifier.Text
+                                    && (predicate?.Invoke(md) ?? true)
+                                  ? Some(md)
+                                  : default)
+                       .SingleOrNone();
+        }
     }
 }

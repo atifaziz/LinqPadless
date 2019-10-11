@@ -31,6 +31,10 @@
     <OutputPath>..\bin\Release\</OutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$(TargetFramework) == 'netcoreapp2.1' Or $(TargetFramework) == 'netcoreapp2.2'">
+    <DefineConstants>$(DefineConstants);SYSTEM_INDEX</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Remove="dotnet.cmd" />
     <None Remove="dotnet.sh" />
@@ -50,6 +54,7 @@
   <ItemGroup>
     <PackageReference Include="Choices" Version="1.0.1" />
     <PackageReference Include="CSharpMinifier" Version="1.2.0" />
+    <PackageReference Include="KeyValuePairs" Version="1.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.3.1" />
     <PackageReference Include="morelinq" Version="3.2.0" />
     <PackageReference Include="NuGet.Versioning" Version="5.2.0" />
