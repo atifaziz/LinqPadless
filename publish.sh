@@ -2,4 +2,6 @@
 set -e
 cd "$(dirname "$0")"
 ./build.sh
-dotnet publish --no-restore --no-build -c Release -o ../dist/bin src
+for f in 3.0 2.2 2.1; do
+    dotnet publish --no-restore --no-build -c Release -f netcoreapp$f -o dist/bin/$f src
+done
