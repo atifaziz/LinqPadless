@@ -45,6 +45,7 @@ namespace LinqPadless
     using Optuple.RegularExpressions;
     using static Minifier;
     using static MoreLinq.Extensions.ChooseExtension;
+    using static MoreLinq.Extensions.DistinctByExtension;
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.IndexExtension;
@@ -501,6 +502,8 @@ namespace LinqPadless
 
                 var allQueries =
                     query.Loads
+                         .Where(q => q.Language == LinqPadQueryLanguage.Statements
+                                  || q.Language == LinqPadQueryLanguage.Expression)
                          .Select(q => new
                          {
                              q.GetQuery().Namespaces,
@@ -568,6 +571,22 @@ namespace LinqPadless
                                    references, templateFiles, dotnetPath, log);
             }
         }
+
+        static IEnumerable<(string Namespace, bool IsDefaulted)>
+            ProcessNamespaceDirectives(IEnumerable<string> namespaces, IEnumerable<string> removals) =>
+                LinqPad.DefaultNamespaces
+                    .Except(removals, StringComparer.Ordinal)
+                    .Select(ns => (ns, true))
+                    .Concat(
+                        from ns in namespaces
+                        select ns.StartsWith("static ", StringComparison.Ordinal)
+                             ? ns.Split2(' ').MapItems((_, t) => (Left: "static ", Right: t))
+                             : ns.IndexOf('=') > 0
+                             ? ns.Split2('=').MapItems((id, nst) => (Left: id + "=", Right: nst))
+                             : (Left: null, Right: ns)
+                        into ns
+                        select (ns.Left + Regex.Replace(ns.Right, @"\s+", string.Empty), false))
+                    .DistinctBy(((string Namespace, bool) e) => e.Namespace, StringComparer.Ordinal);
 
         [Flags]
         enum MainReturnTypeTraits
@@ -654,8 +673,6 @@ namespace LinqPadless
                     return $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]";
                 });
 
-            var source = query.Code;
-
             program =
                 Detemplate(program, "path-string",
                     SyntaxFactory.Literal(query.FilePath).ToString());
@@ -664,13 +681,28 @@ namespace LinqPadless
                 Detemplate(program, "source-string",
                     () => SyntaxFactory.Literal(query.Code).ToString());
 
+            var loads =
+                ImmutableArray.CreateRange(
+                    from load in query.Loads.Index(1)
+                    where load.Value.Language == LinqPadQueryLanguage.Program
+                    select load.WithValue(ProgramQuery.Parse(load.Value.Code)));
+
+            program = Hooks.Aggregate(program, (p, h) =>
+                Detemplate(p, $"hook-{h.Name}",
+                           Lazy.Create(() =>
+                               loads.MapValue(h.Getter)
+                                    .Choose(e => e.Value is MethodDeclarationSyntax md
+                                               ? Some(FormattableString.Invariant($"q => q.{md.Identifier}{e.Key}"))
+                                               : default)
+                                    .ToDelimitedString(", "))));
+
             var noSymbols = Enumerable.Empty<string>();
 
             var (body, symbols)
                 = query.Language == LinqPadQueryLanguage.Expression
                 ? (GenerateExpressionProgram(query, program), noSymbols)
                 : query.Language == LinqPadQueryLanguage.Program
-                ? GenerateProgram(source, program)
+                ? GenerateProgram(query, program)
                 : (Detemplate(program, "statements", "#line 1" + eol + query.GetMergedCode()), noSymbols);
 
             var baseCompilationSymbol = "LINQPAD_" +
@@ -683,7 +715,7 @@ namespace LinqPadless
             if (body != null)
                 File.WriteAllLines(csFilePath,
                     Seq.Return("#define LPLESS",
-                               "#define LPLESS_TEMPLATE_V1",
+                               "#define LPLESS_TEMPLATE_V2",
                                "#define " + baseCompilationSymbol)
                        .Concat(from s in symbols
                                select $"#define {baseCompilationSymbol}_{s}")
@@ -699,6 +731,38 @@ namespace LinqPadless
                 using var s = content.Open();
                 using var w = File.Create(Path.Combine(srcDirPath, name));
                 s.CopyTo(w);
+            }
+
+            var loadedSources =
+                from load in query.Loads.Index(1)
+                where load.Value.Language == LinqPadQueryLanguage.Program
+                let pq = ProgramQuery.Parse(load.Value.GetQuery().Code)
+                select
+                    load.WithValue(
+                        ProcessNamespaceDirectives(load.Value.Namespaces, load.Value.NamespaceRemovals)
+                            .Select(e => $"using {e.Namespace};")
+                            .Concat(new[]
+                            {
+                                "partial class UserQuery",
+                                "{",
+                                FullSourceWithLineDirective(
+                                    pq.Others.Where(sn => !(sn is MethodDeclarationSyntax md) || md != pq.Main),
+                                    e => e is MethodDeclarationSyntax md && (   md == pq.OnInit
+                                                                             || md == pq.OnStart
+                                                                             || md == pq.OnFinish
+                                                                             || md == pq.Main)
+                                       ? md.WithIdentifier(SyntaxFactory.Identifier(md.Identifier.ValueText + load.Key))
+                                       : e),
+                                "}",
+                                FullSourceWithLineDirective(pq.Types),
+                                FullSourceWithLineDirective(pq.Namespaces),
+                            }));
+
+            foreach (var (n, lines) in loadedSources)
+            {
+                using var w = new StreamWriter(Path.Combine(srcDirPath, FormattableString.Invariant($"Load{n}.cs")), false, Utf8.BomlessEncoding);
+                foreach (var line in lines)
+                    w.WriteLine(line);
             }
 
             var quiet = log == null;
@@ -732,17 +796,7 @@ namespace LinqPadless
         static string GenerateExpressionProgram(LinqPadQuery query, string template)
         {
             var eol = Environment.NewLine;
-            var code = query.Code;
-
-            if (query.Loads.Any())
-            {
-                var lns = query.Loads.Select(e => e.LineNumber).ToHashSet();
-                code = code.Lines()
-                            .Index(1)
-                            .Where(e => !lns.Contains(e.Key))
-                            .Select(e => e.Value)
-                            .ToDelimitedString(eol);
-            }
+            var code = query.FormatCodeWithLoadDirectivesCommented();
 
             var program = Detemplate(template, "expression", "#line 1" + eol + code);
 
@@ -752,42 +806,20 @@ namespace LinqPadless
                     where load.Language == LinqPadQueryLanguage.Program
                     select ProgramQuery.Parse(load.Code));
 
-            var namespaces = new StringBuilder();
-            var types = new StringBuilder();
-            var others = new StringBuilder();
-
-            foreach (var (n, load) in loads.Index(1)
-                                           .MapKey(k => k.ToString(CultureInfo.InvariantCulture)))
-            {
-                namespaces.Append(FullSourceWithLineDirective(load.Namespaces, e => e));
-                types.Append(FullSourceWithLineDirective(load.Types, e => e));
-
-                others.Append(
-                    FullSourceWithLineDirective(
-                        load.Others,
-                        e => e is MethodDeclarationSyntax md && (   md == load.OnInit
-                                                                 || md == load.OnStart
-                                                                 || md == load.OnFinish
-                                                                 || md == load.Main)
-                           ? md.WithIdentifier(SyntaxFactory.Identifier(md.Identifier.ValueText + n))
-                           : e));
-            }
-
-            program =
+            return
                 Hooks.Aggregate(program, (p, h) =>
                     Detemplate(p, "expression-hook-" + h.Name,
                                Lazy.Create(() =>
-                               loads.Select(h.Getter)
-                                    .Index(1)
-                                    .Choose(e => e.Value is MethodDeclarationSyntax md
-                                                ? Some(FormattableString.Invariant($"{md.Identifier}{e.Key}();"))
-                                                : default)
-                                    .ToDelimitedString(eol))));
-
-            program = Detemplate(program, "expression-namespaces", namespaces.ToString());
-            program = Detemplate(program, "expression-types", types.ToString());
-            return Detemplate(program, "expression-others", others.ToString());
+                                   loads.Select(h.Getter)
+                                        .Index(1)
+                                        .Choose(e => e.Value is MethodDeclarationSyntax md
+                                                   ? Some(FormattableString.Invariant($"{md.Identifier}{e.Key}();"))
+                                                   : default)
+                                        .ToDelimitedString(eol))));
         }
+
+        static string FullSourceWithLineDirective(IEnumerable<SyntaxNode> sns) =>
+            FullSourceWithLineDirective(sns, sn => sn);
 
         static string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, SyntaxNode> nf)
             where T : SyntaxNode
@@ -805,9 +837,9 @@ namespace LinqPadless
 
 
         static (string Source, IEnumerable<string> CompilationSymbols)
-            GenerateProgram(string source, string template)
+            GenerateProgram(LinqPadQuery query, string template)
         {
-            var parts = ProgramQuery.Parse(source);
+            var parts = ProgramQuery.Parse(query.FormatCodeWithLoadDirectivesCommented());
 
             var program =
                 Detemplate(template, "program-namespaces",
@@ -819,12 +851,30 @@ namespace LinqPadless
 
             var main = parts.Main;
 
+            var loadedStatements = Lazy.Create(() =>
+                ((BlockSyntax)SyntaxFactory
+                    .ParseStatement(Seq.Return("{", query.GetMergedCode(true), ";", "}")
+                                       .ToDelimitedString(Environment.NewLine))).Statements);
+
+            var newMain =
+                query.Loads.Any(q => q.Language == LinqPadQueryLanguage.Expression
+                                  || q.Language == LinqPadQueryLanguage.Statements)
+                ? main.ExpressionBody is ArrowExpressionClauseSyntax arrow
+                  ? main.WithExpressionBody(null).WithSemicolonToken(default)
+                        .WithBody(SyntaxFactory.Block(loadedStatements.Value.Add(SyntaxFactory.ExpressionStatement(arrow.Expression))))
+                        .NormalizeWhitespace()
+                  : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(main.Body.Statements)))
+                : main;
+
             program =
                 Detemplate(program, "program",
                     FullSourceWithLineDirective(parts.Others,
-                        e => e == main
-                           ? main.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
-                           : e));
+                        e =>  e == main
+                            ? newMain.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
+                            : e is MethodDeclarationSyntax md && (e == parts.OnInit || e == parts.OnStart || e == parts.OnFinish)
+                            ? md.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword)
+                                .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")))
+                            : e));
 
             var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
             var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));

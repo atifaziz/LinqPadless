@@ -189,31 +189,45 @@ namespace LinqPadless
         public override string ToString() => Source;
     }
 
-    static class LinqPadQueryExtensions
+    static partial class LinqPadQueryExtensions
     {
-        public static string GetMergedCode(this LinqPadQuery query)
+        public static string GetMergedCode(this LinqPadQuery query, bool skipSelf = false)
         {
-            var loads = query.Loads;
-            using var lq = loads.GetEnumerator();
+            if (query == null) throw new ArgumentNullException(nameof(query));
+
+            using var lq = query.Loads.GetEnumerator();
 
             if (!lq.MoveNext())
                 return query.Code;
 
+            var load = lq.Current;
             var code = new StringBuilder();
 
             var ln = 1;
             foreach (var line in query.Code.Lines())
             {
-                var load = lq.Current;
-                if (load.LineNumber == ln)
+                if (load?.LineNumber == ln)
                 {
                     code.AppendLine("//>>> " + line);
-                    code.Append("#line 1 \"").Append(load.Path).Append('"').AppendLine();
-                    code.AppendLine(load.Code);
+                    if (load.Language switch
+                        {
+                            LinqPadQueryLanguage.Statements => ("RunLoadedStatements(() => {", "})"),
+                            LinqPadQueryLanguage.Expression => ("DumpLoadedExpression(", ")"),
+                            _ => default
+                        }
+                        is (string prologue, string epilogue))
+                    {
+                        code.AppendLine(prologue)
+                            .Append("#line 1 \"").Append(load.Path).Append('"').AppendLine()
+                            .AppendLine(load.Code)
+                            .Append(epilogue).Append(';').AppendLine();
+                    };
                     code.AppendLine("//<<< " + line);
                     code.Append("#line ").Append(ln + 1).Append(" \"").Append(query.FilePath).Append('"').AppendLine();
+
+                    load = lq.MoveNext() ? lq.Current : null;
                 }
-                else
+                else if (!skipSelf)
                 {
                     code.AppendLine(line);
                 }
@@ -222,6 +236,28 @@ namespace LinqPadless
             }
 
             return code.ToString();
+        }
+    }
+}
+
+namespace LinqPadless
+{
+    using System;
+    using System.Linq;
+    using static MoreLinq.Extensions.IndexExtension;
+    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+
+    static partial class LinqPadQueryExtensions
+    {
+        public static string FormatCodeWithLoadDirectivesCommented(this LinqPadQuery query)
+        {
+            if (query.Loads.Count == 0)
+                return query.Code;
+            var lns = query.Loads.Select(e => e.LineNumber).ToHashSet();
+            return query.Code.Lines()
+                             .Index(1)
+                             .Select(e => (lns.Contains(e.Key) ? "// " : null) + e.Value)
+                             .ToDelimitedString(Environment.NewLine);
         }
     }
 }
