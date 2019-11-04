@@ -39,6 +39,8 @@ build_script:
 
     if ($isWindows) { .\pack.cmd ci-$id } else { ./pack.sh ci-$id }
 test_script:
+- cmd: test.cmd
+- sh: ./test.sh
 - sh: docker build -t lpless .
 - sh: docker run --rm lpless
 artifacts:

@@ -7,3 +7,6 @@
 !COPYING.txt
 !COPYING
 !LICENSE
+!.lplessroot
+!.lpless/templates/template
+!.lpless/cache/README
