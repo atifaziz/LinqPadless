@@ -834,7 +834,6 @@ namespace LinqPadless
         static int GetLineNumber(this SyntaxNode node) =>
             node.SyntaxTree.GetLineSpan(node.FullSpan).StartLinePosition.Line + 1;
 
-
         static (string Source, IEnumerable<string> CompilationSymbols)
             GenerateProgram(LinqPadQuery query, string template)
         {
