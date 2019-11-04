@@ -874,11 +874,11 @@ namespace LinqPadless
                 Detemplate(program, "program",
                     FullSourceWithLineDirective(parts.Others,
                         e =>  e == main
-                            ? newMain.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
-                            : e is MethodDeclarationSyntax md && (e == parts.OnInit || e == parts.OnStart || e == parts.OnFinish)
-                            ? md.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword)
-                                .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")))
-                            : e));
+                           ? newMain.WithIdentifier(SyntaxFactory.Identifier("RunUserAuthoredQuery"))
+                           : e is MethodDeclarationSyntax md && (e == parts.OnInit || e == parts.OnStart || e == parts.OnFinish)
+                           ? md.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword)
+                               .WithTrailingTrivia(SyntaxFactory.Whitespace(" ")))
+                           : e));
 
             var isAsync = main.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
             var isStatic = main.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
