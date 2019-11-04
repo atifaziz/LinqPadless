@@ -147,7 +147,11 @@ namespace LinqPadless
                            _ => throw new Exception("Invalid load directive: " + t.Text)
                        }
                        into d
-                       select new LinqPadQueryReference(Path.Join(Path.GetDirectoryName(FilePath), d.Path), d.Path, d.Line))),
+                       select new LinqPadQueryReference(Path.Join(Path.GetDirectoryName(FilePath),
+                                                                  Path.DirectorySeparatorChar == '\\'
+                                                                  ? d.Path
+                                                                  : d.Path.Replace('\\', Path.DirectorySeparatorChar)),
+                                                        d.Path, d.Line))),
                 _ => null,
             };
         }
