@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="linq\*.linq" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="linq\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
