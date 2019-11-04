@@ -49,7 +49,7 @@ partial class UserQuery
     partial void OnStart();
     partial void OnFinish();
 
-    static void RunLoadedStatements(Action action) =>
+    static void RunLoadedStatements(System.Action action) =>
         action();
 
     static void DumpLoadedExpression(object value) =>
@@ -58,7 +58,7 @@ partial class UserQuery
     static async System.Threading.Tasks.Task<int> Main(string[] args)
     {
         var query = new UserQuery();
-        void RunHook(params Func<UserQuery, Action>[] hooks)
+        void RunHook(params System.Func<UserQuery, System.Action>[] hooks)
         {
             foreach (var hook in hooks)
                 hook(query)();
