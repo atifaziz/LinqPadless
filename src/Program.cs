@@ -822,15 +822,13 @@ namespace LinqPadless
             FullSourceWithLineDirective(sns, sn => sn);
 
         static string FullSourceWithLineDirective<T>(IEnumerable<T> nns, Func<T, SyntaxNode> nf)
-            where T : SyntaxNode
-        {
-            return nns.Select(e => "#line " +
-                                   e.GetLineNumber().ToString(CultureInfo.InvariantCulture)
-                                 + Environment.NewLine
-                                 + nf(e).ToFullString())
-                      .Append(Environment.NewLine)
-                      .ToDelimitedString(string.Empty);
-        }
+            where T : SyntaxNode =>
+            nns.Select(e => "#line " +
+                            e.GetLineNumber().ToString(CultureInfo.InvariantCulture)
+                          + Environment.NewLine
+                          + nf(e).ToFullString())
+               .Append(Environment.NewLine)
+               .ToDelimitedString(string.Empty);
 
         static int GetLineNumber(this SyntaxNode node) =>
             node.SyntaxTree.GetLineSpan(node.FullSpan).StartLinePosition.Line + 1;
@@ -862,7 +860,6 @@ namespace LinqPadless
                 ? main.ExpressionBody is ArrowExpressionClauseSyntax arrow
                   ? main.WithExpressionBody(null).WithSemicolonToken(default)
                         .WithBody(SyntaxFactory.Block(loadedStatements.Value.Add(SyntaxFactory.ExpressionStatement(arrow.Expression))))
-                        .NormalizeWhitespace()
                   : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(
                       from stmt in main.Body.Statements.Index()
                       select stmt.Key == 0
