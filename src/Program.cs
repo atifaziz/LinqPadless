@@ -685,7 +685,7 @@ namespace LinqPadless
                 ImmutableArray.CreateRange(
                     from load in query.Loads.Index(1)
                     where load.Value.Language == LinqPadQueryLanguage.Program
-                    select load.WithValue(ProgramQuery.Parse(load.Value.Code)));
+                    select load.WithValue(ProgramQuery.Parse(load.Value.Code, load.Value.Path)));
 
             program = Hooks.Aggregate(program, (p, h) =>
                 Detemplate(p, $"hook-{h.Name}",
@@ -736,7 +736,7 @@ namespace LinqPadless
             var loadedSources =
                 from load in query.Loads.Index(1)
                 where load.Value.Language == LinqPadQueryLanguage.Program
-                let pq = ProgramQuery.Parse(load.Value.GetQuery().Code)
+                let pq = ProgramQuery.Parse(load.Value.GetQuery().Code, load.Value.Path)
                 select
                     load.WithValue(
                         ProcessNamespaceDirectives(load.Value.Namespaces, load.Value.NamespaceRemovals)
@@ -804,7 +804,7 @@ namespace LinqPadless
                 ImmutableArray.CreateRange(
                     from load in query.Loads
                     where load.Language == LinqPadQueryLanguage.Program
-                    select ProgramQuery.Parse(load.Code));
+                    select ProgramQuery.Parse(load.Code, load.Path));
 
             return
                 Hooks.Aggregate(program, (p, h) =>
@@ -825,6 +825,7 @@ namespace LinqPadless
             where T : SyntaxNode =>
             nns.Select(e => "#line " +
                             e.GetLineNumber().ToString(CultureInfo.InvariantCulture)
+                          + " \"" + e.SyntaxTree.FilePath + "\""
                           + Environment.NewLine
                           + nf(e).ToFullString())
                .Append(Environment.NewLine)
@@ -837,7 +838,7 @@ namespace LinqPadless
         static (string Source, IEnumerable<string> CompilationSymbols)
             GenerateProgram(LinqPadQuery query, string template)
         {
-            var parts = ProgramQuery.Parse(query.FormatCodeWithLoadDirectivesCommented());
+            var parts = ProgramQuery.Parse(query.FormatCodeWithLoadDirectivesCommented(), query.FilePath);
 
             var program =
                 Detemplate(template, "program-namespaces",

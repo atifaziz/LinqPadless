@@ -15,8 +15,8 @@ void Main()
     Console.WriteLine(typeof(Nested).FullName);
     Console.WriteLine(typeof(Namespace.UserQuery).FullName);
     Console.WriteLine(MoreEnumerable.Sequence(10, 0).ToDelimitedString(", "));
-    Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
-    Console.WriteLine($"Called line #{GetCalledLineNumber()}");
+    Console.WriteLine($"Caller @ {GetCallerLocation()}");
+    Console.WriteLine($"Called @ {GetCalledLocation()}");
 }
 
 void OnInit()   => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
@@ -35,7 +35,7 @@ void OnFinish() => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 //| UserQuery+Nested
 //| Namespace.UserQuery
 //| 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-//| Caller line #13
-//| Called line #2
+//| Caller @ ProgramLoadsProgram.linq:13
+//| Called @ LineNumber.linq:2
 //| OnFinish1
 //| OnFinish

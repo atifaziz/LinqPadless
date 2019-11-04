@@ -26,8 +26,8 @@ void Main() =>
             .Repeat("This is Program loading Expression", 3)
             .Index(1)
             .Select(e => $"{e.Key}. {e.Value}")
-            .Append($"Caller line #{GetCallerLineNumber()}")
-            .Append($"Called line #{GetCalledLineNumber()}")
+            .Append($"Caller @ {GetCallerLocation()}")
+            .Append($"Called @ {GetCalledLocation()}")
             .ToDelimitedString(Environment.NewLine));
 
 //< 0
@@ -35,5 +35,5 @@ void Main() =>
 //| 1. This is Program loading Expression
 //| 2. This is Program loading Expression
 //| 3. This is Program loading Expression
-//| Caller line #10
-//| Called line #2
+//| Caller @ 10
+//| Called @ 2

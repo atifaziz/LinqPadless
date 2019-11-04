@@ -15,8 +15,8 @@ void Main() =>
         typeof(Nested).FullName,
         typeof(Namespace.UserQuery).FullName,
         MoreEnumerable.Sequence(10, 0).ToDelimitedString(", "),
-        $"Caller line #{GetCallerLineNumber()}",
-        $"Called line #{GetCalledLineNumber()}"));
+        $"Caller @ {GetCallerLocation()}",
+        $"Called @ {GetCalledLocation()}"));
 
 void OnInit()   => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 void OnStart()  => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
@@ -34,7 +34,7 @@ void OnFinish() => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 //| UserQuery+Nested
 //| Namespace.UserQuery
 //| 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-//| Caller line #13
-//| Called line #2
+//| Caller @ 13
+//| Called @ 2
 //| OnFinish1
 //| OnFinish

@@ -13,8 +13,8 @@ Console.WriteLine("Extension".Extension());
 Console.WriteLine(typeof(Nested).FullName);
 Console.WriteLine(typeof(Namespace.UserQuery).FullName);
 Console.WriteLine(MoreEnumerable.Sequence(10, 0).ToDelimitedString(", "));
-Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
-Console.WriteLine($"Called line #{GetCalledLineNumber()}");
+Console.WriteLine($"Caller @ {GetCallerLocation()}");
+Console.WriteLine($"Called @ {GetCalledLocation()}");
 
 //< 0
 //| OnInit1
@@ -26,6 +26,6 @@ Console.WriteLine($"Called line #{GetCalledLineNumber()}");
 //| UserQuery+Nested
 //| Namespace.UserQuery
 //| 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-//| Caller line #11
-//| Called line #2
+//| Caller @ StatementsLoadsProgram.linq:11
+//| Called @ LineNumber.linq:2
 //| OnFinish1

@@ -2,11 +2,11 @@
   <Namespace>System.Runtime.CompilerServices</Namespace>
 </Query>
 
-int GetCallerLineNumber([CallerLineNumber]int line = 0) => line;
-int GetCalledLineNumber() => GetCallerLineNumber();
+string GetCallerLocation([CallerFilePath]string path = null, [CallerLineNumber]int line = 0) => $"{Path.GetFileName(path)}:{line}";
+string GetCalledLocation() => GetCallerLocation();
 
 void Main()
 {
-    Console.WriteLine(GetCallerLineNumber());
-    Console.WriteLine(GetCalledLineNumber());
+    Console.WriteLine(GetCallerLocation());
+    Console.WriteLine(GetCalledLocation());
 }

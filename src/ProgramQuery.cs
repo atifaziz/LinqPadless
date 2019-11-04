@@ -61,11 +61,12 @@ namespace LinqPadless
 
         enum QueryPartKind { Type, Namespace, Other }
 
-        public static ProgramQuery Parse(string source)
+        public static ProgramQuery Parse(string source, string path)
         {
             var syntaxTree =
                 CSharpSyntaxTree.ParseText(source,
-                                           CSharpParseOptions.Default.WithKind(SourceCodeKind.Script));
+                                           options: CSharpParseOptions.Default.WithKind(SourceCodeKind.Script),
+                                           path: path);
 
             var parts =
                 syntaxTree

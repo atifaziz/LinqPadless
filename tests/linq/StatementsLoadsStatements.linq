@@ -27,13 +27,13 @@ Console.WriteLine(
         .Select(e => $"{e.Key}. {e.Value}")
         .ToDelimitedString(Environment.NewLine));
 
-Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
-Console.WriteLine($"Called line #{GetCalledLineNumber()}");
+Console.WriteLine($"Caller @ {GetCallerLocation()}");
+Console.WriteLine($"Called @ {GetCalledLocation()}");
 
 //< 0
 //| Greetings from Statements!
 //| 1. This is Statements loading Statements
 //| 2. This is Statements loading Statements
 //| 3. This is Statements loading Statements
-//| Caller line #11
-//| Called line #2
+//| Caller @ StatementsLoadsStatements.linq:11
+//| Called @ LineNumber.linq:2

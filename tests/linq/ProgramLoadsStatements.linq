@@ -29,8 +29,8 @@ void Main()
             .Select(e => $"{e.Key}. {e.Value}")
             .ToDelimitedString(Environment.NewLine));
 
-    Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
-    Console.WriteLine($"Called line #{GetCalledLineNumber()}");
+    Console.WriteLine($"Caller @ {GetCallerLocation()}");
+    Console.WriteLine($"Called @ {GetCalledLocation()}");
 }
 
 //< 0
@@ -38,5 +38,5 @@ void Main()
 //| 1. This is Program loading Statements
 //| 2. This is Program loading Statements
 //| 3. This is Program loading Statements
-//| Caller line #13
-//| Called line #2
+//| Caller @ ProgramLoadsStatements.linq:13
+//| Called @ LineNumber.linq:2
