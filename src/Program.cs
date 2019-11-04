@@ -825,15 +825,15 @@ namespace LinqPadless
             where T : SyntaxNode
         {
             return nns.Select(e => "#line " +
-                                   GetLineNumber(e).ToString(CultureInfo.InvariantCulture)
+                                   e.GetLineNumber().ToString(CultureInfo.InvariantCulture)
                                  + Environment.NewLine
                                  + nf(e).ToFullString())
                       .Append(Environment.NewLine)
                       .ToDelimitedString(string.Empty);
-
-            static int GetLineNumber(SyntaxNode node) =>
-                node.SyntaxTree.GetLineSpan(node.FullSpan).StartLinePosition.Line + 1;
         }
+
+        static int GetLineNumber(this SyntaxNode node) =>
+            node.SyntaxTree.GetLineSpan(node.FullSpan).StartLinePosition.Line + 1;
 
 
         static (string Source, IEnumerable<string> CompilationSymbols)
@@ -863,7 +863,14 @@ namespace LinqPadless
                   ? main.WithExpressionBody(null).WithSemicolonToken(default)
                         .WithBody(SyntaxFactory.Block(loadedStatements.Value.Add(SyntaxFactory.ExpressionStatement(arrow.Expression))))
                         .NormalizeWhitespace()
-                  : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(main.Body.Statements)))
+                  : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(
+                      from stmt in main.Body.Statements.Index()
+                      select stmt.Key == 0
+                           ? stmt.Value.WithLeadingTrivia(
+                                 SyntaxFactory.Trivia(
+                                 SyntaxFactory.LineDirectiveTrivia(SyntaxFactory.Literal(stmt.Value.GetLineNumber()),
+                                                                   SyntaxFactory.Literal($"\"{query.FilePath}\"", query.FilePath), true).NormalizeWhitespace()))
+                           : stmt.Value)))
                 : main;
 
             program =

@@ -18,6 +18,7 @@
 </Query>
 
 #load ".\lib\Expression.linq"
+#load ".\lib\LineNumber.linq"
 
 void Main()
 {
@@ -27,6 +28,9 @@ void Main()
             .Index(1)
             .Select(e => $"{e.Key}. {e.Value}")
             .ToDelimitedString(Environment.NewLine));
+
+    Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
+    Console.WriteLine($"Called line #{GetCalledLineNumber()}");
 }
 
 //< 0
@@ -34,3 +38,5 @@ void Main()
 //| 1. This is Program loading Expression
 //| 2. This is Program loading Expression
 //| 3. This is Program loading Expression
+//| Caller line #13
+//| Called line #2

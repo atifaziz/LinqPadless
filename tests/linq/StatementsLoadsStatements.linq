@@ -18,6 +18,7 @@
 </Query>
 
 #load ".\lib\Statements.linq"
+#load ".\lib\LineNumber.linq"
 
 Console.WriteLine(
     Enumerable
@@ -26,8 +27,13 @@ Console.WriteLine(
         .Select(e => $"{e.Key}. {e.Value}")
         .ToDelimitedString(Environment.NewLine));
 
+Console.WriteLine($"Caller line #{GetCallerLineNumber()}");
+Console.WriteLine($"Called line #{GetCalledLineNumber()}");
+
 //< 0
 //| Greetings from Statements!
 //| 1. This is Statements loading Statements
 //| 2. This is Statements loading Statements
 //| 3. This is Statements loading Statements
+//| Caller line #11
+//| Called line #2

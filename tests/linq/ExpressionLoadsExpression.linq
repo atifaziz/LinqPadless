@@ -18,14 +18,19 @@
 </Query>
 
 #load ".\lib\Expression.linq"
+#load ".\lib\LineNumber.linq"
 
 Enumerable
     .Repeat("This is Expression loading Expression", 3)
     .Index(1)
     .Select(e => $"{e.Key}. {e.Value}")
+    .Append($"Caller line #{GetCallerLineNumber()}")
+    .Append($"Called line #{GetCalledLineNumber()}")
     .ToDelimitedString(Environment.NewLine)
 
 //< 0
 //| 1. This is Expression loading Expression
 //| 2. This is Expression loading Expression
 //| 3. This is Expression loading Expression
+//| Caller line #8
+//| Called line #2

@@ -1,6 +1,7 @@
 <Query Kind="Statements">
   <NuGetReference Version="3.2.0">morelinq</NuGetReference>
-  <Namespace>MoreLinq</Namespace>
+  <Namespace>static MoreLinq.Extensions.IndexExtension</Namespace>
+  <Namespace>static MoreLinq.Extensions.ToDelimitedStringExtension</Namespace>
   <RemoveNamespace>System.Collections</RemoveNamespace>
   <RemoveNamespace>System.Collections.Generic</RemoveNamespace>
   <RemoveNamespace>System.Data</RemoveNamespace>
