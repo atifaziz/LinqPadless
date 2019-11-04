@@ -798,7 +798,7 @@ namespace LinqPadless
             var eol = Environment.NewLine;
             var code = query.FormatCodeWithLoadDirectivesCommented();
 
-            var program = Detemplate(template, "expression", "#line 1" + eol + code);
+            var program = Detemplate(template, "expression", $"#line 1 \"{query.FilePath}\"{eol}{code}");
 
             var loads =
                 ImmutableArray.CreateRange(
@@ -841,11 +841,11 @@ namespace LinqPadless
 
             var program =
                 Detemplate(template, "program-namespaces",
-                    FullSourceWithLineDirective(parts.Namespaces, e => e));
+                    FullSourceWithLineDirective(parts.Namespaces));
 
             program =
                 Detemplate(program, "program-types",
-                    FullSourceWithLineDirective(parts.Types, e => e));
+                    FullSourceWithLineDirective(parts.Types));
 
             var main = parts.Main;
 
