@@ -34,7 +34,7 @@ void OnFinish() => Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 //| UserQuery+Nested
 //| Namespace.UserQuery
 //| 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
-//| Caller @ 13
-//| Called @ 2
+//| Caller @ ArrowProgramLoadsProgram.linq:13
+//| Called @ LineNumber.linq:2
 //| OnFinish1
 //| OnFinish
