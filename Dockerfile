@@ -1,4 +1,4 @@
-ARG DOTNET_SDK_VERSION=2.2.402
+ARG DOTNET_SDK_VERSION=3.0.100
 ARG PLATFORM=alpine3.9
 
 FROM mcr.microsoft.com/dotnet/core/sdk:3.0.100-${PLATFORM} AS build
@@ -10,10 +10,7 @@ COPY . /project
 
 WORKDIR /project
 
-RUN dotnet pack -c Release \
- && mkdir download \
- && wget -O - https://github.com/atifaziz/LinqPadlessProgramTemplate/tarball/master | tar -xz -C download \
- && mv download/* tmpl
+RUN dotnet pack -c Release src
 
 FROM mcr.microsoft.com/dotnet/core/sdk:${DOTNET_SDK_VERSION}-${PLATFORM} AS tool
 
@@ -31,11 +28,9 @@ COPY --from=tool /root/.dotnet/tools /root/.dotnet/tools
 
 ENV PATH=$PATH:/root/.dotnet/tools
 
-COPY --from=build /project/tmpl/.lpless /scripts/.lpless
-COPY --from=build /project/tmpl/.lplessroot /scripts
+COPY --from=build /project/.lpless /linq/.lpless
+COPY --from=build /project/.lplessroot /linq
 
-RUN mkdir /scripts/linq
-
-WORKDIR /scripts/linq
+WORKDIR /linq
 
 ENTRYPOINT [ "lpless" ]

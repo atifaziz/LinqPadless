@@ -16,6 +16,9 @@ indent_style = tab
 [*.{json,yml}]
 indent_size = 2
 
+[*.md]
+charset = utf-8
+
 [*.{cs,tt}]
 charset = utf-8
 indent_style = space
