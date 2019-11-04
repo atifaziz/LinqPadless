@@ -662,9 +662,9 @@ namespace LinqPadless
 
             program =
                 Detemplate(program, "imports",
-                    imports.GroupBy(e => e, StringComparer.Ordinal)
-                           .Select(ns => $"using {ns.First()};")
-                           .ToDelimitedString(eol));
+                    ProcessNamespaceDirectives(imports, Enumerable.Empty<string>())
+                        .Select(e => $"using {e.Namespace};")
+                        .ToDelimitedString(eol));
 
             program =
                 Detemplate(program, "generator", () =>
