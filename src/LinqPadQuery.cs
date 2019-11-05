@@ -297,5 +297,12 @@ namespace LinqPadless
                              .Select(e => (lns.Contains(e.Key) ? "// " : null) + e.Value)
                              .ToDelimitedString(Environment.NewLine);
         }
+
+        public static NotSupportedException ValidateSupported(this LinqPadQuery query) =>
+            !query.IsLanguageSupported
+            ? new NotSupportedException("Only LINQPad " +
+                                        "C# Statements and Expression queries are fully supported " +
+                                        "and C# Program queries partially in this version.")
+            : null;
     }
 }

@@ -125,8 +125,9 @@ namespace LinqPadless
 
             return command switch
             {
-                "cache" => CacheCommand(args),
-                "init"  => InitCommand(args).GetAwaiter().GetResult(),
+                "cache"  => CacheCommand(args),
+                "init"   => InitCommand(args).GetAwaiter().GetResult(),
+                "bundle" => BundleCommand(args),
                 _ => // ...
                     DefaultCommand(command, args, template, outDirPath,
                                    uncached: uncached || outDirPath != null,
@@ -148,12 +149,8 @@ namespace LinqPadless
         {
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
 
-            if (!query.IsLanguageSupported)
-            {
-                throw new NotSupportedException("Only LINQPad " +
-                                                "C# Statements and Expression queries are fully supported " +
-                                                "and C# Program queries partially in this version.");
-            }
+            if (query.ValidateSupported() is Exception e)
+                throw e;
 
             if (query.Loads.FirstOrNone(r => r.LoadPath.Length == 0
                                           || !Path.IsPathRooted(r.LoadPath)
