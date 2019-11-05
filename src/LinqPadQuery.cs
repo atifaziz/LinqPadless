@@ -26,6 +26,7 @@ namespace LinqPadless
     using System.Text;
     using System.Xml.Linq;
     using CSharpMinifier;
+    using Mannex.IO;
     using MoreLinq.Extensions;
     using NuGet.Versioning;
 
@@ -132,6 +133,8 @@ namespace LinqPadless
                                string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
                                (bool?) nr.Attribute("Prerelease") ?? false)));
 
+            var dirPath = Path.GetDirectoryName(FilePath);
+
             _loads = parseLoads switch
             {
                 true =>
@@ -147,13 +150,44 @@ namespace LinqPadless
                            _ => throw new Exception("Invalid load directive: " + t.Text)
                        }
                        into d
-                       select new LinqPadQueryReference(Path.Join(Path.GetDirectoryName(FilePath),
-                                                                  Path.DirectorySeparatorChar == '\\'
-                                                                  ? d.Path
-                                                                  : d.Path.Replace('\\', Path.DirectorySeparatorChar)),
-                                                        d.Path, d.Line))),
+                       select (d.Line, Path: Path.DirectorySeparatorChar == '\\'
+                                           ? d.Path
+                                           : d.Path.Replace('\\', Path.DirectorySeparatorChar))
+                       into d
+                       select new LinqPadQueryReference(ResolvePath(d.Path), d.Path, d.Line))),
                 _ => null,
             };
+
+            string ResolvePath(string pathSpec)
+            {
+                const string dots = "...";
+
+                if (!pathSpec.StartsWith(dots, StringComparison.Ordinal))
+                    return Path.GetFullPath(pathSpec, dirPath);
+
+                var slashPath = pathSpec.AsSpan(dots.Length);
+
+                if (slashPath.Length < 2)
+                    throw InvalidLoadDirectivePathError(pathSpec);
+
+                var slash = slashPath[0];
+                if (slash != Path.DirectorySeparatorChar && slash != Path.AltDirectorySeparatorChar)
+                    throw InvalidLoadDirectivePathError(pathSpec);
+
+                var path = slashPath.Slice(1);
+
+                foreach (var dir in new DirectoryInfo(dirPath).SelfAndParents())
+                {
+                    var testPath = Path.Join(dir.FullName, path);
+                    if (File.Exists(testPath))
+                        return testPath;
+                }
+
+                throw new FileNotFoundException("File not found: " + pathSpec);
+            }
+
+            static Exception InvalidLoadDirectivePathError(string path) =>
+                throw new Exception("Invalid load directive path: " + path);
         }
 
         public bool IsLanguageSupported

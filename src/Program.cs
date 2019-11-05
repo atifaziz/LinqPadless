@@ -155,6 +155,13 @@ namespace LinqPadless
                                                 "and C# Program queries partially in this version.");
             }
 
+            if (query.Loads.FirstOrNone(r => r.LoadPath.Length == 0
+                                          || !Path.IsPathRooted(r.LoadPath)
+                                          && r.LoadPath[0] != '.') is (true, var r))
+            {
+                throw new NotSupportedException($"Unsupported path \"{r.LoadPath}\" in load directive on line {r.LineNumber}.");
+            }
+
             if (template?.Length == 0)
                 throw new Exception("Template name cannot be empty.");
 
