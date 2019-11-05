@@ -100,6 +100,12 @@ namespace LinqPadless
             from e in source select e.Value;
     }
 
+    static class TupleExtensions
+    {
+        public static TResult MapItems<T1, T2, TResult>(this ValueTuple<T1, T2> tuple, Func<T1, T2, TResult> mapper) =>
+            mapper(tuple.Item1, tuple.Item2);
+    }
+
     static class XmlExtensions
     {
         public static (bool Found, XElement Element) FindElement(this XContainer element, XName name) =>

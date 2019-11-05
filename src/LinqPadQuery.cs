@@ -23,7 +23,10 @@ namespace LinqPadless
     using System.Collections.ObjectModel;
     using System.IO;
     using System.Linq;
+    using System.Text;
     using System.Xml.Linq;
+    using CSharpMinifier;
+    using Mannex.IO;
     using MoreLinq.Extensions;
     using NuGet.Versioning;
 
@@ -54,6 +57,7 @@ namespace LinqPadless
         readonly Lazy<ReadOnlyCollection<string>> _namespaces;
         readonly Lazy<ReadOnlyCollection<string>> _namespaceRemovals;
         readonly Lazy<ReadOnlyCollection<PackageReference>> _packageReferences;
+        readonly Lazy<ReadOnlyCollection<LinqPadQueryReference>> _loads;
         readonly Lazy<string> _code;
 
         public string FilePath { get; }
@@ -63,18 +67,34 @@ namespace LinqPadless
         public IReadOnlyCollection<string> Namespaces => _namespaces.Value;
         public IReadOnlyCollection<string> NamespaceRemovals => _namespaceRemovals.Value;
         public IReadOnlyCollection<PackageReference> PackageReferences => _packageReferences.Value;
+        public IReadOnlyCollection<LinqPadQueryReference> Loads => _loads?.Value ?? ZeroLinqPadQueryReferences;
         public string Code => _code.Value;
 
-        public static LinqPadQuery Load(string path) =>
-            Parse(File.ReadAllText(path), path);
+        static readonly IReadOnlyCollection<LinqPadQueryReference>
+            ZeroLinqPadQueryReferences = new LinqPadQueryReference[0];
 
-        public static LinqPadQuery Parse(string source, string path)
+        public static LinqPadQuery Load(string path) =>
+            Load(path, parseLoads: true);
+
+        public static LinqPadQuery Parse(string source, string path) =>
+            Parse(source, path, parseLoads: true);
+
+        public static LinqPadQuery LoadReferencedQuery(string path) =>
+            Load(path, parseLoads: false);
+
+        public static LinqPadQuery ParseReferencedQuery(string source, string path) =>
+            Parse(source, path, parseLoads: false);
+
+        static LinqPadQuery Load(string path, bool parseLoads) =>
+            Parse(File.ReadAllText(path), path, parseLoads);
+
+        static LinqPadQuery Parse(string source, string path, bool parseLoads)
         {
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
-            return new LinqPadQuery(path, source, eomLineNumber);
+            return new LinqPadQuery(path, source, eomLineNumber, parseLoads);
         }
 
-        LinqPadQuery(string filePath, string source, int eomLineNumber)
+        LinqPadQuery(string filePath, string source, int eomLineNumber, bool parseLoads)
         {
             FilePath = filePath;
             Source = source;
@@ -112,6 +132,62 @@ namespace LinqPadless
                     select new PackageReference((string) nr,
                                string.IsNullOrEmpty(v) ? null : NuGetVersion.Parse(v),
                                (bool?) nr.Attribute("Prerelease") ?? false)));
+
+            var dirPath = Path.GetDirectoryName(FilePath);
+
+            _loads = parseLoads switch
+            {
+                true =>
+                   Lazy.Create(() => ReadOnlyCollection(
+                       from t in Scanner.Scan(Code)
+                       where t.Kind == TokenKind.PreprocessorDirective
+                       select (t.Start.Line, Text: t.Substring(Code)) into t
+                       select (t.Line, t.Text, Parts: t.Text.Split2(' ', StringSplitOptions.RemoveEmptyEntries)) into t
+                       where t.Parts.Item1 == "#load"
+                       select t.Parts.Item2 switch
+                       {
+                           var p when p.Length > 2 && p[0] == '"' && p[^1] == '"' => (t.Line, Path: p.Substring(1, p.Length - 2)),
+                           _ => throw new Exception("Invalid load directive: " + t.Text)
+                       }
+                       into d
+                       select (d.Line, Path: Path.DirectorySeparatorChar == '\\'
+                                           ? d.Path
+                                           : d.Path.Replace('\\', Path.DirectorySeparatorChar))
+                       into d
+                       select new LinqPadQueryReference(ResolvePath(d.Path), d.Path, d.Line))),
+                _ => null,
+            };
+
+            string ResolvePath(string pathSpec)
+            {
+                const string dots = "...";
+
+                if (!pathSpec.StartsWith(dots, StringComparison.Ordinal))
+                    return Path.GetFullPath(pathSpec, dirPath);
+
+                var slashPath = pathSpec.AsSpan(dots.Length);
+
+                if (slashPath.Length < 2)
+                    throw InvalidLoadDirectivePathError(pathSpec);
+
+                var slash = slashPath[0];
+                if (slash != Path.DirectorySeparatorChar && slash != Path.AltDirectorySeparatorChar)
+                    throw InvalidLoadDirectivePathError(pathSpec);
+
+                var path = slashPath.Slice(1);
+
+                foreach (var dir in new DirectoryInfo(dirPath).SelfAndParents())
+                {
+                    var testPath = Path.Join(dir.FullName, path);
+                    if (File.Exists(testPath))
+                        return testPath;
+                }
+
+                throw new FileNotFoundException("File not found: " + pathSpec);
+            }
+
+            static Exception InvalidLoadDirectivePathError(string path) =>
+                throw new Exception("Invalid load directive path: " + path);
         }
 
         public bool IsLanguageSupported
@@ -120,5 +196,106 @@ namespace LinqPadless
             || Language == LinqPadQueryLanguage.Program;
 
         public override string ToString() => Source;
+    }
+
+    sealed class LinqPadQueryReference
+    {
+        readonly Lazy<LinqPadQuery> _query;
+
+        public LinqPadQueryReference(string path, string loadPath, int lineNumber)
+        {
+            Path = path;
+            LoadPath = loadPath;
+            LineNumber = lineNumber;
+            _query = Lazy.Create(() => LinqPadQuery.LoadReferencedQuery(path));
+        }
+
+        public int LineNumber { get; }
+        public string Path { get; }
+        public string LoadPath { get; }
+
+        public LinqPadQuery GetQuery() => _query.Value;
+
+        public string Source => GetQuery().Source;
+        public LinqPadQueryLanguage Language => GetQuery().Language;
+        public XElement MetaElement => GetQuery().MetaElement;
+        public IReadOnlyCollection<string> Namespaces => GetQuery().Namespaces;
+        public IReadOnlyCollection<string> NamespaceRemovals => GetQuery().NamespaceRemovals;
+        public IReadOnlyCollection<PackageReference> PackageReferences => GetQuery().PackageReferences;
+        public string Code => GetQuery().Code;
+
+        public override string ToString() => Source;
+    }
+
+    static partial class LinqPadQueryExtensions
+    {
+        public static string GetMergedCode(this LinqPadQuery query, bool skipSelf = false)
+        {
+            if (query == null) throw new ArgumentNullException(nameof(query));
+
+            using var lq = query.Loads.GetEnumerator();
+
+            if (!lq.MoveNext())
+                return query.Code;
+
+            var load = lq.Current;
+            var code = new StringBuilder();
+
+            var ln = 1;
+            foreach (var line in query.Code.Lines())
+            {
+                if (load?.LineNumber == ln)
+                {
+                    code.AppendLine("//>>> " + line);
+                    if (load.Language switch
+                        {
+                            LinqPadQueryLanguage.Statements => ("RunLoadedStatements(() => {", "})"),
+                            LinqPadQueryLanguage.Expression => ("DumpLoadedExpression(", ")"),
+                            _ => default
+                        }
+                        is (string prologue, string epilogue))
+                    {
+                        code.AppendLine(prologue)
+                            .Append("#line 1 \"").Append(load.Path).Append('"').AppendLine()
+                            .AppendLine(load.Code)
+                            .Append(epilogue).Append(';').AppendLine();
+                    };
+                    code.AppendLine("//<<< " + line);
+                    code.Append("#line ").Append(ln + 1).Append(" \"").Append(query.FilePath).Append('"').AppendLine();
+
+                    load = lq.MoveNext() ? lq.Current : null;
+                }
+                else if (!skipSelf)
+                {
+                    code.AppendLine(line);
+                }
+
+                ln++;
+            }
+
+            return code.ToString();
+        }
+    }
+}
+
+namespace LinqPadless
+{
+    using System;
+    using System.Linq;
+    using static MoreLinq.Extensions.IndexExtension;
+    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+
+    static partial class LinqPadQueryExtensions
+    {
+        public static string FormatCodeWithLoadDirectivesCommented(this LinqPadQuery query)
+        {
+            if (query.Loads.Count == 0)
+                return query.Code;
+            var lns = query.Loads.Select(e => e.LineNumber).ToHashSet();
+            return query.Code.Lines()
+                             .Index(1)
+                             .Select(e => (lns.Contains(e.Key) ? "// " : null) + e.Value)
+                             .ToDelimitedString(Environment.NewLine);
+        }
     }
 }

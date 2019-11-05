@@ -1,9 +1,9 @@
 #if !LPLESS
 #define LINQPAD_STATEMENTS
-#define LPLESS_TEMPLATE_V1
+#define LPLESS_TEMPLATE_V2
 #endif
 
-#if !LPLESS_TEMPLATE_V1
+#if !LPLESS_TEMPLATE_V2
 #error Incompatible template format.
 #endif
 
@@ -21,6 +21,7 @@
 #endif
 
 // {% imports
+
 #if TASK
 using System.Threading.Tasks;
 #endif
@@ -44,16 +45,40 @@ partial class UserQuery
 
 partial class UserQuery
 {
+    partial void OnInit();
+    partial void OnStart();
+    partial void OnFinish();
+
+    static void RunLoadedStatements(System.Action action) =>
+        action();
+
+    static void DumpLoadedExpression(object value) =>
+        System.Console.WriteLine(value);
+
     static async System.Threading.Tasks.Task<int> Main(string[] args)
     {
+        var query = new UserQuery();
+        void RunHook(params System.Func<UserQuery, System.Action>[] hooks)
+        {
+            foreach (var hook in hooks)
+                hook(query)();
+        }
+        query.OnInit();
+        RunHook(
+            // {% hook-init %}
+            );
+        RunHook(
+            // {% hook-start %}
+            );
+        query.OnStart();
 #if !VOID
-        return
+        var result =
 #endif
 #if TASK
-            await
+        await
 #endif
 #if !STATIC
-            new UserQuery().
+            query.
 #endif
                 RunUserAuthoredQuery
 #if ARGS
@@ -62,6 +87,10 @@ partial class UserQuery
                 ()
 #endif
                 ;
+        RunHook(
+            // {% hook-finish %}
+            );
+        query.OnFinish();
 #if VOID
         return
 #if TASK
@@ -69,7 +98,9 @@ partial class UserQuery
 #else
             0;
 #endif
-#endif // VOID
+#else // !VOID
+    return result;
+#endif
     }
 }
 

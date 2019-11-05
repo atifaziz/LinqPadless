@@ -64,9 +64,16 @@ LINQPad Query files must be either C# Statements, Expression or Program.
 LINQPad-specific methods like `Dump` and those on its `Util` class will
 cause compilation errors.
 
+In [loaded (`#load`) queries][linqref]:
+
+- the `Hijack` hook method is not supported.
+- only an absolute path and a path relative to the where the query is saved are
+  supported in the `#load` directive.
+
 
 [nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
 [nuget-pkg]: https://www.nuget.org/packages/LinqPadless
 [LINQPad]: http://www.linqpad.net/
 [lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
 [lprun]: https://www.linqpad.net/lprun.aspx
+[linqref]: https://www.linqpad.net/LinqReference.aspx
