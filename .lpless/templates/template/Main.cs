@@ -123,6 +123,7 @@ partial class UserQuery
 {
     async System.Threading.Tasks.Task RunUserAuthoredQuery()
     {
+        await System.Threading.Tasks.Task.FromResult(0);
         System.Console.WriteLine(
             // {% expression %}
         );
@@ -135,6 +136,7 @@ partial class UserQuery
 {
     async System.Threading.Tasks.Task RunUserAuthoredQuery()
     {
+        await System.Threading.Tasks.Task.FromResult(0);
         // {% statements %}
     }
 }
