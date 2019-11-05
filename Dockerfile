@@ -28,9 +28,11 @@ COPY --from=tool /root/.dotnet/tools /root/.dotnet/tools
 
 ENV PATH=$PATH:/root/.dotnet/tools
 
-COPY --from=build /project/.lpless /linq/.lpless
-COPY --from=build /project/.lplessroot /linq
+COPY --from=build /project/.lpless /scripts/.lpless
+COPY --from=build /project/.lplessroot /scripts
 
-WORKDIR /linq
+RUN mkdir /scripts/linq
+
+WORKDIR /scripts/linq
 
 ENTRYPOINT [ "lpless" ]
