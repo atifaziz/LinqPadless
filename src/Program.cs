@@ -760,7 +760,8 @@ namespace LinqPadless
                                 "}",
                                 FullSourceWithLineDirective(pq.Types),
                                 FullSourceWithLineDirective(pq.Namespaces),
-                            }));
+                            })
+                            .Prepend("#define LPLESS"));
 
             foreach (var (n, lines) in loadedSources)
             {
