@@ -40,6 +40,7 @@ namespace LinqPadless
             var help = Ref.Create(false);
             var verbose = Ref.Create(false);
             var force = false;
+            var bundlePath = (string)null;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -47,6 +48,7 @@ namespace LinqPadless
                 Options.Verbose(verbose),
                 Options.Debug,
                 { "f|force", "overwrite bundle if exists", _ => force = true },
+                { "o|out=", "write bundle at {PATH}", v => bundlePath = v },
             };
 
             var tail = options.Parse(args);
@@ -71,12 +73,12 @@ namespace LinqPadless
             if (query.ValidateSupported() is Exception e)
                 throw e;
 
-            var bundleFilePath = Path.ChangeExtension(query.FilePath, ".zip");
+            bundlePath ??= Path.ChangeExtension(query.FilePath, ".zip");
 
-            if (!force && File.Exists(bundleFilePath))
+            if (!force && File.Exists(bundlePath))
                 throw new Exception("Target bundle file already exists.");
 
-            File.Delete(bundleFilePath);
+            File.Delete(bundlePath);
 
             var tempZipFilePath = Path.GetRandomFileName();
             using var _ = Defer(tempZipFilePath, File.Delete);
@@ -137,7 +139,7 @@ namespace LinqPadless
             }
 
             zip.Dispose();
-            File.Move(tempZipFilePath, bundleFilePath);
+            File.Move(tempZipFilePath, bundlePath);
 
             return 0;
         }
