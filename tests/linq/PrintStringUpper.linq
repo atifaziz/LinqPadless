@@ -4,5 +4,5 @@
 
 "Hello world!"
 
-// | 0
-// < HELLO WORLD!
+//< 0
+//| HELLO WORLD!
