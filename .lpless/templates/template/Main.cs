@@ -158,7 +158,10 @@ partial class UserQuery
     {
         await System.Threading.Tasks.Task.FromResult(0);
 
-        QueryExpressionPrinter(
+        // {% expression-printer
+        QueryExpressionPrinter
+        // %}
+        (
             // {% expression %}
         );
     }

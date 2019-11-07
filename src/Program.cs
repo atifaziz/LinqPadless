@@ -49,6 +49,7 @@ namespace LinqPadless
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.IndexExtension;
+    using static MoreLinq.Extensions.PadExtension;
     using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TagFirstLastExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
@@ -798,12 +799,30 @@ namespace LinqPadless
             ("finish", ld => ld.OnFinish),
         };
 
+        static readonly char[] HorizontalWhiteSpaceSeparators = { ' ', '\t' };
+
         static string GenerateExpressionProgram(LinqPadQuery query, string template)
         {
             var eol = Environment.NewLine;
             var code = query.FormatCodeWithLoadDirectivesCommented();
 
             var program = Detemplate(template, "expression", $"#line 1 \"{query.FilePath}\"{eol}{code}");
+
+            var expressionPrinters =
+                from load in query.Loads
+                where load.Language == LinqPadQueryLanguage.Program
+                from e in
+                       load.GetQuery()
+                           .GetPragmaDirectives()
+                           .Choose(p => p.Text.Split(HorizontalWhiteSpaceSeparators, 4, StringSplitOptions.RemoveEmptyEntries)
+                                         .Pad(4)
+                                         .Fold((n, w1, w2, pn) => (n, w1, w2) is ("lpless", "expression", "printer") ? (true, pn) : default))
+                select e;
+
+            var expressionPrinter = expressionPrinters.LastOrDefault() ?? string.Empty;
+
+            if (expressionPrinter.Length > 0)
+                program = Detemplate(program, "expression-printer", expressionPrinter);
 
             var loads =
                 ImmutableArray.CreateRange(
