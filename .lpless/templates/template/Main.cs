@@ -152,10 +152,13 @@ partial class UserQuery
 
 partial class UserQuery
 {
+    Action<object> QueryExpressionPrinter { get; set; } = System.Console.WriteLine;
+
     async System.Threading.Tasks.Task RunUserAuthoredQuery()
     {
         await System.Threading.Tasks.Task.FromResult(0);
-        System.Console.WriteLine(
+
+        QueryExpressionPrinter(
             // {% expression %}
         );
     }
