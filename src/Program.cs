@@ -799,8 +799,6 @@ namespace LinqPadless
             ("finish", ld => ld.OnFinish),
         };
 
-        static readonly char[] HorizontalWhiteSpaceSeparators = { ' ', '\t' };
-
         static string GenerateExpressionProgram(LinqPadQuery query, string template)
         {
             var eol = Environment.NewLine;
@@ -808,27 +806,42 @@ namespace LinqPadless
 
             var program = Detemplate(template, "expression", $"#line 1 \"{query.FilePath}\"{eol}{code}");
 
-            var expressionPrinters =
-                from load in query.Loads
-                where load.Language == LinqPadQueryLanguage.Program
-                from e in
-                       load.GetQuery()
-                           .GetPragmaDirectives()
-                           .Choose(p => p.Text.Split(HorizontalWhiteSpaceSeparators, 4, StringSplitOptions.RemoveEmptyEntries)
-                                         .Pad(4)
-                                         .Fold((n, w1, w2, pn) => (n, w1, w2) is ("lpless", "expression", "printer") ? (true, pn) : default))
-                select e;
-
-            var expressionPrinter = expressionPrinters.LastOrDefault() ?? string.Empty;
-
-            if (expressionPrinter.Length > 0)
-                program = Detemplate(program, "expression-printer", expressionPrinter);
-
             var loads =
                 ImmutableArray.CreateRange(
                     from load in query.Loads
                     where load.Language == LinqPadQueryLanguage.Program
                     select ProgramQuery.Parse(load.Code, load.Path));
+
+            var printers =
+                ImmutableArray.CreateRange(
+                    from e in
+                        loads.SelectMany(load => load.Others.OfType<MethodDeclarationSyntax>())
+                             .Choose(md =>
+                                 from a in md.AttributeLists
+                                             .SelectMany(attrs => attrs.Attributes)
+                                             .Where(attr =>
+                                                 attr.Name.ToString() switch
+                                                 {
+                                                     "QueryExpressionPrinter" => true,
+                                                     "QueryExpressionPrinterAttribute" => true,
+                                                     _ => false
+                                                 })
+                                             .FirstOrNone()
+                                 select (Method: md.Identifier.ValueText, Attribute: a))
+                    group e.Attribute by e.Method
+                    into g
+                    select (Method: g.Key, Attribute: g.First()));
+
+            switch (printers.Length)
+            {
+                case 0: break;
+                case 1: program = Detemplate(program, "expression-printer", printers[0].Method); break;
+                default: throw new Exception("Ambiguous expression printers: " +
+                                             string.Join(", ",
+                                                 from p in printers
+                                                 select p.Attribute.SyntaxTree.GetMappedLineSpan(p.Attribute.Span) into loc
+                                                 select $"{loc.Path}({loc.StartLinePosition.Line + 1},{loc.StartLinePosition.Character + 1})"));
+            }
 
             return
                 Hooks.Aggregate(program, (p, h) =>

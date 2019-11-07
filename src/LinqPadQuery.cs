@@ -229,20 +229,6 @@ namespace LinqPadless
 
     static partial class LinqPadQueryExtensions
     {
-        public static IEnumerable<(int LineNumber, string Text)>
-            GetPragmaDirectives(this LinqPadQuery query)
-        {
-            const string hashPragma = "#pragma";
-            var code = query.Code;
-            return
-                from t in Scanner.Scan(code)
-                where t.Kind == TokenKind.PreprocessorDirective
-                   && t.Length > hashPragma.Length
-                   && string.CompareOrdinal(hashPragma, 0, code, t.Start.Offset, hashPragma.Length) == 0
-                   && char.IsWhiteSpace(code[t.Start.Offset + hashPragma.Length])
-                select (t.Start.Line, code.Substring(t.Start.Offset + hashPragma.Length + 1 /* WS */, t.Length - hashPragma.Length - 1).Trim());
-        }
-
         public static string GetMergedCode(this LinqPadQuery query, bool skipSelf = false)
         {
             if (query == null) throw new ArgumentNullException(nameof(query));
