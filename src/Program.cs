@@ -788,13 +788,35 @@ namespace LinqPadless
 
             var publishLog = log?.Indent();
 
+            var errored = false;
+            List<string> pendingNonErrors = null;
+
             foreach (var (_, line) in
                 Spawn(dotnetPath, publishArgs, workingDirPath,
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
-                if (quiet && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value == "error")
-                    Console.Error.WriteLine(line);
+                if (quiet
+                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is string ms
+                    && ms.Length > 0)
+                {
+                    if (ms == "error")
+                    {
+                        errored = true;
+                        if (pendingNonErrors is List<string> nonErrors)
+                        {
+                            pendingNonErrors = null;
+                            foreach (var nonError in nonErrors)
+                                Console.Error.WriteLine(nonError);
+                        }
+                        Console.Error.WriteLine(line);
+                    }
+                    else if (!errored)
+                    {
+                        pendingNonErrors ??= new List<string>();
+                        pendingNonErrors.Add(line);
+                    }
+                }
 
                 publishLog?.WriteLines(line);
             }
