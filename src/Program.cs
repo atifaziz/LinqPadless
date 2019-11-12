@@ -1098,6 +1098,8 @@ namespace LinqPadless
             foreach (var item in output.GetConsumingEnumerable())
                 yield return item;
 
+            process.WaitForExit();
+
             var exitCode = process.ExitCode;
             if (exitCode != 0)
                 throw errorSelector(exitCode);
