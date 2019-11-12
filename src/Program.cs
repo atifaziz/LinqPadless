@@ -19,6 +19,7 @@ namespace LinqPadless
     #region Imports
 
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Collections.Immutable;
     using System.Diagnostics;
@@ -31,6 +32,7 @@ namespace LinqPadless
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
+    using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
     using KeyValuePairs;
@@ -776,8 +778,6 @@ namespace LinqPadless
             var publishArgs =
                 Seq.Return(Some("publish"),
                            quiet ? Some("-nologo") : default,
-                           Some("-v"), Some(quiet ? "q" : "m"),
-                           quiet ? Some("-clp:ErrorsOnly") : default,
                            Some("-c"), Some("Release"),
                            Some($"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}"),
                            Some("-o"), Some(binDirPath))
@@ -786,10 +786,31 @@ namespace LinqPadless
 
             log?.WriteLine(PasteArguments.Paste(publishArgs.Prepend(dotnetPath)));
 
-            Spawn(dotnetPath,
-                  publishArgs,
-                  workingDirPath, log?.Indent(),
-                  exitCode => new Exception($"dotnet publish ended with a non-zero exit code of {exitCode}."));
+            var publishLog = log?.Indent();
+
+            foreach (var (_, line) in
+                Spawn(dotnetPath, publishArgs, workingDirPath,
+                      StdOutputStreamKind.Output, StdOutputStreamKind.Error,
+                      exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
+            {
+                if (quiet && Regex.Match(line,
+                        @"^ \s* (.+?)                                           # file path
+                            \(  ([0-9]+                                         # offset
+                                |[0-9]+,[0-9]+
+                                |[0-9]+,[0-9]+,[0-9]+,[0-9]+
+                                ) \)
+                            \s* :
+                            \s* (error|warning|info) \s+ (\w{1,2}[0-9]+) \s* :  # kind + code
+                            \s* (.+)                                            # message
+                            \s* \[(.+?)\]                                       # project
+                        ",
+                        RegexOptions.IgnorePatternWhitespace) is Match m && m.Success && m.Groups[3].Value == "error")
+                {
+                    Console.Error.WriteLine(line);
+                }
+
+                publishLog?.WriteLines(line);
+            }
         }
 
         static readonly (string Name, Func<ProgramQuery, MethodDeclarationSyntax> Getter)[] Hooks =
@@ -1020,9 +1041,12 @@ namespace LinqPadless
             return version ?? throw new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
         }
 
-        static void Spawn(string path, IEnumerable<string> args,
-                          string workingDirPath, IndentingLineWriter writer,
-                          Func<int, Exception> errorSelector)
+        enum StdOutputStreamKind { Output, Error };
+
+        static IEnumerable<(T, string)>
+            Spawn<T>(string path, IEnumerable<string> args,
+                     string workingDirPath, T outputTag, T errorTag,
+                     Func<int, Exception> errorSelector)
         {
             var psi = new ProcessStartInfo
             {
@@ -1039,19 +1063,31 @@ namespace LinqPadless
             using var process = Process.Start(psi);
             Debug.Assert(process != null);
 
-            void OnStdDataReceived(object _, DataReceivedEventArgs e)
-            {
-                if (e.Data == null)
-                    return;
-                writer?.WriteLines(e.Data);
-            }
+            var output = new BlockingCollection<(T, string)>();
 
-            process.OutputDataReceived += OnStdDataReceived;
-            process.ErrorDataReceived  += OnStdDataReceived;
+            DataReceivedEventHandler OnStdDataReceived(T tag, TaskCompletionSource<DateTime> tcs) =>
+                (_, e) =>
+                {
+                    if (e.Data == null)
+                        tcs.SetResult(DateTime.Now);
+                    else
+                        output.Add((tag, e.Data));
+                };
+
+            var tcsStdOut = new TaskCompletionSource<DateTime>();
+            var tcsStdErr = new TaskCompletionSource<DateTime>();
+
+            Task.WhenAll(tcsStdOut.Task, tcsStdErr.Task)
+                .ContinueWith(_ => output.CompleteAdding());
+
+            process.OutputDataReceived += OnStdDataReceived(outputTag, tcsStdOut);
+            process.ErrorDataReceived  += OnStdDataReceived(errorTag , tcsStdErr);
 
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
-            process.WaitForExit();
+
+            foreach (var item in output.GetConsumingEnumerable())
+                yield return item;
 
             var exitCode = process.ExitCode;
             if (exitCode != 0)
