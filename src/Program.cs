@@ -793,21 +793,8 @@ namespace LinqPadless
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
-                if (quiet && Regex.Match(line,
-                        @"^ \s* (.+?)                                           # file path
-                            \(  ([0-9]+                                         # offset
-                                |[0-9]+,[0-9]+
-                                |[0-9]+,[0-9]+,[0-9]+,[0-9]+
-                                ) \)
-                            \s* :
-                            \s* (error|warning|info) \s+ (\w{1,2}[0-9]+) \s* :  # kind + code
-                            \s* (.+)                                            # message
-                            \s* \[(.+?)\]                                       # project
-                        ",
-                        RegexOptions.IgnorePatternWhitespace) is Match m && m.Success && m.Groups[3].Value == "error")
-                {
+                if (quiet && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value == "error")
                     Console.Error.WriteLine(line);
-                }
 
                 publishLog?.WriteLines(line);
             }
