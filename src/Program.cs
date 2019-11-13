@@ -387,7 +387,9 @@ namespace LinqPadless
                     ArgumentList    = { binPath },
                 };
 
-                psi.Environment.Add("LPLESS_LINQ_FILE_PATH", queryPath);
+                var env = psi.Environment;
+                env.Add("LPLESS_LINQ_FILE_PATH", queryPath);
+                env.Add("LPLESS_LINQ_FILE_HASH", hash);
 
                 args.ForEach(psi.ArgumentList.Add);
 
