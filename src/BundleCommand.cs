@@ -73,6 +73,7 @@ namespace LinqPadless
             if (query.ValidateSupported() is Exception e)
                 throw e;
 
+            var logbundlePath = bundlePath == null;
             bundlePath ??= Path.ChangeExtension(query.FilePath, ".zip");
 
             if (!force && File.Exists(bundlePath))
@@ -140,6 +141,9 @@ namespace LinqPadless
 
             zip.Dispose();
             File.Move(tempZipFilePath, bundlePath);
+
+            if (logbundlePath)
+                Console.Error.WriteLine(bundlePath);
 
             return 0;
         }
