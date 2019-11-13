@@ -85,49 +85,56 @@ namespace LinqPadless
             using var _ = Defer(tempZipFilePath, File.Delete);
             using var zip = ZipFile.Open(tempZipFilePath, ZipArchiveMode.Create);
 
-            var mainEntry = zip.CreateEntry(Path.GetFileName(query.FilePath));
-            mainEntry.LastWriteTime = File.GetLastWriteTime(query.FilePath);
-            using var stream = mainEntry.Open();
-            using var writer = new StreamWriter(stream, Utf8.BomlessEncoding);
+            var queryFileName = Path.GetFileName(query.FilePath);
 
-            var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(new FileInfo(queryPath));
-            foreach (var line in File.ReadLines(queryPath).Take(eomLineNumber))
-                writer.WriteLine(line);
-
-            var loadNameSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                mainEntry.Name
-            };
+            var epEntry = zip.CreateEntry(Path.GetFileName("lpless-bundle.ini"));
+            epEntry.LastWriteTime = File.GetLastWriteTime(query.FilePath);
+            using (var stream = epEntry.Open())
+            using (var writer = new StreamWriter(stream, Utf8.BomlessEncoding))
+                writer.WriteLine("entrypoint=" + queryFileName);
 
             var loads = new List<(string Name, string SourceFilePath)>();
 
-            foreach (var (line, load) in
-                query.Code.Lines()
-                          .Index(1)
-                          .LeftJoin(query.Loads, e => e.Key, e => e.LineNumber,
-                                    line => (line.Value, default),
-                                    (line, load) => (line.Value, load)))
+            var mainEntry = zip.CreateEntry(queryFileName);
+            mainEntry.LastWriteTime = File.GetLastWriteTime(query.FilePath);
+            using (var stream = mainEntry.Open())
+            using (var writer = new StreamWriter(stream, Utf8.BomlessEncoding))
             {
-                if (load != null)
-                {
-                    var fileName = Path.GetFileName(load.Path);
-                    var originalName = Path.GetFileNameWithoutExtension(fileName);
-                    var extension = Path.GetExtension(fileName);
-
-                    for (var counter = 1; !loadNameSet.Add(fileName); counter++)
-                        fileName = originalName + counter.ToString(CultureInfo.InvariantCulture) + extension;
-
-                    loads.Add((fileName, load.Path));
-
-                    writer.WriteLine($@"#load "".\{fileName}"" // {line}");
-                }
-                else
-                {
+                var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(new FileInfo(queryPath));
+                foreach (var line in File.ReadLines(queryPath).Take(eomLineNumber))
                     writer.WriteLine(line);
+
+                var loadNameSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    mainEntry.Name
+                };
+
+                foreach (var (line, load) in
+                    query.Code.Lines()
+                              .Index(1)
+                              .LeftJoin(query.Loads, e => e.Key, e => e.LineNumber,
+                                        line => (line.Value, default),
+                                        (line, load) => (line.Value, load)))
+                {
+                    if (load != null)
+                    {
+                        var fileName = Path.GetFileName(load.Path);
+                        var originalName = Path.GetFileNameWithoutExtension(fileName);
+                        var extension = Path.GetExtension(fileName);
+
+                        for (var counter = 1; !loadNameSet.Add(fileName); counter++)
+                            fileName = originalName + counter.ToString(CultureInfo.InvariantCulture) + extension;
+
+                        loads.Add((fileName, load.Path));
+
+                        writer.WriteLine($@"#load "".\{fileName}"" // {line}");
+                    }
+                    else
+                    {
+                        writer.WriteLine(line);
+                    }
                 }
             }
-
-            writer.Close();
 
             if (loads.Count == 0)
                 Console.Error.WriteLine("Warning! No load directives found. Bundle is redundant.");
