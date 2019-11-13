@@ -53,9 +53,9 @@ namespace LinqPadless
 
             var tail = options.Parse(args);
 
-            var stderr = Console.Error;
-            if (verbose)
-                Trace.Listeners.Add(new TextWriterTraceListener(stderr));
+            var log = verbose ? Console.Error : null;
+            if (log != null)
+                Trace.Listeners.Add(new TextWriterTraceListener(log));
 
             if (help)
             {
@@ -134,6 +134,7 @@ namespace LinqPadless
 
             foreach (var (name, path) in loads)
             {
+                log?.WriteLine("+ " + path);
                 var entry = zip.CreateEntry(name);
                 entry.LastWriteTime = File.GetLastWriteTime(path);
                 using var output = entry.Open();
