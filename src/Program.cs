@@ -388,6 +388,7 @@ namespace LinqPadless
                 };
 
                 var env = psi.Environment;
+                env.Add("LPLESS_BIN_PATH", new Uri(Assembly.GetEntryAssembly().CodeBase).LocalPath);
                 env.Add("LPLESS_LINQ_FILE_PATH", queryPath);
                 env.Add("LPLESS_LINQ_FILE_HASH", hash);
 
