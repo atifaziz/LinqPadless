@@ -76,7 +76,7 @@ namespace LinqPadless
             bundlePath ??= Path.ChangeExtension(query.FilePath, ".zip");
 
             if (!force && File.Exists(bundlePath))
-                throw new Exception("Target bundle file already exists.");
+                throw new Exception("Target bundle file already exists: " + bundlePath);
 
             File.Delete(bundlePath);
 
