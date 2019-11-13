@@ -129,6 +129,9 @@ namespace LinqPadless
 
             writer.Close();
 
+            if (loads.Count == 0)
+                Console.Error.WriteLine("Warning! No load directives found. Bundle is redundant.");
+
             foreach (var (name, path) in loads)
             {
                 var entry = zip.CreateEntry(name);
