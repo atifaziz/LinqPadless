@@ -1055,7 +1055,7 @@ namespace LinqPadless
             return version ?? throw new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
         }
 
-        enum StdOutputStreamKind { Output, Error };
+        enum StdOutputStreamKind { Output, Error }
 
         static IEnumerable<(T, string)>
             Spawn<T>(string path, IEnumerable<string> args,
