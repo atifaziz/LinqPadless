@@ -32,6 +32,7 @@ namespace LinqPadless
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
+    using System.Threading;
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
@@ -799,6 +800,7 @@ namespace LinqPadless
             foreach (var (_, line) in
                 Spawn(dotnetPath, publishArgs, workingDirPath,
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
+                      TimeSpan.FromMinutes(5),
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
@@ -1060,6 +1062,7 @@ namespace LinqPadless
         static IEnumerable<(T, string)>
             Spawn<T>(string path, IEnumerable<string> args,
                      string workingDirPath, T outputTag, T errorTag,
+                     TimeSpan timeout,
                      Func<int, Exception> errorSelector)
         {
             var psi = new ProcessStartInfo
@@ -1078,12 +1081,16 @@ namespace LinqPadless
             Debug.Assert(process != null);
 
             var output = new BlockingCollection<(T, string)>();
+            var lastDataTimestamp = DateTime.MinValue;
 
             DataReceivedEventHandler OnStdDataReceived(T tag, TaskCompletionSource<DateTime> tcs) =>
                 (_, e) =>
                 {
+                    var now = DateTime.Now;
+                    lastDataTimestamp = now;
+
                     if (e.Data == null)
-                        tcs.SetResult(DateTime.Now);
+                        tcs.SetResult(now);
                     else
                         output.Add((tag, e.Data));
                 };
@@ -1100,10 +1107,64 @@ namespace LinqPadless
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            foreach (var item in output.GetConsumingEnumerable())
-                yield return item;
+            using var heartbeatCancellationTokenSource = new CancellationTokenSource();
+            var heartbeatCancellationToken = heartbeatCancellationTokenSource.Token;
+            using var timeoutCancellationTokenSource = new CancellationTokenSource();
 
-            process.WaitForExit();
+            async Task Heartbeat()
+            {
+                try
+                {
+                    var delay = timeout;
+                    while (!heartbeatCancellationToken.IsCancellationRequested)
+                    {
+                        await Task.Delay(delay, heartbeatCancellationToken);
+
+                        var span = DateTime.Now - lastDataTimestamp;
+                        if (span > timeout)
+                        {
+                            timeoutCancellationTokenSource.Cancel();
+                            break;
+                        }
+
+                        delay = timeout - span;
+                    }
+                }
+                catch (OperationCanceledException) {} // expected so ignore
+            }
+
+#pragma warning disable 4014
+            Heartbeat(); // fire and forget!
+#pragma warning restore 4014
+
+            var timedOut = false;
+
+            using (var e = output.GetConsumingEnumerable(timeoutCancellationTokenSource.Token)
+                                 .GetEnumerator())
+            {
+                while (true)
+                {
+                    try
+                    {
+                        if (!e.MoveNext())
+                            break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        timedOut = true;
+                        break;
+                    }
+                    yield return e.Current;
+                }
+            }
+
+            heartbeatCancellationTokenSource.Cancel();
+
+            if (timedOut || !process.WaitForExit((int)timeout.TotalMilliseconds))
+            {
+                process.Kill();
+                throw new TimeoutException();
+            }
 
             var exitCode = process.ExitCode;
             if (exitCode != 0)
