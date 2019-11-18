@@ -1081,13 +1081,18 @@ namespace LinqPadless
             Debug.Assert(process != null);
 
             var output = new BlockingCollection<(T, string)>();
+            var tsLock = new object();
             var lastDataTimestamp = DateTime.MinValue;
 
             DataReceivedEventHandler OnStdDataReceived(T tag, TaskCompletionSource<DateTime> tcs) =>
                 (_, e) =>
                 {
                     var now = DateTime.Now;
-                    lastDataTimestamp = now;
+                    lock (tsLock)
+                    {
+                        if (now > lastDataTimestamp)
+                            lastDataTimestamp = now;
+                    }
 
                     if (e.Data == null)
                         tcs.SetResult(now);
@@ -1120,7 +1125,9 @@ namespace LinqPadless
                     {
                         await Task.Delay(delay, heartbeatCancellationToken);
 
-                        var span = DateTime.Now - lastDataTimestamp;
+                        TimeSpan span;
+                        lock (tsLock) span = DateTime.Now - lastDataTimestamp;
+
                         if (span > timeout)
                         {
                             timeoutCancellationTokenSource.Cancel();
