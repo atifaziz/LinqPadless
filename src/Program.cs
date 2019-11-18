@@ -1140,9 +1140,7 @@ namespace LinqPadless
                 catch (OperationCanceledException) {} // expected so ignore
             }
 
-#pragma warning disable 4014
-            Heartbeat(); // fire and forget!
-#pragma warning restore 4014
+            var heartbeatTask = Heartbeat();
 
             var timedOut = false;
 
@@ -1166,6 +1164,7 @@ namespace LinqPadless
             }
 
             heartbeatCancellationTokenSource.Cancel();
+            heartbeatTask.GetAwaiter().GetResult(); // await graceful shutdown
 
             if (timedOut || !process.WaitForExit((int)timeout.TotalMilliseconds))
             {
