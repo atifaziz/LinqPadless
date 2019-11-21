@@ -22,6 +22,7 @@ namespace LinqPadless
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Collections.Immutable;
+    using System.ComponentModel;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
@@ -1194,7 +1195,14 @@ namespace LinqPadless
                                         ? (int)executionTimeout.TotalMilliseconds
                                         : Timeout.Infinite))
             {
-                process.Kill();
+                try
+                {
+                    process.Kill();
+                }
+                catch (Win32Exception e) // If Kill call is made while the process is terminating,
+                {                        // a Win32Exception is thrown for "Access Denied" (2).
+                    Debug.WriteLine(e);
+                }
 
                 var error = $"Timeout expired waiting for process {process.Id} to {(isClinicallyDead ? "respond" : "exit")}.";
 
