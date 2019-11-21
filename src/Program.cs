@@ -1123,16 +1123,16 @@ namespace LinqPadless
                 {
                     await Task.Delay(delay, heartbeatCancellationToken);
 
-                    TimeSpan span;
-                    lock (tsLock) span = DateTime.Now - lastDataTimestamp;
+                    TimeSpan durationSinceLastData;
+                    lock (tsLock) durationSinceLastData = DateTime.Now - lastDataTimestamp;
 
-                    if (span > timeout)
+                    if (durationSinceLastData > timeout)
                     {
                         timeoutCancellationTokenSource.Cancel();
                         break;
                     }
 
-                    delay = timeout - span;
+                    delay = timeout - durationSinceLastData;
                 }
             }
 
