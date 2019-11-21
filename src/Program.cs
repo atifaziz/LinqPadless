@@ -807,6 +807,8 @@ namespace LinqPadless
                 Spawn(dotnetPath, publishArgs, workingDirPath,
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
                       publishIdleTimeout,
+                      executionTimeout: TimeSpan.FromMinutes(15),
+                      killTimeout: TimeSpan.FromSeconds(15),
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
@@ -1068,7 +1070,7 @@ namespace LinqPadless
         static IEnumerable<(T, string)>
             Spawn<T>(string path, IEnumerable<string> args,
                      string workingDirPath, T outputTag, T errorTag,
-                     TimeSpan idleTimeout,
+                     TimeSpan idleTimeout, TimeSpan executionTimeout, TimeSpan killTimeout,
                      Func<int, Exception> errorSelector)
         {
             var psi = new ProcessStartInfo
@@ -1122,6 +1124,11 @@ namespace LinqPadless
             var heartbeatCancellationToken = heartbeatCancellationTokenSource.Token;
             using var timeoutCancellationTokenSource = new CancellationTokenSource();
 
+            if (executionTimeout > TimeSpan.Zero)
+                timeoutCancellationTokenSource.CancelAfter(executionTimeout);
+
+            var isClinicallyDead = false;
+
             async Task Heartbeat()
             {
                 var delay = idleTimeout;
@@ -1134,6 +1141,7 @@ namespace LinqPadless
 
                     if (idleTimeout > TimeSpan.Zero && durationSinceLastData > idleTimeout)
                     {
+                        isClinicallyDead = true;
                         timeoutCancellationTokenSource.Cancel();
                         break;
                     }
@@ -1143,8 +1151,6 @@ namespace LinqPadless
             }
 
             var heartbeatTask = Heartbeat();
-
-            var timedOut = false;
 
             using (var e = output.GetConsumingEnumerable(timeoutCancellationTokenSource.Token)
                                  .GetEnumerator())
@@ -1158,7 +1164,6 @@ namespace LinqPadless
                     }
                     catch (OperationCanceledException)
                     {
-                        timedOut = true;
                         break;
                     }
                     yield return e.Current;
@@ -1177,11 +1182,25 @@ namespace LinqPadless
                 Debug.WriteLine(e);
             }
 
-            if (timedOut || !process.WaitForExit((int)idleTimeout.TotalMilliseconds))
+            if (isClinicallyDead
+                || !process.WaitForExit(executionTimeout > TimeSpan.Zero
+                                        ? (int)executionTimeout.TotalMilliseconds
+                                        : Timeout.Infinite))
             {
                 process.Kill();
-                throw new TimeoutException(
-                    $"Timeout expired waiting for process {process.Id} to {(timedOut ? "respond" : "exit")}.");
+
+                var error = $"Timeout expired waiting for process {process.Id} to {(isClinicallyDead ? "respond" : "exit")}.";
+
+                // Killing of a process executes asynchronously so wait for the process to exit
+
+                if (!process.WaitForExit(killTimeout > TimeSpan.Zero
+                                         ? (int)killTimeout.TotalMilliseconds
+                                         : Timeout.Infinite))
+                {
+                    error += " The process did not terminate on time on killing either.";
+                }
+
+                throw new TimeoutException(error);
             }
 
             var exitCode = process.ExitCode;
