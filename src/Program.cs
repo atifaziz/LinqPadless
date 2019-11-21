@@ -98,6 +98,7 @@ namespace LinqPadless
             var uncached = false;
             var template = (string) null;
             var shouldJustHash = false;
+            var publishTimeout = TimeSpan.FromMinutes(15);
             var publishIdleTimeout = TimeSpan.FromMinutes(3);
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
@@ -110,6 +111,8 @@ namespace LinqPadless
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
                 { "t|template="   , "template", v => template = v },
+                { "timeout="      , $"timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
+                                    v => publishTimeout = TimeSpanHms.Parse(v) },
                 { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
                                     v => publishIdleTimeout = TimeSpanHms.Parse(v) },
                 { "hash"          , "print hash and exit", _ => shouldJustHash = true },
@@ -142,6 +145,7 @@ namespace LinqPadless
                                    dontExecute: dontExecute,
                                    force: force,
                                    publishIdleTimeout: publishIdleTimeout,
+                                   publishTimeout: publishTimeout,
                                    log: log)
             };
         }
@@ -153,7 +157,7 @@ namespace LinqPadless
             string outDirPath,
             bool shouldJustHash,
             bool uncached, bool dontExecute, bool force,
-            TimeSpan publishIdleTimeout,
+            TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             TextWriter log)
         {
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
@@ -342,7 +346,9 @@ namespace LinqPadless
 
             try
             {
-                Compile(query, srcDirPath, tmpDirPath, templateFiles, dotnetPath, publishIdleTimeout, log);
+                Compile(query, srcDirPath, tmpDirPath, templateFiles,
+                        dotnetPath, publishIdleTimeout, publishTimeout,
+                        log);
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -457,7 +463,8 @@ namespace LinqPadless
         static void Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, TimeSpan publishIdleTimeout, TextWriter log)
+            string dotnetPath, TimeSpan publishTimeout, TimeSpan publishIdleTimeout,
+            TextWriter log)
         {
             _(IndentingLineWriter.CreateUnlessNull(log));
 
@@ -586,8 +593,9 @@ namespace LinqPadless
 
                 GenerateExecutable(srcDirPath, binDirPath, query,
                                    from ns in namespaces select ns.Name,
-                                   references, templateFiles, dotnetPath,
-                                   publishIdleTimeout, log);
+                                   references, templateFiles,
+                                   dotnetPath, publishIdleTimeout, publishTimeout,
+                                   log);
             }
         }
 
@@ -623,7 +631,8 @@ namespace LinqPadless
             IEnumerable<string> imports,
             IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, TimeSpan publishIdleTimeout, IndentingLineWriter log)
+            string dotnetPath, TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
+            IndentingLineWriter log)
         {
             // TODO error handling in generated code
 
@@ -806,9 +815,7 @@ namespace LinqPadless
             foreach (var (_, line) in
                 Spawn(dotnetPath, publishArgs, workingDirPath,
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
-                      publishIdleTimeout,
-                      executionTimeout: TimeSpan.FromMinutes(15),
-                      killTimeout: TimeSpan.FromSeconds(15),
+                      publishIdleTimeout, publishTimeout, killTimeout: TimeSpan.FromSeconds(15),
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
