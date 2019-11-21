@@ -1174,7 +1174,8 @@ namespace LinqPadless
             if (timedOut || !process.WaitForExit((int)timeout.TotalMilliseconds))
             {
                 process.Kill();
-                throw new TimeoutException();
+                throw new TimeoutException(
+                    $"Timeout expired waiting for process {process.Id} to {(timedOut ? "respond" : "exit")}.");
             }
 
             var exitCode = process.ExitCode;
