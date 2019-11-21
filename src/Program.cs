@@ -51,7 +51,6 @@ namespace LinqPadless
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.IndexExtension;
-    using static MoreLinq.Extensions.PadExtension;
     using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TagFirstLastExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
