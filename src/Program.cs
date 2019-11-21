@@ -22,6 +22,7 @@ namespace LinqPadless
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Collections.Immutable;
+    using System.ComponentModel;
     using System.Diagnostics;
     using System.Globalization;
     using System.IO;
@@ -32,6 +33,7 @@ namespace LinqPadless
     using System.Security.Cryptography;
     using System.Text;
     using System.Text.RegularExpressions;
+    using System.Threading;
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
@@ -96,6 +98,8 @@ namespace LinqPadless
             var uncached = false;
             var template = (string) null;
             var shouldJustHash = false;
+            var publishTimeout = TimeSpan.FromMinutes(15);
+            var publishIdleTimeout = TimeSpan.FromMinutes(3);
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -107,6 +111,10 @@ namespace LinqPadless
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
                 { "t|template="   , "template", v => template = v },
+                { "timeout="      , $"timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
+                                    v => publishTimeout = TimeSpanHms.Parse(v) },
+                { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
+                                    v => publishIdleTimeout = TimeSpanHms.Parse(v) },
                 { "hash"          , "print hash and exit", _ => shouldJustHash = true },
             };
 
@@ -136,6 +144,8 @@ namespace LinqPadless
                                    shouldJustHash: shouldJustHash,
                                    dontExecute: dontExecute,
                                    force: force,
+                                   publishIdleTimeout: publishIdleTimeout,
+                                   publishTimeout: publishTimeout,
                                    log: log)
             };
         }
@@ -147,6 +157,7 @@ namespace LinqPadless
             string outDirPath,
             bool shouldJustHash,
             bool uncached, bool dontExecute, bool force,
+            TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             TextWriter log)
         {
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
@@ -335,7 +346,9 @@ namespace LinqPadless
 
             try
             {
-                Compile(query, srcDirPath, tmpDirPath, templateFiles, dotnetPath, log);
+                Compile(query, srcDirPath, tmpDirPath, templateFiles,
+                        dotnetPath, publishIdleTimeout, publishTimeout,
+                        log);
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -450,7 +463,8 @@ namespace LinqPadless
         static void Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, TextWriter log)
+            string dotnetPath, TimeSpan publishTimeout, TimeSpan publishIdleTimeout,
+            TextWriter log)
         {
             _(IndentingLineWriter.CreateUnlessNull(log));
 
@@ -579,7 +593,9 @@ namespace LinqPadless
 
                 GenerateExecutable(srcDirPath, binDirPath, query,
                                    from ns in namespaces select ns.Name,
-                                   references, templateFiles, dotnetPath, log);
+                                   references, templateFiles,
+                                   dotnetPath, publishIdleTimeout, publishTimeout,
+                                   log);
             }
         }
 
@@ -615,7 +631,8 @@ namespace LinqPadless
             IEnumerable<string> imports,
             IEnumerable<PackageReference> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
-            string dotnetPath, IndentingLineWriter log)
+            string dotnetPath, TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
+            IndentingLineWriter log)
         {
             // TODO error handling in generated code
 
@@ -798,6 +815,7 @@ namespace LinqPadless
             foreach (var (_, line) in
                 Spawn(dotnetPath, publishArgs, workingDirPath,
                       StdOutputStreamKind.Output, StdOutputStreamKind.Error,
+                      publishIdleTimeout, publishTimeout, killTimeout: TimeSpan.FromSeconds(15),
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
@@ -1059,6 +1077,7 @@ namespace LinqPadless
         static IEnumerable<(T, string)>
             Spawn<T>(string path, IEnumerable<string> args,
                      string workingDirPath, T outputTag, T errorTag,
+                     TimeSpan idleTimeout, TimeSpan executionTimeout, TimeSpan killTimeout,
                      Func<int, Exception> errorSelector)
         {
             var psi = new ProcessStartInfo
@@ -1077,12 +1096,21 @@ namespace LinqPadless
             Debug.Assert(process != null);
 
             var output = new BlockingCollection<(T, string)>();
+            var tsLock = new object();
+            var lastDataTimestamp = DateTime.MinValue;
 
             DataReceivedEventHandler OnStdDataReceived(T tag, TaskCompletionSource<DateTime> tcs) =>
                 (_, e) =>
                 {
+                    var now = DateTime.Now;
+                    lock (tsLock)
+                    {
+                        if (now > lastDataTimestamp)
+                            lastDataTimestamp = now;
+                    }
+
                     if (e.Data == null)
-                        tcs.SetResult(DateTime.Now);
+                        tcs.SetResult(now);
                     else
                         output.Add((tag, e.Data));
                 };
@@ -1099,10 +1127,95 @@ namespace LinqPadless
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
 
-            foreach (var item in output.GetConsumingEnumerable())
-                yield return item;
+            using var heartbeatCancellationTokenSource = new CancellationTokenSource();
+            var heartbeatCancellationToken = heartbeatCancellationTokenSource.Token;
+            using var timeoutCancellationTokenSource = new CancellationTokenSource();
 
-            process.WaitForExit();
+            if (executionTimeout > TimeSpan.Zero)
+                timeoutCancellationTokenSource.CancelAfter(executionTimeout);
+
+            var isClinicallyDead = false;
+
+            async Task Heartbeat()
+            {
+                var delay = idleTimeout;
+                while (!heartbeatCancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(delay, heartbeatCancellationToken);
+
+                    TimeSpan durationSinceLastData;
+                    lock (tsLock) durationSinceLastData = DateTime.Now - lastDataTimestamp;
+
+                    if (idleTimeout > TimeSpan.Zero && durationSinceLastData > idleTimeout)
+                    {
+                        isClinicallyDead = true;
+                        timeoutCancellationTokenSource.Cancel();
+                        break;
+                    }
+
+                    delay = idleTimeout - durationSinceLastData;
+                }
+            }
+
+            var heartbeatTask = Heartbeat();
+
+            using (var e = output.GetConsumingEnumerable(timeoutCancellationTokenSource.Token)
+                                 .GetEnumerator())
+            {
+                while (true)
+                {
+                    try
+                    {
+                        if (!e.MoveNext())
+                            break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    yield return e.Current;
+                }
+            }
+
+            heartbeatCancellationTokenSource.Cancel();
+
+            try
+            {
+                heartbeatTask.GetAwaiter().GetResult(); // await graceful shutdown
+            }
+            catch (OperationCanceledException) { } // expected so ignore
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
+
+            if (isClinicallyDead
+                || !process.WaitForExit(executionTimeout > TimeSpan.Zero
+                                        ? (int)executionTimeout.TotalMilliseconds
+                                        : Timeout.Infinite))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch (Win32Exception e) // If Kill call is made while the process is terminating,
+                {                        // a Win32Exception is thrown for "Access Denied" (2).
+                    Debug.WriteLine(e);
+                }
+
+                var error = $"Timeout expired waiting for process {process.Id} to {(isClinicallyDead ? "respond" : "exit")}.";
+
+                // Killing of a process executes asynchronously so wait for the process to exit
+
+                if (!process.WaitForExit(killTimeout > TimeSpan.Zero
+                                         ? (int)killTimeout.TotalMilliseconds
+                                         : Timeout.Infinite))
+                {
+                    error += " The process did not terminate on time on killing either.";
+                }
+
+                throw new TimeoutException(error);
+            }
 
             var exitCode = process.ExitCode;
             if (exitCode != 0)
