@@ -111,7 +111,7 @@ namespace LinqPadless
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
                 { "t|template="   , "template", v => template = v },
-                { "timeout="      , $"timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
+                { "timeout="      , $"timeout for publishing; default is {publishTimeout.FormatHms()}",
                                     v => publishTimeout = TimeSpanHms.Parse(v) },
                 { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
                                     v => publishIdleTimeout = TimeSpanHms.Parse(v) },
