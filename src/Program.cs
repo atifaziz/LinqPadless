@@ -1118,26 +1118,22 @@ namespace LinqPadless
 
             async Task Heartbeat()
             {
-                try
+                var delay = timeout;
+                while (!heartbeatCancellationToken.IsCancellationRequested)
                 {
-                    var delay = timeout;
-                    while (!heartbeatCancellationToken.IsCancellationRequested)
+                    await Task.Delay(delay, heartbeatCancellationToken);
+
+                    TimeSpan span;
+                    lock (tsLock) span = DateTime.Now - lastDataTimestamp;
+
+                    if (span > timeout)
                     {
-                        await Task.Delay(delay, heartbeatCancellationToken);
-
-                        TimeSpan span;
-                        lock (tsLock) span = DateTime.Now - lastDataTimestamp;
-
-                        if (span > timeout)
-                        {
-                            timeoutCancellationTokenSource.Cancel();
-                            break;
-                        }
-
-                        delay = timeout - span;
+                        timeoutCancellationTokenSource.Cancel();
+                        break;
                     }
+
+                    delay = timeout - span;
                 }
-                catch (OperationCanceledException) {} // expected so ignore
             }
 
             var heartbeatTask = Heartbeat();
@@ -1164,7 +1160,16 @@ namespace LinqPadless
             }
 
             heartbeatCancellationTokenSource.Cancel();
-            heartbeatTask.GetAwaiter().GetResult(); // await graceful shutdown
+
+            try
+            {
+                heartbeatTask.GetAwaiter().GetResult(); // await graceful shutdown
+            }
+            catch (OperationCanceledException) { } // expected so ignore
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+            }
 
             if (timedOut || !process.WaitForExit((int)timeout.TotalMilliseconds))
             {
