@@ -238,7 +238,7 @@ namespace LinqPadless
 
             var hashSource =
                 MoreEnumerable
-                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("2")))
+                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("3")))
                     .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
                             select minifierByExtension.TryGetValue(Path.GetExtension(rn.Name), out var minifier)
                                  ? rn.Content.MapText(minifier)
@@ -496,6 +496,7 @@ namespace LinqPadless
                                 Version = Option.From(r.HasVersion, r.Version),
                                 r.IsPrereleaseAllowed,
                                 Source = None<string>(),
+                                Priority = 0,
                             })
                             .Concat(from lq in query.Loads
                                     from r in lq.PackageReferences
@@ -505,6 +506,7 @@ namespace LinqPadless
                                         Version = Option.From(r.HasVersion, r.Version),
                                         r.IsPrereleaseAllowed,
                                         Source = Some(lq.LoadPath),
+                                        Priority = -1,
                                     })
                     select new
                     {
@@ -515,6 +517,7 @@ namespace LinqPadless
                                 some: Lazy.Value,
                                 none: () => Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed))),
                         nr.IsPrereleaseAllowed,
+                        nr.Priority,
                         Title = Seq.Return(Some(nr.Id),
                                            nr.Version.Map(v => v.ToString()),
                                            nr.IsPrereleaseAllowed ? Some("(pre-release)") : default,
@@ -589,7 +592,7 @@ namespace LinqPadless
 
                 var references =
                     from r in nrs
-                    select new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed);
+                    select (r.Priority, Reference: new PackageReference(r.Id, r.ActualVersion.Value, r.IsPrereleaseAllowed));
 
                 GenerateExecutable(srcDirPath, binDirPath, query,
                                    from ns in namespaces select ns.Name,
@@ -629,7 +632,7 @@ namespace LinqPadless
         static void GenerateExecutable(string srcDirPath, string binDirPath,
             LinqPadQuery query,
             IEnumerable<string> imports,
-            IEnumerable<PackageReference> packages,
+            IEnumerable<(int Priority, PackageReference Reference)> packages,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             string dotnetPath, TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             IndentingLineWriter log)
@@ -652,7 +655,7 @@ namespace LinqPadless
                 XDocument.Parse(resourceNames.Single(e => e.Key.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)).Value.ReadText());
 
             var packageIdSet =
-                ps.Select(e => e.Id)
+                ps.Select(e => e.Reference.Id)
                   .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             projectDocument
@@ -663,6 +666,12 @@ namespace LinqPadless
             projectDocument.Element("Project").Add(
                 new XElement("ItemGroup",
                     from p in ps
+                    group p by p.Reference.Id into g
+                    select g.OrderByDescending(p => p.Priority)
+                            .ThenByDescending(p => p.Reference.Version)
+                            .First()
+                            .Reference
+                    into p
                     select
                         new XElement("PackageReference",
                             new XAttribute("Include", p.Id),
