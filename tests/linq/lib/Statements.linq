@@ -17,4 +17,6 @@
   <RemoveNamespace>System.Xml.XPath</RemoveNamespace>
 </Query>
 
+#load ".\Dummy.linq"
+
 Console.WriteLine("Greetings from Statements!");

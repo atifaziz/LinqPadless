@@ -257,7 +257,7 @@ namespace LinqPadless
                     {
                         code.AppendLine(prologue)
                             .Append("#line 1 \"").Append(load.Path).Append('"').AppendLine()
-                            .AppendLine(load.Code)
+                            .AppendLine(LinqPadQuery.Load(load.Path).FormatCodeWithLoadDirectivesCommented())
                             .Append(epilogue).Append(';').AppendLine();
                     };
                     code.AppendLine("//<<< " + line);

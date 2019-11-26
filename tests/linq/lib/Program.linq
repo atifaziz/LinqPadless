@@ -18,10 +18,7 @@
   <RemoveNamespace>System.Xml.XPath</RemoveNamespace>
 </Query>
 
-void Main()
-{
-    System.Console.WriteLine("This should not run when included in another program.");
-}
+#load ".\Dummy.linq"
 
 string PrivateMethod() => nameof(PrivateMethod);
 int privateField = 10;
@@ -41,3 +38,8 @@ namespace Namespace
 void OnInit()   => System.Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 void OnStart()  => System.Console.WriteLine(MethodBase.GetCurrentMethod().Name);
 void OnFinish() => System.Console.WriteLine(MethodBase.GetCurrentMethod().Name);
+
+void Main()
+{
+    System.Console.WriteLine("This should not run when included in another program.");
+}

@@ -773,7 +773,7 @@ namespace LinqPadless
             var loadedSources =
                 from load in query.Loads.Index(1)
                 where load.Value.Language == LinqPadQueryLanguage.Program
-                let pq = ProgramQuery.Parse(load.Value.GetQuery().Code, load.Value.Path)
+                let pq = ProgramQuery.Parse(LinqPadQuery.Load(load.Value.Path).FormatCodeWithLoadDirectivesCommented(), load.Value.Path)
                 select
                     load.WithValue(
                         ProcessNamespaceDirectives(load.Value.Namespaces, load.Value.NamespaceRemovals)
