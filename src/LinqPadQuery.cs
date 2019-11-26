@@ -74,27 +74,27 @@ namespace LinqPadless
             ZeroLinqPadQueryReferences = new LinqPadQueryReference[0];
 
         public static LinqPadQuery Load(string path) =>
-            Load(path, parseLoads: true);
+            Load(path, parseLoads: true, resolveLoads: true);
 
         public static LinqPadQuery Parse(string source, string path) =>
-            Parse(source, path, parseLoads: true);
+            Parse(source, path, parseLoads: true, resolveLoads: true);
 
         public static LinqPadQuery LoadReferencedQuery(string path) =>
-            Load(path, parseLoads: false);
+            Load(path, parseLoads: true, resolveLoads: false);
 
         public static LinqPadQuery ParseReferencedQuery(string source, string path) =>
-            Parse(source, path, parseLoads: false);
+            Parse(source, path, parseLoads: true, resolveLoads: false);
 
-        static LinqPadQuery Load(string path, bool parseLoads) =>
-            Parse(File.ReadAllText(path), path, parseLoads);
+        static LinqPadQuery Load(string path, bool parseLoads, bool resolveLoads) =>
+            Parse(File.ReadAllText(path), path, parseLoads, resolveLoads);
 
-        static LinqPadQuery Parse(string source, string path, bool parseLoads)
+        static LinqPadQuery Parse(string source, string path, bool parseLoads, bool resolveLoads)
         {
             var eomLineNumber = LinqPad.GetEndOfMetaLineNumber(source);
-            return new LinqPadQuery(path, source, eomLineNumber, parseLoads);
+            return new LinqPadQuery(path, source, eomLineNumber, parseLoads, resolveLoads);
         }
 
-        LinqPadQuery(string filePath, string source, int eomLineNumber, bool parseLoads)
+        LinqPadQuery(string filePath, string source, int eomLineNumber, bool parseLoads, bool resolveLoads)
         {
             FilePath = filePath;
             Source = source;
@@ -154,7 +154,7 @@ namespace LinqPadless
                                            ? d.Path
                                            : d.Path.Replace('\\', Path.DirectorySeparatorChar))
                        into d
-                       select new LinqPadQueryReference(ResolvePath(d.Path), d.Path, d.Line))),
+                       select new LinqPadQueryReference(resolveLoads ? ResolvePath(d.Path) : null, d.Path, d.Line))),
                 _ => null,
             };
 
@@ -257,7 +257,7 @@ namespace LinqPadless
                     {
                         code.AppendLine(prologue)
                             .Append("#line 1 \"").Append(load.Path).Append('"').AppendLine()
-                            .AppendLine(LinqPadQuery.Load(load.Path).FormatCodeWithLoadDirectivesCommented())
+                            .AppendLine(load.GetQuery().FormatCodeWithLoadDirectivesCommented())
                             .Append(epilogue).Append(';').AppendLine();
                     };
                     code.AppendLine("//<<< " + line);
