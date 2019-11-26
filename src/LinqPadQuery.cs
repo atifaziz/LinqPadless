@@ -201,17 +201,18 @@ namespace LinqPadless
     sealed class LinqPadQueryReference
     {
         readonly Lazy<LinqPadQuery> _query;
+        readonly string _path;
 
         public LinqPadQueryReference(string path, string loadPath, int lineNumber)
         {
-            Path = path;
+            _path = path;
             LoadPath = loadPath;
             LineNumber = lineNumber;
             _query = Lazy.Create(() => LinqPadQuery.LoadReferencedQuery(path));
         }
 
         public int LineNumber { get; }
-        public string Path { get; }
+        public string Path => _path ?? throw new InvalidOperationException();
         public string LoadPath { get; }
 
         public LinqPadQuery GetQuery() => _query.Value;
