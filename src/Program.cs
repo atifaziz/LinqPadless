@@ -37,6 +37,7 @@ namespace LinqPadless
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
+    using Arqs;
     using KeyValuePairs;
     using Mannex.IO;
     using Microsoft.CodeAnalysis;
@@ -61,7 +62,6 @@ namespace LinqPadless
     using static OptionTag;
     using static Optuple.OptionModule;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
-    using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
 
     #endregion
 
@@ -90,64 +90,101 @@ namespace LinqPadless
 
         static int Wain(IEnumerable<string> args)
         {
-            var verbose = Ref.Create(false);
-            var help = Ref.Create(false);
-            var force = false;
-            var dontExecute = false;
-            var outDirPath = (string) null;
-            var uncached = false;
-            var template = (string) null;
-            var shouldJustHash = false;
-            var publishTimeout = TimeSpan.FromMinutes(15);
-            var publishIdleTimeout = TimeSpan.FromMinutes(3);
+            var defaultPublishTimeout = TimeSpan.FromMinutes(15);
+            var defaultPublishIdleTimeout = TimeSpan.FromMinutes(3);
 
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
+            var timeSpanParser =
+                Parser.Create(s => TimeSpanHms.TryParse(s, out var ts) ? ParseResult.Success(ts) : default)
+                      .Nullable();
+
+            var commonOptions =
+                from h1 in Arg.Flag("h|help    prints out the options")
+                join h2 in Arg.Flag("?         prints out the options") on 1 equals 1
+                join v  in Arg.Flag("v|verbose enable additional output") on 1 equals 1
+                join d  in Arg.Flag("d|debug   debug break") on 1 equals 1
+                select new
+                {
+                    Help       = h1 || h2,
+                    Verbose    = v,
+                    DebugBreak = d,
+                };
+
+            static IEntryPoint EntryPoint(bool help,
+                                          bool debug, bool verbose,
+                                          Func<ImmutableArray<string>, TextWriter, int> epf)
             {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force"       , "force re-fresh/build", _ => force = true },
-                { "x"             , "do not execute", _ => dontExecute = true },
-                { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
-                { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
-                { "t|template="   , "template", v => template = v },
-                { "timeout="      , $"timeout for publishing; default is {publishTimeout.FormatHms()}",
-                                    v => publishTimeout = TimeSpanHms.Parse(v) },
-                { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
-                                    v => publishIdleTimeout = TimeSpanHms.Parse(v) },
-                { "hash"          , "print hash and exit", _ => shouldJustHash = true },
-            };
+                if (debug)
+                    Debugger.Break();
 
-            var tail = options.Parse(args);
+                var log = verbose ? Console.Error : null;
+                if (log != null)
+                    Trace.Listeners.Add(new TextWriterTraceListener(log));
 
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help || tail.Count == 0)
-            {
-                Help(options);
-                return 0;
+                return CommandLine.EntryPoint(help ? EntryPointMode.ShowHelp : EntryPointMode.RunMain,
+                                              tail => epf(tail, log));
             }
 
-            var command = tail.First();
-            args = tail.Skip(1).TakeWhile(arg => arg != "--");
+            return
+                CommandLine.Run(args,
 
-            return command switch
-            {
-                "cache"  => CacheCommand(args),
-                "init"   => InitCommand(args).GetAwaiter().GetResult(),
-                "bundle" => BundleCommand(args),
-                _ => // ...
-                    DefaultCommand(command, args, template, outDirPath,
-                                   uncached: uncached || outDirPath != null,
-                                   shouldJustHash: shouldJustHash,
-                                   dontExecute: dontExecute,
-                                   force: force,
-                                   publishIdleTimeout: publishIdleTimeout,
-                                   publishTimeout: publishTimeout,
-                                   log: log)
-            };
+                    from co   in commonOptions
+                    join f    in Arg.Flag   ( "f|force             force re-fresh/build") on 1 equals 1
+                    join nox  in Arg.Flag   ( "x                   do not execute") on 1 equals 1
+                    join bld  in Arg.Flag   ( "b|build             build entirely to output directory; implies -f") on 1 equals 1
+                    join od   in Arg.Option ( "o|out|output=<dir>  output directory; implies -b and -f") on 1 equals 1
+                    join tn   in Arg.Option ( "t|template=<name>   program template to use") on 1 equals 1
+                    join pto  in Arg.Option ($"timeout=<secs>      timeout for publishing; default is {defaultPublishTimeout.FormatHms()}", timeSpanParser) on 1 equals 1
+                    join ito  in Arg.Option ($"idle-timeout=<secs> idle timeout for publishing; default is {defaultPublishIdleTimeout.FormatHms()}", timeSpanParser) on 1 equals 1
+                    join hsh  in Arg.Flag   ( "hash                print hash and exit") on 1 equals 1
+                    join q    in Arg.Operand( "<query>             LINQPad query file path") on 1 equals 1
+                    join tail in Arg.Operand( "<args>...           remaining arguments").Tail() on 1 equals 1
+                    select
+                        EntryPoint(co.Help, co.DebugBreak, co.Verbose, (_, log) =>
+                            DefaultCommand(q, tail, tn, od,
+                                           uncached: bld || od != null,
+                                           shouldJustHash: hsh,
+                                           dontExecute: nox,
+                                           force: f,
+                                           publishIdleTimeout: pto ?? defaultPublishIdleTimeout,
+                                           publishTimeout: ito ?? defaultPublishTimeout,
+                                           log: log)),
+
+                    CommandLine.Command("cache",
+                        from co in commonOptions
+                        select
+                            EntryPoint(co.Help, co.DebugBreak, co.Verbose, (tail, _) =>
+                                tail.Length > 0
+                                ? throw new Exception("Invalid argument: " + tail[0])
+                                : CacheCommand())),
+
+                    CommandLine.Command("init",
+                        from co  in commonOptions
+                        join f   in Arg.Flag   ("f|force             force re-fresh/build") on 1 equals 1
+                        join od  in Arg.Option ("o|out|output=<dir>  output directory path") on 1 equals 1
+                        join eg  in Arg.Flag   ("example             add a simple example") on 1 equals 1
+                        join ver in Arg.Option ("v|version=<ver>     use package version", Parser.Create(s => NuGetVersion.TryParse(s, out var v) ? ParseResult.Success(v) : default)) on 1 equals 1
+                        join fd  in Arg.Option ("feed=<path>         use path as the package feed") on 1 equals 1
+                        join pre in Arg.Flag   ("pre|pre-release     include pre-releases in searches") on 1 equals 1
+                        join g   in Arg.Flag   ("g|global            set-up globally/user-wide") on 1 equals 1
+                        join s   in Arg.Operand("<source>            package name or zip path/URL") on 1 equals 1
+                        select
+                            EntryPoint(co.Help, co.DebugBreak, co.Verbose, (tail, log) =>
+                                tail.Length > 0
+                                ? throw new Exception("Invalid argument: " + tail[0])
+                                : InitCommand(s ?? "LinqPadless.Templates.Template",
+                                              force: f, outputDirectoryPath: od, example: eg,
+                                              specificVersion: ver, feedDirPath: fd,
+                                              searchPrereleases: pre, isGlobalSetup: g).GetAwaiter().GetResult())),
+
+                    CommandLine.Command("bundle",
+                        from co in commonOptions
+                        join f  in Arg.Flag   ("f|force             overwrite bundle if exists") on 1 equals 1
+                        join op in Arg.Option ("o|out|output=<path> write bundle at <path>") on 1 equals 1
+                        join fp in Arg.Operand("<path>              path to LINQPad query to bundle") on 1 equals 1
+                        select
+                            EntryPoint(co.Help, co.DebugBreak, co.Verbose, (_, log) =>
+                                BundleCommand(fp ?? throw new Exception("Missing LINQPad query path argument"),
+                                              op, f, log))));
         }
 
         static int DefaultCommand(
@@ -444,18 +481,6 @@ namespace LinqPadless
 
                 return process.ExitCode;
             }
-        }
-
-        static class Options
-        {
-            public static Mono.Options.Option Help(Ref<bool> value) =>
-                new ActionOption("?|help|h", "prints out the options", _ => value.Value = true);
-
-            public static Mono.Options.Option Verbose(Ref<bool> value) =>
-                new ActionOption("verbose|v", "enable additional output", _ => value.Value = true);
-
-            public static readonly Mono.Options.Option Debug =
-                new ActionOption("d|debug", "debug break", vs => Debugger.Launch());
         }
 
         static readonly ValueTuple Unit = default;
@@ -1234,10 +1259,10 @@ namespace LinqPadless
         static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
         static FileVersionInfo VersionInfo => CachedVersionInfo.Value;
 
-        static void Help(Mono.Options.OptionSet options)
+        static void Help(IArgBinder<IEntryPoint> binder)
         {
             var name    = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
-            var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
+            var opts    = Lazy.Create(() => { var sw = new StringWriter { NewLine = Environment.NewLine }; binder.Describe(sw); return sw.ToString(); });
             var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{VersionInfo.ProductName} (version {VersionInfo.FileVersion})")
                                                                .AppendLines(Regex.Split(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"), @"\. *(?=(?:Portions +)?Copyright\b)")
                                                                                  .TagFirstLast((s, _, l) => l ? s : s + "."))
@@ -1263,26 +1288,6 @@ namespace LinqPadless
                 else
                     Console.WriteLine(line);
             }
-        }
-
-        static OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
-        {
-            var hasTailStarted = false;
-            return (impl, arg, context) =>
-            {
-                if (hasTailStarted) // once a tail, always a tail
-                    return false;
-
-                var isOption = impl(arg, context);
-                if (!isOption)
-                {
-                    if (arg.Length > 0 && arg[0] == '-' && !hasTailStarted)
-                        throw new Exception("Invalid argument: " + arg);
-                    hasTailStarted = true;
-                }
-
-                return isOption;
-            };
         }
 
         static string LoadTextResource(string name, Encoding encoding = null) =>

@@ -74,4 +74,8 @@
     <Folder Include="Properties\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\lib\Arqs\src\Arqs.csproj" />
+  </ItemGroup>
+
 </Project>

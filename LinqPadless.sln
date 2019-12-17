@@ -32,6 +32,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "tests\Tests.csproj
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ProgramTemplate", ".lpless\templates\template\ProgramTemplate.csproj", "{42D9CD32-88F9-4767-B6DB-2F8C462BF8EF}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Arqs", "lib\Arqs\src\Arqs.csproj", "{5A3D3948-BB5C-4B7F-A274-9381C16372E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -50,6 +52,10 @@ Global
 		{42D9CD32-88F9-4767-B6DB-2F8C462BF8EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{42D9CD32-88F9-4767-B6DB-2F8C462BF8EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{42D9CD32-88F9-4767-B6DB-2F8C462BF8EF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5A3D3948-BB5C-4B7F-A274-9381C16372E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5A3D3948-BB5C-4B7F-A274-9381C16372E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5A3D3948-BB5C-4B7F-A274-9381C16372E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5A3D3948-BB5C-4B7F-A274-9381C16372E8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,3 @@
+[submodule "lib/Arqs"]
+	path = lib/Arqs
+	url = https://github.com/atifaziz/Arqs.git

@@ -20,13 +20,10 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Globalization;
     using System.IO;
     using System.IO.Compression;
     using System.Linq;
-    using Optuple.Collections;
-    using static OptionTag;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.LeftJoinExtension;
     using static DeferDisposable;
@@ -35,40 +32,8 @@ namespace LinqPadless
 
     partial class Program
     {
-        static int BundleCommand(IEnumerable<string> args)
+        static int BundleCommand(string queryPath, string bundlePath, bool force, TextWriter log)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var force = false;
-            var bundlePath = (string)null;
-
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force", "overwrite bundle if exists", _ => force = true },
-                { "o|out=", "write bundle at {PATH}", v => bundlePath = v },
-            };
-
-            var tail = options.Parse(args);
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(options);
-                return 0;
-            }
-
-            var queryPath = tail.FirstOrNone() switch
-            {
-                (SomeT, var arg) => arg,
-                _ => throw new Exception("Missing LINQPad query path argument")
-            };
-
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
             if (query.ValidateSupported() is Exception e)
                 throw e;

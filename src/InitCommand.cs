@@ -45,49 +45,16 @@ namespace LinqPadless
 
     partial class Program
     {
-        static async Task<int> InitCommand(IEnumerable<string> args)
+        static async Task<int> InitCommand(string source,
+            bool force = false,
+            string outputDirectoryPath = null,
+            bool example = false,
+            NuGetVersion specificVersion = null,
+            string feedDirPath = null,
+            bool searchPrereleases = false,
+            bool isGlobalSetup = false,
+            TextWriter log = null)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var force = false;
-            var outputDirectoryPath = (string)null;
-            var example = false;
-            var specificVersion = (NuGetVersion)null;
-            var feedDirPath = (string)null;
-            var searchPrereleases = false;
-            var isGlobalSetup = false;
-
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force", "force re-fresh/build", _ => force = true },
-                { "o|output=", "output {DIRECTORY}", v => outputDirectoryPath = v },
-                { "example", "add a simple example", _ => example = true },
-                { "version=", "use package {VERSION}", v => specificVersion = NuGetVersion.Parse(v) },
-                { "feed=", "use {PATH} as package feed", v => feedDirPath = v },
-                { "pre|prerelease", "include pre-releases in searches", _ => searchPrereleases = true },
-                { "g|global", "set-up globally/user-wide", _ => isGlobalSetup = true },
-            };
-
-            var tail = options.Parse(args);
-
-            if (tail.Count > 1)
-                throw new Exception("Invalid argument: " + tail[1]);
-
-            var source = tail.FirstOrNone().Or("LinqPadless.Templates.Template");
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(options);
-                return 0;
-            }
-
             if (isGlobalSetup)
             {
                 if (!(outputDirectoryPath is null))

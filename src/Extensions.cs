@@ -111,14 +111,4 @@ namespace LinqPadless
         public static (bool Found, XElement Element) FindElement(this XContainer element, XName name) =>
             element.Element(name) switch { null => default, var e => Some(e) };
     }
-
-    static class OptionSetExtensions
-    {
-        public static T WriteOptionDescriptionsReturningWriter<T>(this Mono.Options.OptionSet options, T writer)
-            where T : TextWriter
-        {
-            options.WriteOptionDescriptions(writer);
-            return writer;
-        }
-    }
 }

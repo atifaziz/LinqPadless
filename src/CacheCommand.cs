@@ -20,46 +20,20 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Globalization;
     using System.IO;
     using System.Linq;
     using System.Text.RegularExpressions;
     using Choices;
-    using Optuple.Collections;
     using static MoreLinq.Extensions.AggregateExtension;
     using static MoreLinq.Extensions.FoldExtension;
-    using static OptionTag;
 
     #endregion
 
     partial class Program
     {
-        static int CacheCommand(IEnumerable<string> args)
+        static int CacheCommand()
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-            };
-
-            var tail = options.Parse(args);
-            if (tail.FirstOrNone() is (SomeT, var arg))
-                throw new Exception("Invalid argument: " + arg);
-
-            if (verbose)
-                Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
-
-            if (help)
-            {
-                Help(options);
-                return 0;
-            }
-
             var baseDir = new DirectoryInfo(GetCacheDirPath(GetSearchPaths(new DirectoryInfo(Environment.CurrentDirectory))));
             var binDir = new DirectoryInfo(Path.Join(baseDir.FullName, "bin"));
             if (!binDir.Exists)
