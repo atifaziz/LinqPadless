@@ -31,7 +31,7 @@ public class TemplateTests
 
         return new DirectoryInfo(TestDirectoryPath)
             .AncestorsAndSelf()
-            .Select(dir => Path.Combine(dir.FullName, "bin", BuildConfiguration, "netcoreapp3.0", isWindows ? "lpless.exe" : "lpless"))
+            .Select(dir => Path.Combine(dir.FullName, "bin", BuildConfiguration, "netcoreapp3.1", isWindows ? "lpless.exe" : "lpless"))
             .Where(File.Exists)
             .First();
     });
