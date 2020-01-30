@@ -22,12 +22,12 @@ environment:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
 install:
 - cmd: curl -OsSL https://dot.net/v1/dotnet-install.ps1
+- ps: if ($isWindows) { ./dotnet-install.ps1 -JsonFile global.json }
+- ps: if ($isWindows) { ./dotnet-install.ps1 -Runtime dotnet -Version 2.1.15 -SkipNonVersionedFiles }
 - sh: curl -OsSL https://dot.net/v1/dotnet-install.sh
 - sh: chmod +x dotnet-install.sh
-- ps: |
-    $sdkVersion = (type .\global.json | ConvertFrom-Json).sdk.version
-    if ($isWindows) { ./dotnet-install.ps1 -Version $sdkVersion }
-    if ($isLinux)   { ./dotnet-install.sh --version $sdkVersion }
+- sh: ./dotnet-install.sh --jsonfile global.json
+- sh: ./dotnet-install.sh --runtime dotnet --version 2.1.15 --skip-non-versioned-files
 - sh: export PATH="$HOME/.dotnet:$PATH"
 before_build:
 - dotnet --info
