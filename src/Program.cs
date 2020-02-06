@@ -28,6 +28,7 @@ namespace LinqPadless
     using System.IO;
     using System.Linq;
     using System.Net;
+    using System.Reactive.Disposables;
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Security.Cryptography;
@@ -37,6 +38,7 @@ namespace LinqPadless
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
+    using CSharpMinifier;
     using KeyValuePairs;
     using Mannex.IO;
     using Microsoft.CodeAnalysis;
@@ -100,6 +102,7 @@ namespace LinqPadless
             var shouldJustHash = false;
             var publishTimeout = TimeSpan.FromMinutes(15);
             var publishIdleTimeout = TimeSpan.FromMinutes(3);
+            var inputQueryKind = LinqPadQueryLanguage.Expression;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -110,6 +113,16 @@ namespace LinqPadless
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
+                { "k|kind="       , $@"query kind ({string.Join(", ", nameof(LinqPadQueryLanguage.Expression),
+                                                                      nameof(LinqPadQueryLanguage.Statements),
+                                                                      nameof(LinqPadQueryLanguage.Program))})",
+                                    v => inputQueryKind = v.ToLowerInvariant() switch
+                                    {
+                                        nameof(LinqPadQueryLanguage.Expression) => LinqPadQueryLanguage.Expression,
+                                        nameof(LinqPadQueryLanguage.Statements) => LinqPadQueryLanguage.Statements,
+                                        nameof(LinqPadQueryLanguage.Program)    => LinqPadQueryLanguage.Program,
+                                        _ => throw new Exception("Invalid query kind:" + v)
+                                    } },
                 { "t|template="   , "template", v => template = v },
                 { "timeout="      , $"timeout for publishing; default is {publishTimeout.FormatHms()}",
                                     v => publishTimeout = TimeSpanHms.Parse(v) },
@@ -140,6 +153,7 @@ namespace LinqPadless
                 "bundle" => BundleCommand(args),
                 _ => // ...
                     DefaultCommand(command, args, template, outDirPath,
+                                   inputQueryKind,
                                    uncached: uncached || outDirPath != null,
                                    shouldJustHash: shouldJustHash,
                                    dontExecute: dontExecute,
@@ -150,16 +164,108 @@ namespace LinqPadless
             };
         }
 
+        enum RewriterState
+        {
+            Scan,
+            Using,
+        }
+
+        static (XElement, string) Rewrite(string source)
+        {
+            var state = RewriterState.Scan;
+            var imports = new List<string>();
+            var packages = new List<PackageReference>();
+            var sb = new StringBuilder(source.Length);
+
+            using var e = Scanner.Scan(source).GetEnumerator();
+            while (e.TryRead(out var token))
+            {
+                switch (state)
+                {
+                    case RewriterState.Scan:
+                    {
+                        switch (token.Kind)
+                        {
+                            case TokenKind.PreprocessorDirective:
+                                var directive = source.Substring(token.Start.Offset, token.Length);
+                                var match = Regex.Match(directive, @"^#r\s+""nuget:\s*(\w+(?:\.\w+)*)(?:\s*,\s*(.+))?""\s*$");
+                                if (!match.Success)
+                                    goto default;
+                                var id = match.Groups[1].Value;
+                                if (!NuGetVersion.TryParse(match.Groups[2].Value, out var version))
+                                    throw new Exception($"Invalid package version in reference (line {token.Start.Line}): {directive}");
+                                packages.Add(new PackageReference(id, version, version.IsPrerelease));
+                                while (e.TryRead(out var t) && t.Kind != TokenKind.NewLine)
+                                    /* NOP */
+                                    ;
+                                break;
+                            case TokenKind.Text:
+                                if (source.AsSpan(token.Start.Offset, token.Length).Equals("using", StringComparison.OrdinalIgnoreCase))
+                                    state = RewriterState.Using;
+                                break;
+                            default:
+                                sb.Append(source, token.Start.Offset, token.Length);
+                                break;
+                        }
+                        break;
+                    }
+                    case RewriterState.Using:
+                    {
+                        if (token.Kind.HasTraits(TokenKindTraits.WhiteSpace) || token.Kind.HasTraits(TokenKindTraits.Comment))
+                            break;
+
+                        if (token.Kind != TokenKind.Text)
+                            throw new Exception($"Syntax error parsing import on line {token.Start.Line}, column {token.Start.Column}.");
+
+                        var text = source.AsSpan(token.Start.Offset, token.Length);
+                        if (text.EndsWith(";", StringComparison.Ordinal))
+                        {
+                            imports.Add(text.Slice(0, text.Length - 1).ToString());
+                            state = RewriterState.Scan;
+                        }
+                        else if (text.EndsWith(";using", StringComparison.Ordinal))
+                        {
+                            imports.Add(text.Slice(0, text.IndexOf(';')).ToString());
+                        }
+                        else
+                        {
+                            imports.Add(text.ToString());
+
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+
         static int DefaultCommand(
             string queryPath,
             IEnumerable<string> args,
             string template,
             string outDirPath,
+            LinqPadQueryLanguage inputQueryKind,
             bool shouldJustHash,
             bool uncached, bool dontExecute, bool force,
             TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             TextWriter log)
         {
+            using var disposables = new CompositeDisposable();
+
+            if (queryPath == "STDIN")
+            {
+                var tempPath = Path.Combine(Environment.CurrentDirectory, Path.GetRandomFileName() + ".linq");
+                disposables.Add(new TempFile(tempPath));
+                log?.WriteLine("Temporary query path: " + tempPath);
+                var (header, body) = Rewrite(inputQueryKind, Console.In.ReadToEnd());
+                File.WriteAllLines(tempPath, new[] { header.ToString(), string.Empty }, Utf8.BomlessEncoding);
+                File.AppendAllText(tempPath, body);
+                queryPath = tempPath;
+            }
+
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
 
             if (query.ValidateSupported() is Exception e)
