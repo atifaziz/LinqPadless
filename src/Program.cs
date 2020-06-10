@@ -414,7 +414,7 @@ namespace LinqPadless
                 var (_, binPath) =
                     Directory.GetFiles(binDirPath, "*.json")
                              .Where(p => p.EndsWith(runtimeconfigJsonSuffix, StringComparison.OrdinalIgnoreCase))
-                             .Select(p => p.Substring(0, p.Length - runtimeconfigJsonSuffix.Length))
+                             .Select(p => p[..^runtimeconfigJsonSuffix.Length])
                              .FirstOrNone()
                              .Select(s => s + ".dll");
 
@@ -1091,11 +1091,11 @@ namespace LinqPadless
                  .Aggregate((Index: 0, Text: string.Empty),
                             (s, m) =>
                                 (m.Index + m.Length,
-                                 s.Text + template.Substring(s.Index, m.Index - s.Index)
+                                 s.Text + template[s.Index..m.Index]
                                         + (string.Equals(name, m.Groups[1].Value, StringComparison.OrdinalIgnoreCase)
                                            ? replacement.Value
                                            : m.Value)),
-                            s => s.Text + template.Substring(s.Index));
+                            s => s.Text + template[s.Index..]);
 
         static NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed, Func<Uri, string> downloader)
         {

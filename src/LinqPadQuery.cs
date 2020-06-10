@@ -146,7 +146,7 @@ namespace LinqPadless
                        where t.Parts.Item1 == "#load"
                        select t.Parts.Item2 switch
                        {
-                           var p when p.Length > 2 && p[0] == '"' && p[^1] == '"' => (t.Line, Path: p.Substring(1, p.Length - 2)),
+                           var p when p.Length > 2 && p[0] == '"' && p[^1] == '"' => (t.Line, Path: p[1..^1]),
                            _ => throw new Exception("Invalid load directive: " + t.Text)
                        }
                        into d
