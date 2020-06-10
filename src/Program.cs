@@ -411,22 +411,28 @@ namespace LinqPadless
 
                 const string runtimeconfigJsonSuffix = ".runtimeconfig.json";
 
-                var (_, binPath) =
+                var binPath =
                     Directory.GetFiles(binDirPath, "*.json")
-                             .Where(p => p.EndsWith(runtimeconfigJsonSuffix, StringComparison.OrdinalIgnoreCase))
-                             .Select(p => p[..^runtimeconfigJsonSuffix.Length])
-                             .FirstOrNone()
-                             .Select(s => s + ".dll");
+                             .FirstOrNone(p => p.EndsWith(runtimeconfigJsonSuffix, StringComparison.OrdinalIgnoreCase))
+                             .Select(p => p[..^runtimeconfigJsonSuffix.Length] + ".dll")
+                             .Match(p  => p,
+                                    () => Directory.GetFiles(binDirPath, "*.exe")
+                                                   .SingleOrDefault());
 
                 if (binPath == null)
                     return null;
 
-                var psi = new ProcessStartInfo
+                var psi = new ProcessStartInfo { UseShellExecute = false };
+
+                if (binPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
                 {
-                    UseShellExecute = false,
-                    FileName        = dotnetPath,
-                    ArgumentList    = { binPath },
-                };
+                    psi.FileName = dotnetPath;
+                    psi.ArgumentList.Add(binPath);
+                }
+                else
+                {
+                    psi.FileName = binPath;
+                }
 
                 var env = psi.Environment;
                 env.Add("LPLESS_BIN_PATH", new Uri(Assembly.GetEntryAssembly().CodeBase).LocalPath);
