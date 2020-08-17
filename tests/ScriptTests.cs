@@ -25,7 +25,9 @@ namespace Tests
             var source = record.Source;
             var expected = record.Expected;
 
+#pragma warning disable 8509
             var language = kind switch
+#pragma warning restore 8509
             {
                 QueryKind.Expression => LinqPadQueryLanguage.Expression,
                 QueryKind.Statements => LinqPadQueryLanguage.Statements,
