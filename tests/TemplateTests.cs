@@ -62,7 +62,7 @@ public class TemplateTests
         var content = File.ReadAllText(path);
 
         var expectedExitCode
-            = Regex.Match(content, @"(?<=^//<\s*)[0-9]+(?=\s*$)", RegexOptions.Multiline).Value is string s && s.Length > 0
+            = Regex.Match(content, @"(?<=^//<\s*)[0-9]+(?=\s*$)", RegexOptions.Multiline).Value is {} s && s.Length > 0
             ? int.Parse(s, NumberStyles.None, CultureInfo.InvariantCulture)
             : throw new FormatException("Missing expected exit code specification.");
 

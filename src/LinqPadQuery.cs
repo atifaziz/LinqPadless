@@ -254,7 +254,7 @@ namespace LinqPadless
                             LinqPadQueryLanguage.Expression => ("DumpLoadedExpression(", ")"),
                             _ => default
                         }
-                        is (string prologue, string epilogue))
+                        is ({} prologue, {} epilogue))
                     {
                         code.AppendLine(prologue)
                             .Append("#line 1 \"").Append(load.Path).Append('"').AppendLine()

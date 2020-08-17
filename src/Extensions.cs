@@ -53,7 +53,7 @@ namespace LinqPadless
             return _(); IEnumerable<string> _()
             {
                 using var reader = new StringReader(input);
-                while (reader.ReadLine() is string line)
+                while (reader.ReadLine() is {} line)
                     yield return line;
             }
         }

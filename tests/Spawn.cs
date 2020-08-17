@@ -46,7 +46,7 @@ static class Process
                                                                        Action<T> appender) =>
             (_, args) =>
             {
-                if (args.Data is string data)
+                if (args.Data is {} data)
                     appender(selector(data));
             };
     }

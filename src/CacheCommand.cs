@@ -131,7 +131,7 @@ namespace LinqPadless
                                 if (starts.TryGetValue(end.Id, out var start))
                                     starts.Remove(end.Id);
 
-                                var startTime = start.Time is string st ? ParseTime(st) : (DateTimeOffset?) null;
+                                var startTime = start.Time is {} st ? ParseTime(st) : (DateTimeOffset?) null;
                                 var endTime   = ParseTime(end.Time);
                                 return (true, selector(endTime, startTime));
                             });

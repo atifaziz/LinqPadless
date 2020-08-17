@@ -340,7 +340,7 @@ namespace LinqPadless
                     .FirstOrNone(File.Exists).Or("dotnet");
 
             {
-                if (!force && Run() is int exitCode)
+                if (!force && Run() is {} exitCode)
                     return exitCode;
             }
 
@@ -370,7 +370,7 @@ namespace LinqPadless
             }
 
             {
-                return Run() is int exitCode
+                return Run() is {} exitCode
                      ? exitCode
                      : throw new Exception("Internal error executing compilation.");
             }
@@ -728,7 +728,7 @@ namespace LinqPadless
                 Detemplate(p, $"hook-{h.Name}",
                            Lazy.Create(() =>
                                loads.MapValue(h.Getter)
-                                    .Choose(e => e.Value is MethodDeclarationSyntax md
+                                    .Choose(e => e.Value is {} md
                                                ? Some(FormattableString.Invariant($"q => q.{md.Identifier}{e.Key}"))
                                                : default)
                                     .ToDelimitedString(", "))));
@@ -828,13 +828,13 @@ namespace LinqPadless
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
-                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is string ms
+                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is {} ms
                     && ms.Length > 0)
                 {
                     if (ms == "error")
                     {
                         errored = true;
-                        if (pendingNonErrors is List<string> nonErrors)
+                        if (pendingNonErrors is {} nonErrors)
                         {
                             pendingNonErrors = null;
                             foreach (var nonError in nonErrors)
@@ -910,7 +910,7 @@ namespace LinqPadless
                                Lazy.Create(() =>
                                    loads.Select(h.Getter)
                                         .Index(1)
-                                        .Choose(e => e.Value is MethodDeclarationSyntax md
+                                        .Choose(e => e.Value is {} md
                                                    ? Some(FormattableString.Invariant($"{md.Identifier}{e.Key}();"))
                                                    : default)
                                         .ToDelimitedString(eol))));
@@ -955,7 +955,7 @@ namespace LinqPadless
             var newMain =
                 query.Loads.Any(q => q.Language == LinqPadQueryLanguage.Expression
                                   || q.Language == LinqPadQueryLanguage.Statements)
-                ? main.ExpressionBody is ArrowExpressionClauseSyntax arrow
+                ? main.ExpressionBody is {} arrow
                   ? main.WithExpressionBody(null).WithSemicolonToken(default)
                         .WithBody(SyntaxFactory.Block(loadedStatements.Value.Add(SyntaxFactory.ExpressionStatement(arrow.Expression))))
                   : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(
