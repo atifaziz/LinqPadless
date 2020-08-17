@@ -100,6 +100,16 @@ namespace LinqPadless
             from e in source select e.Value;
     }
 
+    static class EnumeratorExtensions
+    {
+        public static bool TryRead<T>(this IEnumerator<T> enumerator, out T item)
+        {
+            bool moved;
+            (moved, item) = enumerator.MoveNext() ? (true, enumerator.Current) : default;
+            return moved;
+        }
+    }
+
     static class TupleExtensions
     {
         public static TResult MapItems<T1, T2, TResult>(this ValueTuple<T1, T2> tuple, Func<T1, T2, TResult> mapper) =>
