@@ -669,8 +669,20 @@ namespace LinqPadless
             // TODO error handling in generated code
 
             var workingDirPath = srcDirPath;
-            if (!Directory.Exists(workingDirPath))
-                Directory.CreateDirectory(workingDirPath);
+
+            if (Directory.Exists(workingDirPath))
+            {
+                try
+                {
+                    Directory.Delete(workingDirPath, true);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                     // ignore in case of a race condition
+                }
+            }
+
+            Directory.CreateDirectory(workingDirPath);
 
             var ps = packages.ToArray();
 
