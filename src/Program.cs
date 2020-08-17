@@ -409,12 +409,12 @@ namespace LinqPadless
                 if (!Directory.Exists(binDirPath))
                     return null;
 
-                const string depsJsonSuffix = ".deps.json";
+                const string runtimeconfigJsonSuffix = ".runtimeconfig.json";
 
                 var (_, binPath) =
                     Directory.GetFiles(binDirPath, "*.json")
-                             .Where(p => p.EndsWith(depsJsonSuffix, StringComparison.OrdinalIgnoreCase))
-                             .Select(p => p.Substring(0, p.Length - depsJsonSuffix.Length))
+                             .Where(p => p.EndsWith(runtimeconfigJsonSuffix, StringComparison.OrdinalIgnoreCase))
+                             .Select(p => p.Substring(0, p.Length - runtimeconfigJsonSuffix.Length))
                              .FirstOrNone()
                              .Select(s => s + ".dll");
 
