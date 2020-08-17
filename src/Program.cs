@@ -346,9 +346,9 @@ namespace LinqPadless
                     return exitCode;
             }
 
-            var mutex = new Mutex(initiallyOwned: true,
-                                  @"Global\lpless:" + hash,
-                                  out var isBuildMutexOwned);
+            var buildMutex = new Mutex(initiallyOwned: true,
+                                       @"Global\lpless:" + hash,
+                                       out var isBuildMutexOwned);
 
             try
             {
@@ -357,7 +357,7 @@ namespace LinqPadless
                     try
                     {
                         log.WriteLine("Detected competing executions and waiting for other(s) to finish...");
-                        if (!mutex.WaitOne(TimeSpan.FromMinutes(1.5)))
+                        if (!buildMutex.WaitOne(TimeSpan.FromMinutes(1.5)))
                             throw new TimeoutException("Timed-out waiting for competing execution(s) to finish.");
                         log.WriteLine("...other is done; proceeding...");
                     }
@@ -394,8 +394,8 @@ namespace LinqPadless
             }
             finally
             {
-                mutex.ReleaseMutex();
-                mutex.Dispose();
+                buildMutex.ReleaseMutex();
+                buildMutex.Dispose();
             }
 
             {
