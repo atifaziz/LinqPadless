@@ -17,13 +17,6 @@ namespace Tests
     {
         public enum QueryKind { Expression, Statements, Program }
 
-        //[Fact]
-        public void Test2()
-        {
-            foreach (var args in TestSource())
-                Test((TestRecord)args[0]);
-        }
-
         [Theory]
         [MemberData(nameof(TestSource))]
         public void Test(TestRecord record)
