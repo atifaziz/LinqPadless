@@ -28,6 +28,7 @@ namespace LinqPadless
     using System.IO;
     using System.Linq;
     using System.Net;
+    using System.Reactive.Disposables;
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Security.Cryptography;
@@ -37,6 +38,7 @@ namespace LinqPadless
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
+    using CSharpMinifier;
     using KeyValuePairs;
     using Mannex.IO;
     using Microsoft.CodeAnalysis;
@@ -100,6 +102,7 @@ namespace LinqPadless
             var shouldJustHash = false;
             var publishTimeout = TimeSpan.FromMinutes(15);
             var publishIdleTimeout = TimeSpan.FromMinutes(3);
+            var inputQueryKind = LinqPadQueryLanguage.Expression;
 
             var options = new OptionSet(CreateStrictOptionSetArgumentParser())
             {
@@ -110,6 +113,14 @@ namespace LinqPadless
                 { "x"             , "do not execute", _ => dontExecute = true },
                 { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
                 { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
+                { "k|kind="       , $@"query kind (expression, statements or program)",
+                                    v => inputQueryKind = v.Trim().ToLowerInvariant() switch
+                                    {
+                                        "expression" => LinqPadQueryLanguage.Expression,
+                                        "statements" => LinqPadQueryLanguage.Statements,
+                                        "program"    => LinqPadQueryLanguage.Program,
+                                        _ => throw new Exception("Invalid query kind: " + v)
+                                    } },
                 { "t|template="   , "template", v => template = v },
                 { "timeout="      , $"timeout for publishing; default is {publishTimeout.FormatHms()}",
                                     v => publishTimeout = TimeSpanHms.Parse(v) },
@@ -140,6 +151,7 @@ namespace LinqPadless
                 "bundle" => BundleCommand(args),
                 _ => // ...
                     DefaultCommand(command, args, template, outDirPath,
+                                   inputQueryKind,
                                    uncached: uncached || outDirPath != null,
                                    shouldJustHash: shouldJustHash,
                                    dontExecute: dontExecute,
@@ -155,11 +167,25 @@ namespace LinqPadless
             IEnumerable<string> args,
             string template,
             string outDirPath,
+            LinqPadQueryLanguage inputQueryKind,
             bool shouldJustHash,
             bool uncached, bool dontExecute, bool force,
             TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             TextWriter log)
         {
+            using var disposables = new CompositeDisposable();
+
+            if (queryPath == "STDIN")
+            {
+                var tempPath = Path.Combine(Environment.CurrentDirectory, Path.GetRandomFileName() + ".linq");
+                disposables.Add(new TempFile(tempPath));
+                log?.WriteLine("Temporary query path: " + tempPath);
+                var (header, body) = Script.Transpile(inputQueryKind, Console.In.ReadToEnd());
+                File.WriteAllLines(tempPath, new[] { header.ToString(), string.Empty }, Utf8.BomlessEncoding);
+                File.AppendAllText(tempPath, body);
+                queryPath = tempPath;
+            }
+
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
 
             if (query.ValidateSupported() is Exception e)

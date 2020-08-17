@@ -29,11 +29,9 @@ public class TemplateTests
         var isWindows =    Environment.GetEnvironmentVariable("WINDIR") != null
                         && Environment.GetEnvironmentVariable("COMSPEC") != null;
 
-        return new DirectoryInfo(TestDirectoryPath)
-            .AncestorsAndSelf()
-            .Select(dir => Path.Combine(dir.FullName, "bin", BuildConfiguration, "netcoreapp3.1", isWindows ? "lpless.exe" : "lpless"))
-            .Where(File.Exists)
-            .First();
+        return Path.Combine(TestDirectoryPath, "..", "..", "..", "..",
+                            "bin", BuildConfiguration, "netcoreapp3.1",
+                            isWindows ? "lpless.exe" : "lpless");
     });
 
     readonly ITestOutputHelper _testOutput;
