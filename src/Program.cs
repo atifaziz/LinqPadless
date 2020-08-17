@@ -332,6 +332,8 @@ namespace LinqPadless
                 force = true;
             }
 
+            rerun:
+
             var dotnetSearchPaths = GetDotnetExecutableSearchPaths(searchPaths);
             var dotnetPath =
                 dotnetSearchPaths
@@ -344,8 +346,30 @@ namespace LinqPadless
                     return exitCode;
             }
 
+            var mutex = new Mutex(initiallyOwned: true,
+                                  @"Global\lpless:" + hash,
+                                  out var isBuildMutexOwned);
+
             try
             {
+                if (!isBuildMutexOwned)
+                {
+                    try
+                    {
+                        log.WriteLine("Detected competing executions and waiting for other(s) to finish...");
+                        if (!mutex.WaitOne(TimeSpan.FromMinutes(1.5)))
+                            throw new TimeoutException("Timed-out waiting for competing execution(s) to finish.");
+                        log.WriteLine("...other is done; proceeding...");
+                    }
+                    catch (AbandonedMutexException)
+                    {
+                        log.WriteLine("...detected abandonment by other execution!");
+                    }
+
+                    if (!force)
+                        goto rerun;
+                }
+
                 Compile(query, srcDirPath, tmpDirPath, templateFiles,
                         dotnetPath, publishIdleTimeout, publishTimeout,
                         log);
@@ -367,6 +391,11 @@ namespace LinqPadless
                 }
                 catch { /* ignore */}
                 throw;
+            }
+            finally
+            {
+                mutex.ReleaseMutex();
+                mutex.Dispose();
             }
 
             {
