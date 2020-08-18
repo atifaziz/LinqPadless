@@ -22,5 +22,3 @@ version.
 [nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
 [nuget-pkg]: https://www.nuget.org/packages/LinqPadless
 [LINQPad]: http://www.linqpad.net/
-[lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
-[lprun]: https://www.linqpad.net/lprun.aspx

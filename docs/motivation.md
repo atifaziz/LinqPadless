@@ -18,3 +18,7 @@ parity with LINQPad features at _run-time_. On the other hand, when all you
 are doing is using [LINQPad as a lightweight IDE][lpide] to script some task
 that doesn't need its bells and whistles then turning those queries into
 compiled executables enables them be shipped and run without LINQPad.
+
+
+[lprun]: https://www.linqpad.net/lprun.aspx
+[lpide]: https://www.linqpad.net/CodeSnippetIDE.aspx
