@@ -19,6 +19,7 @@ execution may seem slow, subsequent ones run fast.
 The compilation requires an installation of .NET Core SDK 2.1 or a later
 version.
 
+
 [nuget-badge]: https://img.shields.io/nuget/v/LinqPadless.svg
 [nuget-pkg]: https://www.nuget.org/packages/LinqPadless
 [LINQPad]: http://www.linqpad.net/
