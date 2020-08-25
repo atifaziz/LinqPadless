@@ -1125,7 +1125,7 @@ namespace LinqPadless
                 from v in p.FindElement(d + "Version")
                 select NuGetVersion.Parse((string)v);
 
-            return version ?? throw new Exception($"Unable to determine latest {(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
+            return version ?? throw new Exception($"Unable to determine latest{(isPrereleaseAllowed ? " (pre-release)" : null)} version of package named \"{id}\".");
         }
 
         enum StdOutputStreamKind { Output, Error }
