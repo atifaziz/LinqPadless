@@ -746,7 +746,7 @@ namespace LinqPadless
 
             program =
                 Detemplate(program, "imports",
-                    ProcessNamespaceDirectives(imports, Enumerable.Empty<string>())
+                    ProcessNamespaceDirectives(imports, query.NamespaceRemovals)
                         .Select(e => $"using {e.Namespace};")
                         .ToDelimitedString(eol));
 
