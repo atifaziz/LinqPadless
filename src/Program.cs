@@ -97,7 +97,6 @@ namespace LinqPadless
             var outDirPath = (string) null;
             var uncached = false;
             var template = (string) null;
-            var shouldJustHash = false;
             var publishTimeout = TimeSpan.FromMinutes(15);
             var publishIdleTimeout = TimeSpan.FromMinutes(3);
 
@@ -115,7 +114,6 @@ namespace LinqPadless
                                     v => publishTimeout = TimeSpanHms.Parse(v) },
                 { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
                                     v => publishIdleTimeout = TimeSpanHms.Parse(v) },
-                { "hash"          , "print hash and exit", _ => shouldJustHash = true },
             };
 
             var tail = options.Parse(args);
@@ -135,13 +133,14 @@ namespace LinqPadless
 
             return command switch
             {
-                "cache"  => CacheCommand(args),
-                "init"   => InitCommand(args).GetAwaiter().GetResult(),
-                "bundle" => BundleCommand(args),
+                "cache"   => CacheCommand(args),
+                "init"    => InitCommand(args).GetAwaiter().GetResult(),
+                "bundle"  => BundleCommand(args),
+                "inspect" => InspectCommand(args),
                 _ => // ...
                     DefaultCommand(command, args, template, outDirPath,
                                    uncached: uncached || outDirPath != null,
-                                   shouldJustHash: shouldJustHash,
+                                   inspection: Inspection.None,
                                    dontExecute: dontExecute,
                                    force: force,
                                    publishIdleTimeout: publishIdleTimeout,
@@ -155,7 +154,7 @@ namespace LinqPadless
             IEnumerable<string> args,
             string template,
             string outDirPath,
-            bool shouldJustHash,
+            Inspection inspection,
             bool uncached, bool dontExecute, bool force,
             TimeSpan publishIdleTimeout, TimeSpan publishTimeout,
             TextWriter log)
@@ -164,6 +163,41 @@ namespace LinqPadless
 
             if (query.ValidateSupported() is Exception e)
                 throw e;
+
+            switch (inspection)
+            {
+                case Inspection.Meta:
+                    Console.WriteLine(query.MetaElement);
+                    return 0;
+                case Inspection.Code:
+                    Console.WriteLine(query.Code);
+                    return 0;
+                case Inspection.Kind:
+                    Console.WriteLine(query.Language);
+                    return 0;
+                case Inspection.Namespaces:
+                    foreach (var ns in query.Namespaces)
+                        Console.WriteLine(ns);
+                    return 0;
+                case Inspection.RemovedNamespaces:
+                    foreach (var ns in query.NamespaceRemovals)
+                        Console.WriteLine(ns);
+                    return 0;
+                case Inspection.Loads:
+                    foreach (var load in query.Loads)
+                        Console.WriteLine(load.LoadPath);
+                    return 0;
+                case Inspection.Packages:
+                    foreach (var pr in
+                        from pr in query.PackageReferences
+                        select pr.Id
+                             + (pr.Version is {} v ? "=" + v : null)
+                             + (pr.IsPrereleaseAllowed ? "!" : null))
+                    {
+                        Console.WriteLine(pr);
+                    }
+                    return 0;
+            }
 
             if (query.Loads.FirstOrNone(r => r.LoadPath.Length == 0
                                           || !Path.IsPathRooted(r.LoadPath)
@@ -259,6 +293,10 @@ namespace LinqPadless
             using (var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1))
             using (var stream = hashSource.Open())
             {
+                var stdout = inspection == Inspection.HashSource
+                           ? Console.OpenStandardOutput()
+                           : null;
+
                 for (var buffer = new byte[4096]; ;)
                 {
                     var length = stream.Read(buffer, 0, buffer.Length);
@@ -277,6 +315,7 @@ namespace LinqPadless
                         if (si < 0)
                         {
                             sha.AppendData(span);
+                            stdout?.Write(span);
                             break;
                         }
 
@@ -284,17 +323,22 @@ namespace LinqPadless
                             throw new NotSupportedException("Binary data is not yet supported.");
 
                         sha.AppendData(span.Slice(0, si));
+                        stdout?.Write(span.Slice(0, si));
+
                         span = span.Slice(si + 1);
                     }
                     while (span.Length > 0);
                 }
+
+                if (inspection == Inspection.HashSource)
+                    return 0;
 
                 hash = BitConverter.ToString(sha.GetHashAndReset())
                                    .Replace("-", string.Empty)
                                    .ToLowerInvariant();
             }
 
-            if (shouldJustHash)
+            if (inspection == Inspection.Hash)
             {
                 Console.WriteLine(hash);
                 return 0;
@@ -370,9 +414,12 @@ namespace LinqPadless
                         goto rerun;
                 }
 
-                Compile(query, srcDirPath, tmpDirPath, templateFiles,
-                        dotnetPath, publishIdleTimeout, publishTimeout,
-                        log);
+                if (Compile(query, srcDirPath, tmpDirPath, templateFiles,
+                            dotnetPath, publishIdleTimeout, publishTimeout,
+                            inspection, log) is {} exitCode)
+                {
+                    return exitCode;
+                }
 
                 if (tmpDirPath != binDirPath)
                 {
@@ -495,17 +542,16 @@ namespace LinqPadless
 
         static readonly ValueTuple Unit = default;
 
-        static void Compile(LinqPadQuery query,
+        static int? Compile(LinqPadQuery query,
             string srcDirPath, string binDirPath,
             IEnumerable<(string Name, IStreamable Content)> templateFiles,
             string dotnetPath, TimeSpan publishTimeout, TimeSpan publishIdleTimeout,
-            TextWriter log)
+            Inspection inspection, TextWriter log)
         {
-            _(IndentingLineWriter.CreateUnlessNull(log));
+            return _(IndentingLineWriter.CreateUnlessNull(log));
 
-            void _(IndentingLineWriter log)
+            int? _(IndentingLineWriter log)
             {
-                log?.Write(query.MetaElement);
                 log?.WriteLines(from r in query.MetaElement.Elements("Reference")
                                 select "Warning! Reference will be ignored: " + (string)r);
 
@@ -553,15 +599,21 @@ namespace LinqPadless
                                 none: () => Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed))),
                         nr.IsPrereleaseAllowed,
                         nr.Priority,
-                        Title = Seq.Return(Some(nr.Id),
-                                           nr.Version.Map(v => v.ToString()),
-                                           nr.IsPrereleaseAllowed ? Some("(pre-release)") : default,
-                                           nr.Source.Map(s => $"<{s}>"))
-                                   .Choose(e => e)
-                                   .ToDelimitedString(" "),
+                        nr.Source,
                     };
 
-                nrs = nrs.ToArray();
+                if (inspection == Inspection.ActualPackages)
+                {
+                    foreach (var nr in nrs)
+                    {
+                        Console.WriteLine(nr.Id
+                                          + nr.Version.Map(v => "=" + v).OrDefault()
+                                          + (nr.IsPrereleaseAllowed ? "!" : null)
+                                          + nr.Source.Map(s => $" <{s}>").OrDefault());
+                    }
+
+                    return 0;
+                }
 
                 var allQueries =
                     query.Loads
@@ -606,23 +658,16 @@ namespace LinqPadless
                     from ns in nss
                     select ns);
 
-                if (log != null)
+                if (inspection == Inspection.ActualNamespaces)
                 {
-                    if (nrs.Any())
+                    foreach (var ns in namespaces)
                     {
-                        log.WriteLine($"Packages ({nrs.Count():N0}):");
-                        log.WriteLines(from nr in nrs select "- " + nr.Title);
+                        Console.WriteLine(ns.Name
+                                        + (ns.IsDefaulted ? "*" : null)
+                                        + ns.QueryPath.Map(p => $" <{p}>").OrDefault());
                     }
 
-                    if (namespaces.Any())
-                    {
-                        log.WriteLine($"Imports ({namespaces.Length:N0}):");
-                        log.WriteLines(from ns in namespaces
-                                       select "- "
-                                            + ns.Name
-                                            + (ns.IsDefaulted ? "*" : null)
-                                            + ns.QueryPath.Map(p =>  $" <{p}>").OrDefault());
-                    }
+                    return 0;
                 }
 
                 var references =
@@ -634,6 +679,8 @@ namespace LinqPadless
                                    references, templateFiles,
                                    dotnetPath, publishIdleTimeout, publishTimeout,
                                    log);
+
+                return null;
             }
         }
 
