@@ -59,7 +59,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help(options);
+                Help("bundle", options);
                 return 0;
             }
 

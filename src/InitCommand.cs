@@ -84,7 +84,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help(options);
+                Help("init", options);
                 return 0;
             }
 

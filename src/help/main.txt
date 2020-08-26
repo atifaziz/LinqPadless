@@ -1,0 +1,35 @@
+$PRODUCT$ ($VERSION$)
+
+Main Usage:
+
+    $NAME$ [OPTIONS...] FILE ARGS...
+
+where FILE is the path to the LINQPad Query file (.linq extension) to
+run and ARGS is one or more arguments passed to the query.
+
+Options:
+
+$OPTIONS$
+
+Secondary Usage:
+
+    $NAME$ COMMAND ...
+
+where COMMAND is one of:
+
+  init      Initialize a directory with templates and cache
+  cache     List cache entries
+  bundle    Bundle a script with referenced scripts
+  inspect   Show various diagnostics information
+  license   Show the full license
+  help      Show help on help
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+For full details, run:
+
+    $NAME$ license

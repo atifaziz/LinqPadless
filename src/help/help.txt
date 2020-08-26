@@ -1,0 +1,14 @@
+$PRODUCT$ ($VERSION$)
+
+Usage:
+
+    $NAME$ $COMMAND$ [COMMAND]
+
+where COMMAND is one of:
+
+  init      Initialize a directory with templates and cache
+  cache     List cache entries
+  bundle    Bundle a script with referenced scripts
+  inspect   Show various diagnostics information
+  license   Show the full license
+  help      Show this help

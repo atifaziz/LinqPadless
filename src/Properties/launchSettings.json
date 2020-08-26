@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "LinqPadless": {
+      "commandName": "Project",
+      "commandLineArgs": "help init"
+    }
+  }
+}

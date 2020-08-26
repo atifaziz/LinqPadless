@@ -1,13 +1,7 @@
-$LOGO$
-
-Usage: $NAME$ [OPTIONS...] FILE ARGS...
-
-where FILE is the path to the LINQPad Query file (.linq extension) to
-run and ARGS is one or more arguments passed to the query.
-
-Options:
-
-$OPTIONS$
+Copyright 2016 Atif Aziz. All rights reserved.
+Portions Copyright 2008 Novell.
+Portions Copyright .NET Foundation and Contributors.
+Portions Copyright 2001 Douglas Crockford.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

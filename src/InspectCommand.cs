@@ -66,7 +66,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help(options);
+                Help("inspect", options);
                 return 0;
             }
 

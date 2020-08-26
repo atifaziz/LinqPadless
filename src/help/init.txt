@@ -1,0 +1,15 @@
+$PRODUCT$ ($VERSION$)
+
+Initializes a directory with templates and cache.
+
+Usage:
+
+    $NAME$ [OPTIONS...] [FILE | URL | ID]
+
+where FILE is the path to a ZIP file, URL is a URL to a ZIP
+file/resource and ID is a NuGet package Id. All of these
+identify a source used to initialize the templates.
+
+Options:
+
+$OPTIONS$

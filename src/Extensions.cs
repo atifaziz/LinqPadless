@@ -20,7 +20,6 @@ namespace LinqPadless
     using System.Collections.Generic;
     using System.Linq;
     using System.IO;
-    using System.Text;
     using System.Xml.Linq;
     using static MoreLinq.Extensions.PipeExtension;
     using static Optuple.OptionModule;
@@ -40,13 +39,6 @@ namespace LinqPadless
             };
         }
 
-        public static StringBuilder AppendLines(this StringBuilder builder, IEnumerable<string> lines)
-        {
-            foreach (var line in lines)
-                builder.AppendLine(line);
-            return builder;
-        }
-
         public static IEnumerable<string> Lines(this string input)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
@@ -56,6 +48,32 @@ namespace LinqPadless
                 while (reader.ReadLine() is {} line)
                     yield return line;
             }
+        }
+
+        /// <summary>
+        /// Trims version build and revision fields if they are both zero or
+        /// just the revision if build is non-zero. An additional parameter
+        /// specifies the minimum field count (between 2 and 4) in the
+        /// resulting version, which prevents trimming even if zero.
+        /// </summary>
+
+        public static Version Trim(this Version version, int minFieldCount = 2)
+        {
+            if (version == null) throw new ArgumentNullException(nameof(version));
+            if (minFieldCount < 2 || minFieldCount > 4) throw new ArgumentOutOfRangeException(nameof(minFieldCount), minFieldCount, null);
+
+            if (version.Revision < 0 || version.Build < 0)
+            {
+                version = new Version(version.Major,
+                                      version.Minor,
+                                      version.Build    < 0 ? 0 : version.Build,
+                                      version.Revision < 0 ? 0 : version.Revision);
+            }
+
+            return minFieldCount < 4 && version.Revision == 0
+                 ? minFieldCount < 3 && version.Build == 0 ? new Version(version.Major, version.Minor)
+                 : new Version(version.Major, version.Minor, version.Build)
+                 : version;
         }
     }
 

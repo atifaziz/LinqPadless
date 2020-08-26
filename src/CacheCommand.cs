@@ -56,7 +56,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help(options);
+                Help("cache", options);
                 return 0;
             }
 

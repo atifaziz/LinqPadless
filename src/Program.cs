@@ -54,7 +54,6 @@ namespace LinqPadless
     using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.PartitionExtension;
-    using static MoreLinq.Extensions.TagFirstLastExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static MoreLinq.Extensions.ToDictionaryExtension;
@@ -124,29 +123,69 @@ namespace LinqPadless
 
             if (help || tail.Count == 0)
             {
-                Help(options);
+                Help("main", string.Empty, options);
                 return 0;
             }
 
             var command = tail.First();
             args = tail.Skip(1).TakeWhile(arg => arg != "--");
 
-            return command switch
+            switch (command)
             {
-                "cache"   => CacheCommand(args),
-                "init"    => InitCommand(args).GetAwaiter().GetResult(),
-                "bundle"  => BundleCommand(args),
-                "inspect" => InspectCommand(args),
-                _ => // ...
-                    DefaultCommand(command, args, template, outDirPath,
-                                   uncached: uncached || outDirPath != null,
-                                   inspection: Inspection.None,
-                                   dontExecute: dontExecute,
-                                   force: force,
-                                   publishIdleTimeout: publishIdleTimeout,
-                                   publishTimeout: publishTimeout,
-                                   log: log)
-            };
+                case CommandName.Cache  : return CacheCommand(args);
+                case CommandName.Init   : return InitCommand(args).GetAwaiter().GetResult();
+                case CommandName.Bundle : return BundleCommand(args);
+                case CommandName.Inspect: return InspectCommand(args);
+                case CommandName.Help   : return HelpCommand(args);
+                case CommandName.License:
+                    Console.WriteLine(LoadTextResource(typeof(Program), "license.txt"));
+                    return 0;
+                default:
+                    return DefaultCommand(command, args, template, outDirPath,
+                                          uncached: uncached || outDirPath != null,
+                                          inspection: Inspection.None, dontExecute: dontExecute,
+                                          force: force, publishIdleTimeout: publishIdleTimeout,
+                                          publishTimeout: publishTimeout, log: log);
+            }
+        }
+
+        static class CommandName
+        {
+            public const string Cache   = "cache";
+            public const string Init    = "init";
+            public const string Bundle  = "bundle";
+            public const string Inspect = "inspect";
+            public const string Help    = "help";
+            public const string License = "license";
+
+            public static readonly ImmutableArray<string> All =
+                ImmutableArray.Create(Cache, Init, Bundle, Inspect, Help, License);
+        }
+
+        static int HelpCommand(IEnumerable<string> args)
+        {
+            using var arg = args.GetEnumerator();
+            if (!arg.MoveNext())
+            {
+                Help();
+            }
+            else
+            {
+                var command = arg.Current;
+                if (CommandName.All.IndexOf(command) < 0)
+                    throw new Exception($"\"{command}\" is an invalid command. Must be one of: {CommandName.All.ToDelimitedString(", ")}");
+
+                if (arg.MoveNext())
+                    throw new Exception("Invalid argument: " + arg.Current);
+
+                if (command == CommandName.Help)
+                    Help();
+                else
+                    Wain(new[] { command, "--help" });
+            }
+            return 0;
+
+            static void Help() => Program.Help("help", new Mono.Options.OptionSet());
         }
 
         static int DefaultCommand(
@@ -1325,40 +1364,6 @@ namespace LinqPadless
                 throw errorSelector(exitCode);
         }
 
-        static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(new Uri(typeof(Program).Assembly.CodeBase).LocalPath));
-        static FileVersionInfo VersionInfo => CachedVersionInfo.Value;
-
-        static void Help(Mono.Options.OptionSet options)
-        {
-            var name    = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
-            var opts    = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
-            var logo    = Lazy.Create(() => new StringBuilder().AppendLine($"{VersionInfo.ProductName} (version {VersionInfo.FileVersion})")
-                                                               .AppendLines(Regex.Split(VersionInfo.LegalCopyright.Replace("\u00a9", "(C)"), @"\. *(?=(?:Portions +)?Copyright\b)")
-                                                                                 .TagFirstLast((s, _, l) => l ? s : s + "."))
-                                                               .ToString());
-
-            using var stream = GetManifestResourceStream("help.txt");
-            using var reader = new StreamReader(stream);
-            using var e = reader.ReadLines();
-
-            while (e.MoveNext())
-            {
-                var line = e.Current;
-                line = Regex.Replace(line, @"\$([A-Z][A-Z_]*)\$", m => m.Groups[1].Value switch
-                {
-                    "NAME"    => name.Value,
-                    "LOGO"    => logo.Value,
-                    "OPTIONS" => opts.Value,
-                    _ => string.Empty
-                });
-
-                if (line.Length > 0 && line[line.Length - 1] == '\n')
-                    Console.Write(line);
-                else
-                    Console.WriteLine(line);
-            }
-        }
-
         static OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
         {
             var hasTailStarted = false;
@@ -1378,26 +1383,6 @@ namespace LinqPadless
                 return isOption;
             };
         }
-
-        static string LoadTextResource(string name, Encoding encoding = null) =>
-            LoadTextResource(typeof(Program), name, encoding);
-
-        static string LoadTextResource(Type type, string name, Encoding encoding = null)
-        {
-            using var stream = type != null
-                             ? GetManifestResourceStream(type, name)
-                             : GetManifestResourceStream(null, name);
-            Debug.Assert(stream != null);
-            using var reader = new StreamReader(stream, encoding ?? Encoding.UTF8);
-            return reader.ReadToEnd();
-        }
-
-        static Stream GetManifestResourceStream(string name) =>
-            GetManifestResourceStream(typeof(Program), name);
-
-        static Stream GetManifestResourceStream(Type type, string name) =>
-            type != null ? type.Assembly.GetManifestResourceStream(type, name)
-                         : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
     }
 
     static class Utf8

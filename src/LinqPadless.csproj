@@ -34,7 +34,8 @@
   <ItemGroup>
     <None Remove="dotnet.cmd" />
     <None Remove="dotnet.sh" />
-    <None Remove="help.txt" />
+    <None Remove="help\*.txt" />
+    <None Remove="license.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,7 +45,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="help.txt" />
+    <EmbeddedResource Include="help\*.txt" />
+    <EmbeddedResource Include="license.txt" />
   </ItemGroup>
 
   <ItemGroup>

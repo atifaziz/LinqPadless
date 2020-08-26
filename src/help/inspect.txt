@@ -1,0 +1,24 @@
+$PRODUCT$ ($VERSION$)
+
+Usage:
+
+    $NAME$ inspect QUERY FILE
+
+and where FILE is the path to the LINQPad Query file (.linq extension)
+and QUERY is one of:
+
+  hash                 Hash for compilation cache
+  hash-source          Source used to compute hash
+  meta                 XML header for query file
+  code                 Code section of query file
+  kind                 Language/Kind of query file:
+                         Expression, Statements or Program
+  loads                "#load" references
+  default-namespaces   Namespaces imported by default
+  removed-namespaces   Default namespaces removed by query
+  namespaces           Namespaces listed in query file
+  actual-namespaces    Computed namespaces from query file and its
+                         references
+  packages             Packages listed in query file
+  actual-packages      Computed packages from query file and its
+                         references
