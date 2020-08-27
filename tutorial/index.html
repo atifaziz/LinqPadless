@@ -1,0 +1,506 @@
+
+
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      <link rel="shortcut icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-5.5.9">
+    
+    
+      
+        <title>Tutorial - LINQPadless</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.36ee6aaa.min.css">
+      
+      
+    
+    
+    
+      
+        <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
+        <style>body,input{font-family:"Roboto",-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono",SFMono-Regular,Consolas,Menlo,monospace}</style>
+      
+    
+    
+    
+    
+      
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tutorial" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid" aria-label="Header">
+    <a href=".." title="LINQPadless" class="md-header-nav__button md-logo" aria-label="LINQPadless">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    <label class="md-header-nav__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
+    </label>
+    <div class="md-header-nav__title" data-md-component="header-title">
+      
+        <div class="md-header-nav__ellipsis">
+          <span class="md-header-nav__topic md-ellipsis">
+            LINQPadless
+          </span>
+          <span class="md-header-nav__topic md-ellipsis">
+            
+              Tutorial
+            
+          </span>
+        </div>
+      
+    </div>
+    
+      <label class="md-header-nav__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+      </label>
+      
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active">
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </label>
+      <button type="reset" class="md-search__icon md-icon" aria-label="Clear" data-md-component="search-reset" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+        
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="LINQPadless" class="md-nav__button md-logo" aria-label="LINQPadless">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    LINQPadless
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href=".." title="Introduction" class="md-nav__link">
+      Introduction
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../motivation/" title="Motivation" class="md-nav__link">
+      Motivation
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+    
+      
+    
+    
+    <a href="./" title="Tutorial" class="md-nav__link md-nav__link--active">
+      Tutorial
+    </a>
+    
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../limitations/" title="Limitations" class="md-nav__link">
+      Limitations
+    </a>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                
+                  
+                
+                
+                <h1 id="tutorial">Tutorial</h1>
+<p>The simplest way to take LINQPadless for a spin is to try it in a <a href="https://www.docker.com/">Docker</a>
+container. Assuming you have Docker installed for your operating system,
+start by cloning the <a href="https://github.com/atifaziz/LinqPadless">project's repository</a>:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">git clone https://github.com/atifaziz/LinqPadless.git LinqPadless</span>
+</code></pre></div>
+
+
+<p>Next, make the working directory of the clone the current working directory of
+your shell. In most shells, you can do this with:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">cd LinqPadless</span>
+</code></pre></div>
+
+
+<p>Build the Docker image as follows (it will be named/tagged <code>lpless</code>):</p>
+<div class="codehilite"><pre><span></span><code><span class="err">docker build --rm -t lpless .</span>
+</code></pre></div>
+
+
+<p>Once the image is built, run a container as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">docker run --rm -it --entrypoint /bin/sh lpless</span>
+</code></pre></div>
+
+
+<p>The <code>--entrypoint /bin/sh</code> is necessary to <em>enter</em> the shell of the container
+image (based on <a href="https://alpinelinux.org/">Alpine Linux</a>) so you can explore running LINQPadless.
+Without changing the entry-point of the image, LINQPadless will just run,
+display its help and exit.</p>
+<p>Once the container is running, you will see a shell prompt with
+<code>/scripts/linq</code> as your current directory:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # █</span>
+</code></pre></div>
+
+
+<p>For the purpose of this tutorial, █ represents your cursor.</p>
+<p>Copy and paste the following on the shell prompt to create a tiny LINQPad
+query file that has the C# expression <code>DateTime.Now</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">cat</span> <span class="o">&gt;</span> <span class="n">Now</span><span class="p">.</span><span class="n">linq</span> <span class="o">&lt;&lt;</span><span class="n">EOF</span>
+<span class="o">&lt;</span><span class="n">Query</span> <span class="n">Kind</span><span class="o">=</span><span class="ss">&quot;Expression&quot;</span> <span class="o">/&gt;</span>
+
+<span class="n">DateTime</span><span class="p">.</span><span class="n">Now</span>
+<span class="n">EOF</span>
+</code></pre></div>
+
+
+<p>Everything between <code>&lt;&lt;EOF</code> and <code>EOF</code> will become the content of the file
+<code>Now.linq</code>. If you have never opened a LINQPad query file in a plain text
+editor then the above may seem strange. In short, LINQPad query files are
+plain text files that have the following structure:</p>
+<ul>
+<li>a header that is an XML element containing LINQPad meta data</li>
+<li>a blank line that separates the header from the remaining content</li>
+<li>body of code (expression, statements or program)</li>
+</ul>
+<p>The <code>&lt;Query Kind="Expression" /&gt;</code> that we placed in the header of the
+<code>Now.linq</code> file says that the code <code>DateTime.Now</code> is a C# expression.</p>
+<p>Your shell session should now be looking as follows:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # cat &gt; Now.linq &lt;&lt;EOF</span>
+<span class="err">&gt; &lt;Query Kind=&quot;Expression&quot; /&gt;</span>
+<span class="err">&gt;</span>
+<span class="err">&gt; DateTime.Now</span>
+<span class="err">&gt; EOF</span>
+<span class="err">/scripts/linq # █</span>
+</code></pre></div>
+
+
+<p>Let's run it by typing <code>lpless Now.linq</code> at the shell prompt. After a few
+seconds, you should see the current time appear as shown below:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # lpless Now.linq</span>
+<span class="err">8/25/2020 4:48:42 PM</span>
+<span class="err">/scripts/linq # █</span>
+</code></pre></div>
+
+
+<p>If you run it as second time, you should notice that it executes almost
+instantly. LINQPadless caches the results of previous compilations and
+re-uses them if there have been no changes to the source files. In fact,
+let's time the execution with <code>time lpless Now.linq</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # time lpless Now.linq</span>
+<span class="err">8/25/2020 4:50:14 PM</span>
+<span class="err">real    0m 0.35s</span>
+<span class="err">user    0m 0.33s</span>
+<span class="err">sys     0m 0.04s</span>
+</code></pre></div>
+
+
+<p>You can see that it executed in a fraction of a second. We can force a
+re-compilation even if a cached version is available by adding the <code>--force</code>
+flag (or just <code>-f</code> for short) <em>before</em> the query file name.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # time lpless --force Now.linq</span>
+<span class="err">8/25/2020 4:50:55 PM</span>
+<span class="err">real    0m 2.55s</span>
+<span class="err">user    0m 2.44s</span>
+<span class="err">sys     0m 0.30s</span>
+</code></pre></div>
+
+
+<p>Notice how it took substantially longer time to run. If you copy the file and
+run the copy, it will also run quickly:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # cp Now.linq Now2.linq</span>
+<span class="err">/scripts/linq # time lpless Now2.linq</span>
+<span class="err">8/25/2020 4:57:46 PM</span>
+<span class="err">real    0m 0.41s</span>
+<span class="err">user    0m 0.38s</span>
+<span class="err">sys     0m 0.04s</span>
+</code></pre></div>
+
+
+<p>LINQPadless is smart enough to re-use a previous compilation across sources
+if they match. Internally, it computes a digest/hash of the file content and
+uses that to look-up a compilation in its on-disk cache. Since <code>Now.linq</code> and
+<code>Now2.linq</code> are copies of each other, running the copy is just as fast the
+original.</p>
+<p>Let's explore a LINQPad query file with C# statements:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">cat</span> <span class="o">&gt;</span> <span class="n">Statements</span><span class="p">.</span><span class="n">linq</span> <span class="o">&lt;&lt;</span><span class="n">EOF</span>
+<span class="o">&lt;</span><span class="n">Query</span> <span class="n">Kind</span><span class="o">=</span><span class="ss">&quot;Statements&quot;</span> <span class="o">/&gt;</span>
+
+<span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">DateTime</span><span class="p">.</span><span class="n">Now</span><span class="p">);</span>
+<span class="n">EOF</span>
+</code></pre></div>
+
+
+<p>Run it with <code>lpless Statements.linq</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # cat &gt; Statements.linq &lt;&lt;EOF</span>
+<span class="err">&gt; &lt;Query Kind=&quot;Statements&quot; /&gt;</span>
+<span class="err">&gt;</span>
+<span class="err">&gt; Console.WriteLine(DateTime.Now);</span>
+<span class="err">&gt; EOF</span>
+<span class="err">/scripts/linq # lpless Statements.linq</span>
+<span class="err">8/25/2020 5:04:26 PM</span>
+<span class="err">/scripts/linq # █</span>
+</code></pre></div>
+
+
+<p>It prints the current date and time like the first example, but since the
+XML header <code>&lt;Query Kind="Statements" /&gt;</code> says the file contains statements,
+the date and time had to be printed to the console as a regular
+C# statement using:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">Console</span><span class="p">.</span><span class="n">WriteLine</span><span class="p">(</span><span class="n">DateTime</span><span class="p">.</span><span class="n">Now</span><span class="p">);</span>
+</code></pre></div>
+
+
+<p>Let's append another statement to the same file that prints <code>Hello!</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">/scripts/linq # echo &#39;Console.WriteLine(&quot;Hello!&quot;);&#39; &gt;&gt; Statements.linq</span>
+<span class="err">/scripts/linq # lpless Statements.linq</span>
+<span class="err">8/25/2020 5:08:13 PM</span>
+<span class="err">Hello!</span>
+</code></pre></div>
+
+
+<p>Since <code>Statements.linq</code> was modified, you will notice the compilation delay
+when <code>lpless Statements.linq</code> executes.</p>
+<p>The final type of LINQPad query file supported by LINQPadless is a C#
+program, but for this, let's try something more complicated. A slightly
+modified version of the <a href="https://github.com/isaacrlevin/dotnet-cowsay/tree/d94facb0721efad77c50864d1ad6112f694345b5">dotnet-cowsay</a> project has been shared at the
+following URL:</p>
+<blockquote>
+<p><a href="http://share.linqpad.net/9bfa4d.linq">http://share.linqpad.net/9bfa4d.linq</a>.</p>
+</blockquote>
+<p>You open download and open it up in LINQPad if you want to take a peek inside,
+even run it! The program selects a random blog article from <a href="https://discoverdot.net/">Discover .NET</a>
+and then displays an ASCII cow with a speech bubble containing the selected
+blog title, article title and article URL. It is a variant of the popular
+<a href="https://en.wikipedia.org/wiki/Cowsay"><code>cowsay</code></a> program.</p>
+<p>Back in the Docker container shel prompt, download the LINQPad query file to
+disk:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">wget -q -O cowsay.linq http://share.linqpad.net/9bfa4d.linq</span>
+</code></pre></div>
+
+
+<p>and then run it:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">lpless cowsay.linq</span>
+</code></pre></div>
+
+
+<p>You should then see an output like this:</p>
+<div class="codehilite"><pre><span></span><code><span class="err">⠏</span> <span class="n">Looking</span> <span class="k">for</span> <span class="n">an</span> <span class="n">awesome</span> <span class="n">article</span><span class="p">..</span>
+ <span class="n">_________________________________________________________</span>
+<span class="o">/</span> <span class="n">Evgeny</span> <span class="n">Zborovsky</span>                                        <span class="err">\</span>
+<span class="o">|</span> <span class="k">Using</span> <span class="n">Native</span> <span class="n">Facebook</span> <span class="n">Login</span> <span class="n">Button</span> <span class="k">in</span> <span class="n">Xamarin</span><span class="p">.</span><span class="n">Forms</span> <span class="n">QA</span>  <span class="o">|</span>
+<span class="err">\</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">evgenyzborovsky</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="mi">2019</span><span class="o">/</span><span class="mi">09</span><span class="o">/</span><span class="mi">10</span><span class="o">/</span><span class="n">facebook</span><span class="o">-</span><span class="n">sdk</span><span class="o">-</span><span class="n">qa</span><span class="o">/</span> <span class="o">/</span>
+<span class="c1">---------------------------------------------------------</span>
+
+     <span class="err">\</span>  <span class="o">^</span><span class="n">__</span><span class="o">^</span>
+      <span class="err">\</span> <span class="p">(</span><span class="n">oo</span><span class="p">)</span><span class="err">\</span><span class="n">_______</span>
+        <span class="p">(</span><span class="n">__</span><span class="p">)</span><span class="err">\</span>       <span class="p">)</span><span class="err">\</span><span class="o">/</span><span class="err">\</span>
+            <span class="o">||</span><span class="c1">----w |</span>
+            <span class="o">||</span>     <span class="o">||</span>
+</code></pre></div>
+                
+              
+              
+                
+
+
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
+        
+          <a href="../motivation/" title="Motivation" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+            </div>
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                Motivation
+              </div>
+            </div>
+          </a>
+        
+        
+          <a href="../limitations/" title="Limitations" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Limitations
+              </div>
+            </div>
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+        Made with
+        <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+          Material for MkDocs
+        </a>
+      </div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+      <script src="../assets/javascripts/vendor.df0def68.min.js"></script>
+      <script src="../assets/javascripts/bundle.ba57d267.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents"}</script>
+      
+      <script>
+        app = initialize({
+          base: "..",
+          features: [],
+          search: Object.assign({
+            worker: "../assets/javascripts/worker/search.5eca75d3.min.js"
+          }, typeof search !== "undefined" && search)
+        })
+      </script>
+      
+    
+  </body>
+</html>
