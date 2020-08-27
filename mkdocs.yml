@@ -2,7 +2,7 @@ site_name: LINQPadless
 nav:
 - 'index.md'
 - 'motivation.md'
-- 'usage.md'
+- 'tutorial.md'
 - 'limitations.md'
 theme:
   name: material
