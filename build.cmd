@@ -3,8 +3,8 @@ setlocal
 if "%PROCESSOR_ARCHITECTURE%"=="x86" set PROGRAMS=%ProgramFiles%
 if defined ProgramFiles(x86) set PROGRAMS=%ProgramFiles(x86)%
 for %%e in (Community Professional Enterprise) do (
-    if exist "%PROGRAMS%\Microsoft Visual Studio\2017\%%e\MSBuild\15.0\Bin\MSBuild.exe" (
-        set "MSBUILD=%PROGRAMS%\Microsoft Visual Studio\2017\%%e\MSBuild\15.0\Bin\MSBuild.exe"
+    if exist "%PROGRAMS%\Microsoft Visual Studio\2019\%%e\MSBuild\Current\Bin\MSBuild.exe" (
+        set "MSBUILD=%PROGRAMS%\Microsoft Visual Studio\2019\%%e\MSBuild\Current\Bin\MSBuild.exe"
     )
 )
 if exist "%MSBUILD%" goto :restore
@@ -19,8 +19,8 @@ for /f "delims=. tokens=1,2,3,4" %%m in ('msbuild /version /nologo') do (
 )
 if not defined MSBUILD_VERSION_MAJOR goto :nomsbuild
 if not defined MSBUILD_VERSION_MINOR goto :nomsbuild
-if %MSBUILD_VERSION_MAJOR% lss 15    goto :nomsbuild
-if %MSBUILD_VERSION_MINOR% lss 1     goto :nomsbuild
+if %MSBUILD_VERSION_MAJOR% lss 16    goto :nomsbuild
+if %MSBUILD_VERSION_MINOR% lss 8     goto :nomsbuild
 :restore
 for %%i in (NuGet.exe) do set nuget=%%~dpnx$PATH:i
 if "%nuget%"=="" (
@@ -40,6 +40,6 @@ setlocal
 goto :EOF
 
 :nomsbuild
-echo Microsoft Build version 15.1 (or later) does not appear to be
+echo Microsoft Build version 16.8 (or later) does not appear to be
 echo installed on this machine, which is required to build the solution.
 exit /b 1
