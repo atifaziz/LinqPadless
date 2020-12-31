@@ -48,8 +48,6 @@ namespace LinqPadless
     {
         static partial void Wain(IEnumerable<string> args)
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
             const string csx = "csx";
             const string exe = "exe";
 
