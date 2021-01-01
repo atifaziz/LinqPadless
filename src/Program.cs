@@ -102,6 +102,11 @@ namespace LinqPadless
 
             var queries = GetQueries(tail, recurse);
 
+            // See also: https://docs.microsoft.com/en-us/dotnet/framework/network-programming/tls
+            const SecurityProtocolType tls12 = SecurityProtocolType.Tls12;
+            if ((ServicePointManager.SecurityProtocol & tls12) != tls12)
+                ServicePointManager.SecurityProtocol |= tls12;
+
             // TODO Allow packages directory to be specified via args
 
             const string packagesDirName = "packages";
@@ -360,11 +365,6 @@ namespace LinqPadless
 
             foreach (var nr in nrs)
             {
-                // See also: https://docs.microsoft.com/en-us/dotnet/framework/network-programming/tls
-                const SecurityProtocolType tls12 = SecurityProtocolType.Tls12;
-                if ((ServicePointManager.SecurityProtocol & tls12) != tls12)
-                    ServicePointManager.SecurityProtocol |= tls12;
-
                 var version = nr.Version;
                 if (version == null)
                 {
