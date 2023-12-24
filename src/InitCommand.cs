@@ -36,7 +36,6 @@ namespace LinqPadless
     using Optuple.Collections;
     using Optuple.Linq;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
-    using static MoreLinq.Extensions.MaxByExtension;
     using static Optuple.OptionModule;
     using static TryModule;
     using static OptionTag;
@@ -176,8 +175,8 @@ namespace LinqPadless
                             ListPackagesFromFileSystemFeed(feedDirPath)
                                 .Where(p => (searchPrereleases || !p.Version.IsPrerelease)
                                          && string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))
-                                .MaxBy(p => p.Version)
-                                .FirstOrDefault();
+                                .DefaultIfEmpty()
+                                .MaxBy(p => p.Version);
                     }
                     else
                     {

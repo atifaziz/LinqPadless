@@ -1,7 +1,7 @@
 version: '{build}'
 image:
-  - Visual Studio 2019
-  - Ubuntu
+  - Visual Studio 2022
+  - Ubuntu2204
 skip_commits:
   files:
     - Dockerfile
@@ -23,11 +23,9 @@ environment:
 install:
 - cmd: curl -OsSL https://dot.net/v1/dotnet-install.ps1
 - ps: if ($isWindows) { ./dotnet-install.ps1 -JsonFile global.json }
-- ps: if ($isWindows) { ./dotnet-install.ps1 -Runtime dotnet -Version 2.1.15 -SkipNonVersionedFiles }
 - sh: curl -OsSL https://dot.net/v1/dotnet-install.sh
 - sh: chmod +x dotnet-install.sh
-- sh: ./dotnet-install.sh --version 3.1.101
-- sh: ./dotnet-install.sh --runtime dotnet --version 2.1.15 --skip-non-versioned-files
+- sh: ./dotnet-install.sh --jsonfile global.json
 - sh: export PATH="$HOME/.dotnet:$PATH"
 before_build:
 - dotnet --info
@@ -40,7 +38,7 @@ build_script:
     if ($isWindows) { .\pack.cmd ci-$id } else { ./pack.sh ci-$id }
 test_script:
 - cmd: test.cmd
-- sh: ./test.sh
+- sh: DOTNET_ROOT="$HOME/.dotnet" ./test.sh
 - sh: docker build -t lpless .
 - sh: docker run --rm lpless
 artifacts:

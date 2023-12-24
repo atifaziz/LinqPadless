@@ -49,14 +49,12 @@ namespace LinqPadless
     using Optuple.RegularExpressions;
     using static Minifier;
     using static MoreLinq.Extensions.ChooseExtension;
-    using static MoreLinq.Extensions.DistinctByExtension;
     using static MoreLinq.Extensions.FoldExtension;
     using static MoreLinq.Extensions.ForEachExtension;
     using static MoreLinq.Extensions.IndexExtension;
     using static MoreLinq.Extensions.PartitionExtension;
     using static MoreLinq.Extensions.TakeUntilExtension;
     using static MoreLinq.Extensions.ToDelimitedStringExtension;
-    using static MoreLinq.Extensions.ToDictionaryExtension;
     using static OptionTag;
     using static Optuple.OptionModule;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
@@ -307,7 +305,7 @@ namespace LinqPadless
 
             var minifierByExtension =
                 minifierTable.SelectMany(m => m.Extension, (m, ext) => KeyValuePair.Create(ext, m.Function))
-                             .ToDictionary(StringComparer.OrdinalIgnoreCase);
+                             .ToDictionary(e => e.Key, e => e.Value, StringComparer.OrdinalIgnoreCase);
 
             var hashSource =
                 MoreEnumerable

@@ -1,7 +1,7 @@
-ARG DOTNET_SDK_VERSION=3.1.101
-ARG PLATFORM=alpine3.10
+ARG DOTNET_SDK_VERSION=8.0.100
+ARG PLATFORM=alpine3.18
 
-FROM mcr.microsoft.com/dotnet/core/sdk:${DOTNET_SDK_VERSION}-${PLATFORM} AS build
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_SDK_VERSION}-1-${PLATFORM} AS build
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=true
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
@@ -12,7 +12,7 @@ WORKDIR /project
 
 RUN dotnet pack -c Release src
 
-FROM mcr.microsoft.com/dotnet/core/sdk:${DOTNET_SDK_VERSION}-${PLATFORM} AS tool
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_SDK_VERSION}-1-${PLATFORM} AS tool
 
 COPY --from=build /project/dist/*.nupkg /dist/
 COPY --from=build /project/etc/sourceless-nuget.config nuget.config
@@ -22,7 +22,7 @@ RUN dotnet tool install --global \
         --add-source dist \
         LinqPadless --version 2.0.0
 
-FROM mcr.microsoft.com/dotnet/core/sdk:${DOTNET_SDK_VERSION}-${PLATFORM}
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_SDK_VERSION}-1-${PLATFORM}
 
 COPY --from=tool /root/.dotnet/tools /root/.dotnet/tools
 
