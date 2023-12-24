@@ -104,7 +104,7 @@ namespace LinqPadless
             if (parts.Hijack != null)
                 throw new NotSupportedException("The Hijack hook method is not yet supported.");
 
-           return new ProgramQuery(parts.Main, parts.OnInit, parts.OnStart, parts.OnFinish, parts.Hijack,
+            return new ProgramQuery(parts.Main, parts.OnInit, parts.OnStart, parts.OnFinish, parts.Hijack,
                                     ImmutableArray.CreateRange(parts.Others),
                                     ImmutableArray.CreateRange(parts.Types),
                                     ImmutableArray.CreateRange(parts.Namespaces));
