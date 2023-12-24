@@ -25,10 +25,9 @@ namespace LinqPadless
     using System.IO;
     using System.IO.Compression;
     using System.Linq;
+    using MoreLinq;
     using Optuple.Collections;
     using static OptionTag;
-    using static MoreLinq.Extensions.IndexExtension;
-    using static MoreLinq.Extensions.LeftJoinExtension;
     using static DeferDisposable;
 
     #endregion

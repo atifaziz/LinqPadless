@@ -31,11 +31,11 @@ namespace LinqPadless
     using System.Threading.Tasks;
     using System.Xml;
     using System.Xml.Linq;
+    using MoreLinq;
     using NuGet.Versioning;
     using Optuple;
     using Optuple.Collections;
     using Optuple.Linq;
-    using static MoreLinq.Extensions.ToDelimitedStringExtension;
     using static Optuple.OptionModule;
     using static TryModule;
     using static OptionTag;

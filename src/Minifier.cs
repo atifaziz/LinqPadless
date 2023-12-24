@@ -20,7 +20,7 @@ namespace LinqPadless
     using System.Xml.Linq;
     using CSharpMinifier;
     using Jazmin;
-    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using MoreLinq;
 
     static class Minifier
     {

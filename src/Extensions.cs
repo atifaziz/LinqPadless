@@ -21,7 +21,7 @@ namespace LinqPadless
     using System.Linq;
     using System.IO;
     using System.Xml.Linq;
-    using static MoreLinq.Extensions.PipeExtension;
+    using MoreLinq;
     using static Optuple.OptionModule;
 
     static class StringExtensions

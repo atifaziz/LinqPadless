@@ -27,7 +27,7 @@ namespace LinqPadless
     using System.Xml.Linq;
     using CSharpMinifier;
     using Mannex.IO;
-    using MoreLinq.Extensions;
+    using MoreLinq;
     using NuGet.Versioning;
 
     #endregion
@@ -283,8 +283,7 @@ namespace LinqPadless
 {
     using System;
     using System.Linq;
-    using static MoreLinq.Extensions.IndexExtension;
-    using static MoreLinq.Extensions.ToDelimitedStringExtension;
+    using MoreLinq;
 
     static partial class LinqPadQueryExtensions
     {

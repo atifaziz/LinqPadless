@@ -23,10 +23,9 @@ namespace LinqPadless
     using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
+    using MoreLinq;
     using Optuple.Collections;
     using Optuple;
-    using static MoreLinq.Extensions.ChooseExtension;
-    using static MoreLinq.Extensions.PartitionExtension;
     using static Optuple.OptionModule;
 
     sealed class ProgramQuery

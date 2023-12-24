@@ -26,9 +26,8 @@ namespace LinqPadless
     using System.Linq;
     using System.Text.RegularExpressions;
     using Choices;
+    using MoreLinq;
     using Optuple.Collections;
-    using static MoreLinq.Extensions.AggregateExtension;
-    using static MoreLinq.Extensions.FoldExtension;
     using static OptionTag;
 
     #endregion
