@@ -27,7 +27,7 @@ namespace LinqPadless
     using System.Globalization;
     using System.IO;
     using System.Linq;
-    using System.Net;
+    using System.Net.Http;
     using System.Reflection;
     using System.Runtime.InteropServices;
     using System.Security.Cryptography;
@@ -513,7 +513,7 @@ namespace LinqPadless
                 }
 
                 var env = psi.Environment;
-                env.Add("LPLESS_BIN_PATH", new Uri(Assembly.GetEntryAssembly().CodeBase).LocalPath);
+                env.Add("LPLESS_BIN_PATH", Assembly.GetEntryAssembly().Location);
                 env.Add("LPLESS_LINQ_FILE_PATH", queryPath);
                 env.Add("LPLESS_LINQ_FILE_HASH", hash);
 
@@ -586,14 +586,14 @@ namespace LinqPadless
                 log?.WriteLines(from r in query.MetaElement.Elements("Reference")
                                 select "Warning! Reference will be ignored: " + (string)r);
 
-                var wc = new WebClient();
+                using var httpClient = new HttpClient();
 
                 NuGetVersion GetLatestPackageVersion(string id, bool isPrereleaseAllowed)
                 {
                     var latestVersion = Program.GetLatestPackageVersion(id, isPrereleaseAllowed, url =>
                     {
                         log?.WriteLine(url.OriginalString);
-                        return wc.DownloadString(url);
+                        return httpClient.GetStringAsync(url).GetAwaiter().GetResult();
                     });
                     log?.WriteLine($"{id} -> {latestVersion}");
                     return latestVersion;

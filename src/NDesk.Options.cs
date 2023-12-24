@@ -481,7 +481,9 @@ namespace Mono.Options
 		}
 
 		protected OptionException (SerializationInfo info, StreamingContext context)
+#pragma warning disable SYSLIB0051
 			: base (info, context)
+#pragma warning restore SYSLIB0051
 		{
 			this.option = info.GetString ("OptionName");
 		}
@@ -490,10 +492,18 @@ namespace Mono.Options
 			get {return this.option;}
 		}
 
+#pragma warning disable SYSLIB0003
+		// SYSLIB0003: 'SecurityPermissionAttribute' is obsolete: 'Code Access Security is not supported or honored by the runtime.' (https://aka.ms/dotnet-warnings/SYSLIB0003)
+		// SYSLIB0003: 'SecurityAction' is obsolete: 'Code Access Security is not supported or honored by the runtime.' (https://aka.ms/dotnet-warnings/SYSLIB0003)
 		[SecurityPermission (SecurityAction.LinkDemand, SerializationFormatter = true)]
+#pragma warning restore SYSLIB0003
+#pragma warning disable CS0672 // Member overrides obsolete member
 		public override void GetObjectData (SerializationInfo info, StreamingContext context)
+#pragma warning restore CS0672 // Member overrides obsolete member
 		{
+#pragma warning disable SYSLIB0051 // 'Exception.GetObjectData(SerializationInfo, StreamingContext)' is obsolete: 'This API supports obsolete formatter-based serialization. It should not be called or extended by application code.' (https://aka.ms/dotnet-warnings/SYSLIB0051)
 			base.GetObjectData (info, context);
+#pragma warning restore SYSLIB0051
 			info.AddValue ("OptionName", option);
 		}
 	}
