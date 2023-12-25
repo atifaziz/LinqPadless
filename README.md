@@ -57,7 +57,7 @@ compiled executables enables them to be shipped and run without LINQPad.
 
 ## Limitations
 
-Requires .NET Core SDK 2.1+ for execution.
+Requires .NET SDK 6+ for execution.
 
 LINQPad Query files must be either C# Statements, Expression or Program.
 
