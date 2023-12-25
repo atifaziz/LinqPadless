@@ -55,7 +55,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help("cache", options);
+                Help(CommandName.Cache, Streamable.Create(ThisAssembly.Resources.Help.Cache.GetStream), options);
                 return 0;
             }
 

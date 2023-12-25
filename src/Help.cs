@@ -17,30 +17,18 @@
 namespace LinqPadless
 {
     using System;
-    using System.Diagnostics;
     using System.IO;
-    using System.Reflection;
-    using System.Text;
     using System.Text.RegularExpressions;
     using Mannex.IO;
     using MonoOptionSet = Mono.Options.OptionSet;
 
     partial class Program
     {
-        static readonly Lazy<FileVersionInfo> CachedVersionInfo = Lazy.Create(() => FileVersionInfo.GetVersionInfo(typeof(Program).Assembly.Location));
-        static FileVersionInfo VersionInfo => CachedVersionInfo.Value;
-
-        static void Help(string command, MonoOptionSet options) =>
-            Help(command, command, options);
-
-        static void Help(string id, string command, MonoOptionSet options)
+        static void Help(string command, IStreamable resource, MonoOptionSet options)
         {
-            var name = Lazy.Create(() => Path.GetFileNameWithoutExtension(VersionInfo.FileName));
             var opts = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
-            var product = Lazy.Create(() => VersionInfo.ProductName);
-            var version = Lazy.Create(() => new Version(VersionInfo.FileVersion));
 
-            using var stream = GetManifestResourceStream($"help.{id ?? command}.txt");
+            using var stream = resource.Open();
             using var reader = new StreamReader(stream);
             using var e = reader.ReadLines();
             while (e.MoveNext())
@@ -50,10 +38,10 @@ namespace LinqPadless
                                   @"\$([A-Z][A-Z_]*)\$",
                                   m => m.Groups[1].Value switch
                                   {
-                                      "NAME"    => name.Value,
+                                      "NAME"    => ThisAssembly.Project.AssemblyName,
                                       "COMMAND" => command,
-                                      "PRODUCT" => product.Value,
-                                      "VERSION" => version.Value.Trim(3).ToString(),
+                                      "PRODUCT" => ThisAssembly.Info.Product,
+                                      "VERSION" => new Version(ThisAssembly.Info.FileVersion).Trim(3).ToString(),
                                       "OPTIONS" => opts.Value,
                                       _         => string.Empty
                                   });
@@ -64,25 +52,5 @@ namespace LinqPadless
                     Console.WriteLine(line);
             }
         }
-
-        static string LoadTextResource(string name, Encoding encoding = null) =>
-            LoadTextResource(typeof(Program), name, encoding);
-
-        static string LoadTextResource(Type type, string name, Encoding encoding = null)
-        {
-            using var stream = type != null
-                             ? GetManifestResourceStream(type, name)
-                             : GetManifestResourceStream(null, name);
-            Debug.Assert(stream != null);
-            using var reader = new StreamReader(stream, encoding ?? Encoding.UTF8);
-            return reader.ReadToEnd();
-        }
-
-        static Stream GetManifestResourceStream(string name) =>
-            GetManifestResourceStream(typeof(Program), name);
-
-        static Stream GetManifestResourceStream(Type type, string name) =>
-            type != null ? type.Assembly.GetManifestResourceStream(type, name)
-                         : Assembly.GetCallingAssembly().GetManifestResourceStream(name);
     }
 }

@@ -115,7 +115,7 @@ namespace LinqPadless
 
             if (help || tail.Count == 0)
             {
-                Help("main", string.Empty, options);
+                Help(string.Empty, Streamable.Create(ThisAssembly.Resources.Help.Main.GetStream), options);
                 return 0;
             }
 
@@ -130,7 +130,7 @@ namespace LinqPadless
                 case CommandName.Inspect: return InspectCommand(args);
                 case CommandName.Help   : return HelpCommand(args);
                 case CommandName.License:
-                    Console.WriteLine(LoadTextResource(typeof(Program), "license.txt"));
+                    Console.WriteLine(ThisAssembly.Resources.License.Text);
                     return 0;
                 default:
                     return DefaultCommand(command, args, template, outDirPath,
@@ -177,7 +177,7 @@ namespace LinqPadless
             }
             return 0;
 
-            static void Help() => Program.Help("help", new Mono.Options.OptionSet());
+            static void Help() => Program.Help(CommandName.Help, Streamable.Create(ThisAssembly.Resources.Help._Help.GetStream), new Mono.Options.OptionSet());
         }
 
         static int DefaultCommand(
@@ -831,8 +831,7 @@ namespace LinqPadless
             program =
                 Detemplate(program, "generator", () =>
                 {
-                    var versionInfo = CachedVersionInfo.Value;
-                    return $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(versionInfo.ProductName)}, {SyntaxFactory.Literal(versionInfo.FileVersion)})]";
+                    return $"[assembly: System.CodeDom.Compiler.GeneratedCode({SyntaxFactory.Literal(ThisAssembly.Info.Product)}, {SyntaxFactory.Literal(ThisAssembly.Info.FileVersion)})]";
                 });
 
             program =
@@ -934,7 +933,7 @@ namespace LinqPadless
                 Seq.Return(Some("publish"),
                            quiet ? Some("-nologo") : default,
                            Some("-c"), Some("Release"),
-                           Some($"-p:{nameof(LinqPadless)}={CachedVersionInfo.Value.FileVersion}"),
+                           Some($"-p:{nameof(LinqPadless)}={ThisAssembly.Info.FileVersion}"),
                            Some("-o"), Some(binDirPath))
                    .Choose(e => e)
                    .ToArray();
