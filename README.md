@@ -52,7 +52,7 @@ file into a C# script or an executable that you can then run without LINQPad.
 parity with LINQPad features at _run-time_. On the other hand, when all you
 are doing is using [LINQPad as a lightweight IDE][lpide] to script some task
 that doesn't need its bells and whistles then turning those queries into
-compiled executables enables them be shipped and run without LINQPad.
+compiled executables enables them to be shipped and run without LINQPad.
 
 
 ## Limitations
@@ -67,7 +67,7 @@ cause compilation errors.
 In [loaded (`#load`) queries][linqref]:
 
 - the `Hijack` hook method is not supported.
-- only an absolute path and a path relative to the where the query is saved are
+- only an absolute path and a path relative to where the query is saved are
   supported in the `#load` directive.
 
 
