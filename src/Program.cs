@@ -115,7 +115,7 @@ namespace LinqPadless
 
             if (help || tail.Count == 0)
             {
-                Help(string.Empty, ThisAssembly.Resources.Help.Main.GetStream, options);
+                Help(string.Empty, Streamable.Create(ThisAssembly.Resources.Help.Main.GetStream), options);
                 return 0;
             }
 
@@ -177,7 +177,7 @@ namespace LinqPadless
             }
             return 0;
 
-            static void Help() => Program.Help(CommandName.Help, ThisAssembly.Resources.Help._Help.GetStream, new Mono.Options.OptionSet());
+            static void Help() => Program.Help(CommandName.Help, Streamable.Create(ThisAssembly.Resources.Help._Help.GetStream), new Mono.Options.OptionSet());
         }
 
         static int DefaultCommand(

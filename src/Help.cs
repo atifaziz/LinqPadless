@@ -24,11 +24,11 @@ namespace LinqPadless
 
     partial class Program
     {
-        static void Help(string command, Func<Stream> streamFactory, MonoOptionSet options)
+        static void Help(string command, IStreamable resource, MonoOptionSet options)
         {
             var opts = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
 
-            using var stream = streamFactory();
+            using var stream = resource.Open();
             using var reader = new StreamReader(stream);
             using var e = reader.ReadLines();
             while (e.MoveNext())
