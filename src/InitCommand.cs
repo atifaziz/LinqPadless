@@ -83,7 +83,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help("init", options);
+                Help(CommandName.Init, ThisAssembly.Resources.Help.Init.GetStream, options);
                 return 0;
             }
 

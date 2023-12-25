@@ -66,7 +66,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help("inspect", options);
+                Help(CommandName.Inspect, ThisAssembly.Resources.Help.Inspect.GetStream, options);
                 return 0;
             }
 

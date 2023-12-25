@@ -58,7 +58,7 @@ namespace LinqPadless
 
             if (help)
             {
-                Help("bundle", options);
+                Help(CommandName.Bundle, ThisAssembly.Resources.Help.Bundle.GetStream, options);
                 return 0;
             }
 
