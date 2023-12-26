@@ -48,20 +48,20 @@ namespace LinqPadless
 
         static int InspectCommand(InspectArguments args)
         {
-            var inspection = args.ArgQuery switch
+            var inspection = args switch
             {
-                "hash"               => Inspection.Hash,
-                "hash-source"        => Inspection.HashSource,
-                "meta"               => Inspection.Meta,
-                "code"               => Inspection.Code,
-                "kind"               => Inspection.Kind,
-                "loads"              => Inspection.Loads,
-                "default-namespaces" => Inspection.DefaultNamespaces,
-                "removed-namespaces" => Inspection.RemovedNamespaces,
-                "namespaces"         => Inspection.Namespaces,
-                "actual-namespaces"  => Inspection.ActualNamespaces,
-                "packages"           => Inspection.Packages,
-                "actual-packages"    => Inspection.ActualPackages,
+                { CmdHash             : true } => Inspection.Hash,
+                { CmdHashSource       : true } => Inspection.HashSource,
+                { CmdMeta             : true } => Inspection.Meta,
+                { CmdCode             : true } => Inspection.Code,
+                { CmdKind             : true } => Inspection.Kind,
+                { CmdLoads            : true } => Inspection.Loads,
+                { CmdDefaultNamespaces: true } => Inspection.DefaultNamespaces,
+                { CmdRemovedNamespaces: true } => Inspection.RemovedNamespaces,
+                { CmdNamespaces       : true } => Inspection.Namespaces,
+                { CmdActualNamespaces : true } => Inspection.ActualNamespaces,
+                { CmdPackages         : true } => Inspection.Packages,
+                { CmdActualPackages   : true } => Inspection.ActualPackages,
                 _ => throw new Exception("Unknown inspection query.")
             };
 

@@ -1,9 +1,15 @@
 $PRODUCT$ ($VERSION$)
 
-Usage: $NAME$ inspect [options] QUERY FILE
+Usage: $NAME$ inspect [options]
+         ( hash | hash-source
+         | meta | code | kind
+         | loads
+         | default-namespaces | removed-namespaces | namespaces | actual-namespaces
+         | packages | actual-packages )
+         FILE
 
 and where FILE is the path to the LINQPad Query file (.linq extension)
-and QUERY is one of:
+and the type of inspection is one of:
 
   hash                 Hash for compilation cache
   hash-source          Source used to compute hash
