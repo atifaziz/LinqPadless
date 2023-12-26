@@ -1,6 +1,6 @@
 $PRODUCT$ ($VERSION$)
 
-Usage: $NAME$ [options] FILE [ARGS...]
+Usage: $NAME$ [options] [--] FILE [ARGS...]
 
 where FILE is the path to the LINQPad Query file (.linq extension) to
 run and ARGS is one or more arguments passed to the query.
