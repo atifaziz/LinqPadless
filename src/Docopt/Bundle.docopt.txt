@@ -1,5 +1,7 @@
 $PRODUCT$ ($VERSION$)
 
+Bundles a script with referenced scripts.
+
 Usage: $NAME$ bundle [options] FILE
 
 where FILE is the path to the LINQPad Query file (.linq extension) that

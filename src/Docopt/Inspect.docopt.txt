@@ -1,5 +1,7 @@
 $PRODUCT$ ($VERSION$)
 
+Shows various diagnostics information.
+
 Usage: $NAME$ inspect [options]
          ( hash | hash-source
          | meta | code | kind

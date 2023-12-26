@@ -1,6 +1,6 @@
 $PRODUCT$ ($VERSION$)
 
-Initializes a directory with templates and cache.
+Lists cache entries.
 
 Usage: $NAME$ [options] cache
 
