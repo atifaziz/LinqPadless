@@ -6,7 +6,6 @@
     <OutputType>Exe</OutputType>
     <VersionPrefix>2.0.0</VersionPrefix>
     <TargetFrameworks>net8.0;net6.0</TargetFrameworks>
-    <LangVersion>9</LangVersion>
     <AssemblyName>lpless</AssemblyName>
     <Summary>LINQPad Queries without LINQPad</Summary>
     <Description>LINQPadless is a tool that compiles and runs LINQPad query files as stand-alone .NET Core programs, without requiring LINQPad.</Description>
