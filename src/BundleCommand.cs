@@ -37,7 +37,6 @@ namespace LinqPadless
 
         static int BundleCommand(BundleArguments args)
         {
-            var force = args.OptForce;
             var bundlePath = args.OptOut;
             var log = args.OptVerbose ? Console.Error : null;
 
@@ -51,7 +50,7 @@ namespace LinqPadless
             var logbundlePath = bundlePath == null;
             bundlePath ??= Path.ChangeExtension(query.FilePath, ".zip");
 
-            if (!force && File.Exists(bundlePath))
+            if (!args.OptForce && File.Exists(bundlePath))
                 throw new Exception("Target bundle file already exists: " + bundlePath);
 
             File.Delete(bundlePath);

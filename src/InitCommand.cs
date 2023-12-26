@@ -47,21 +47,18 @@ namespace LinqPadless
 
         static int InitCommand(InitArguments args)
         {
-            var force = args.OptForce;
             var outputDirectoryPath = args.OptOutput;
-            var example = args.OptExample;
             var specificVersion = args.OptVersion is { } someVersion
                                 ? NuGetVersion.Parse(someVersion)
                                 : null;
             var feedDirPath = args.OptFeed;
             var searchPrereleases = args.OptPrerelease;
-            var isGlobalSetup = args.OptGlobal;
 
             var source = args.ArgFile ?? "LinqPadless.Templates.Template";
 
             var log = args.OptVerbose ? Console.Error : null;
 
-            if (isGlobalSetup)
+            if (args.OptGlobal)
             {
                 if (!(outputDirectoryPath is null))
                     throw new Exception(@"The ""global"" and ""output"" options are mutually exclusive.");
@@ -74,7 +71,7 @@ namespace LinqPadless
 
             Directory.CreateDirectory(outputDirectoryPath);
 
-            if (!force && Directory.EnumerateFileSystemEntries(outputDirectoryPath).Any())
+            if (!args.OptForce && Directory.EnumerateFileSystemEntries(outputDirectoryPath).Any())
             {
                 Console.Error.WriteLine("The output directory is not empty (use \"--force\" switch to override).");
                 return 1;
@@ -257,7 +254,7 @@ namespace LinqPadless
             if (!File.Exists(lplessRootFilePath))
                 File.Create(lplessRootFilePath).Close();
 
-            if (example)
+            if (args.OptExample)
             {
                 File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8.BomlessEncoding, contents: new []
                 {
