@@ -32,7 +32,7 @@ namespace LinqPadless
     partial class Program
     {
         static int CacheCommand(IEnumerable<string> args) =>
-            CacheArguments.CreateParser().Run(CommandName.Cache, args, CacheCommand);
+            CacheArguments.CreateParser().Run(args, CacheCommand);
 
         static int CacheCommand(CacheArguments args)
         {

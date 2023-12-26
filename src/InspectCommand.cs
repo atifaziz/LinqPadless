@@ -44,7 +44,7 @@ namespace LinqPadless
         }
 
         static int InspectCommand(IEnumerable<string> args) =>
-            InspectArguments.CreateParser().Run(CommandName.Inspect, args, InspectCommand);
+            InspectArguments.CreateParser().Run(args, InspectCommand);
 
         static int InspectCommand(InspectArguments args)
         {

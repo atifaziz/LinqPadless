@@ -33,7 +33,7 @@ namespace LinqPadless
     partial class Program
     {
         static int BundleCommand(IEnumerable<string> args) =>
-            BundleArguments.CreateParser().Run(CommandName.Bundle, args, BundleCommand);
+            BundleArguments.CreateParser().Run(args, BundleCommand);
 
         static int BundleCommand(BundleArguments args)
         {

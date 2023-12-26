@@ -23,7 +23,7 @@ namespace LinqPadless
 
     partial class Program
     {
-        internal static void Help(string command, string help, TextWriter output)
+        internal static void Help(string help, TextWriter output)
         {
             using var reader = new StringReader(help);
             using var e = reader.ReadLines();
@@ -35,7 +35,6 @@ namespace LinqPadless
                                   m => m.Groups[1].Value switch
                                   {
                                       "NAME"    => ThisAssembly.Project.AssemblyName,
-                                      "COMMAND" => command,
                                       "PRODUCT" => ThisAssembly.Info.Product,
                                       "VERSION" => new Version(ThisAssembly.Info.FileVersion).Trim(3).ToString(),
                                       _         => string.Empty

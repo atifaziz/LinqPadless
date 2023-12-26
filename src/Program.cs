@@ -92,7 +92,7 @@ namespace LinqPadless
                     return 0;
                 default:
                     var parser = ExecuteArguments.CreateParser();
-                    return parser.Run(string.Empty, args,
+                    return parser.Run(args,
                                       static args =>
                                           DefaultCommand(args.ArgFile, args.ArgArgs, args.OptTemplate, args.OptOutput,
                                                          uncached: args.OptBuild || args.OptOutput != null,
@@ -118,7 +118,7 @@ namespace LinqPadless
         }
 
         static int HelpCommand(IEnumerable<string> args) =>
-            HelpArguments.CreateParser().Run(CommandName.Help, args, HelpCommand);
+            HelpArguments.CreateParser().Run(args, HelpCommand);
 
         static int HelpCommand(HelpArguments args)
         {
@@ -139,7 +139,7 @@ namespace LinqPadless
 
             return 0;
 
-            static void Help() => Program.Help(CommandName.Help, HelpArguments.Help, Console.Out);
+            static void Help() => Program.Help(HelpArguments.Help, Console.Out);
         }
 
         static int DefaultCommand(

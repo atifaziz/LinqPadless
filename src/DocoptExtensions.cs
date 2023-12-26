@@ -36,7 +36,7 @@ namespace LinqPadless
 
     static class DocoptExtensions
     {
-        public static int Run<T>(this IHelpFeaturingParser<T> parser, string name,
+        public static int Run<T>(this IHelpFeaturingParser<T> parser,
                                  IEnumerable<string> args, Func<T, int> handler)
             where T : ICommonOptions =>
             parser.Parse(args)
@@ -52,12 +52,12 @@ namespace LinqPadless
                          },
                          result =>
                          {
-                             Program.Help(name, result.Help, Console.Out);
+                             Program.Help(result.Help, Console.Out);
                              return 0;
                          },
                          result =>
                          {
-                             Program.Help(name, result.Usage, Console.Error);
+                             Program.Help(result.Usage, Console.Error);
                              return 1;
                          });
     }

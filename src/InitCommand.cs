@@ -43,7 +43,7 @@ namespace LinqPadless
     partial class Program
     {
         static int InitCommand(IEnumerable<string> args) =>
-            InitArguments.CreateParser().Run(CommandName.Init, args, InitCommand);
+            InitArguments.CreateParser().Run(args, InitCommand);
 
         static int InitCommand(InitArguments args)
         {
