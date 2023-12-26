@@ -40,7 +40,7 @@ test_script:
 - cmd: test.cmd
 - sh: DOTNET_ROOT="$HOME/.dotnet" ./test.sh
 - sh: docker build -t lpless .
-- sh: docker run --rm lpless
+- sh: docker run --rm lpless --help
 artifacts:
 - path: dist\*.nupkg
 deploy:

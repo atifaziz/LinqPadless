@@ -20,7 +20,6 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.IO;
     using System.IO.Compression;
     using System.Linq;
@@ -33,7 +32,6 @@ namespace LinqPadless
     using System.Xml.Linq;
     using MoreLinq;
     using NuGet.Versioning;
-    using Optuple;
     using Optuple.Collections;
     using Optuple.Linq;
     using static Optuple.OptionModule;
@@ -44,50 +42,21 @@ namespace LinqPadless
 
     partial class Program
     {
-        static async Task<int> InitCommand(IEnumerable<string> args)
+        static int InitCommand(IEnumerable<string> args) =>
+            InitArguments.CreateParser().Run(args, InitCommand);
+
+        static int InitCommand(InitArguments args)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var force = false;
-            var outputDirectoryPath = (string)null;
-            var example = false;
-            var specificVersion = (NuGetVersion)null;
-            var feedDirPath = (string)null;
-            var searchPrereleases = false;
-            var isGlobalSetup = false;
+            var outputDirectoryPath = args.OptOutput;
+            var specificVersion = args.OptVersion is { } someVersion
+                                ? NuGetVersion.Parse(someVersion)
+                                : null;
+            var feedDirPath = args.OptFeed;
+            var searchPrereleases = args.OptPrerelease;
+            var source = args.ArgFile ?? "LinqPadless.Templates.Template";
+            var log = args.OptVerbose ? Console.Error : null;
 
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force", "force re-fresh/build", _ => force = true },
-                { "o|output=", "output {DIRECTORY}", v => outputDirectoryPath = v },
-                { "example", "add a simple example", _ => example = true },
-                { "version=", "use package {VERSION}", v => specificVersion = NuGetVersion.Parse(v) },
-                { "feed=", "use {PATH} as package feed", v => feedDirPath = v },
-                { "pre|prerelease", "include pre-releases in searches", _ => searchPrereleases = true },
-                { "g|global", "set-up globally/user-wide", _ => isGlobalSetup = true },
-            };
-
-            var tail = options.Parse(args);
-
-            if (tail.Count > 1)
-                throw new Exception("Invalid argument: " + tail[1]);
-
-            var source = tail.FirstOrNone().Or("LinqPadless.Templates.Template");
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(CommandName.Init, Streamable.Create(ThisAssembly.Resources.Help.Init.GetStream), options);
-                return 0;
-            }
-
-            if (isGlobalSetup)
+            if (args.OptGlobal)
             {
                 if (!(outputDirectoryPath is null))
                     throw new Exception(@"The ""global"" and ""output"" options are mutually exclusive.");
@@ -100,7 +69,7 @@ namespace LinqPadless
 
             Directory.CreateDirectory(outputDirectoryPath);
 
-            if (!force && Directory.EnumerateFileSystemEntries(outputDirectoryPath).Any())
+            if (!args.OptForce && Directory.EnumerateFileSystemEntries(outputDirectoryPath).Any())
             {
                 Console.Error.WriteLine("The output directory is not empty (use \"--force\" switch to override).");
                 return 1;
@@ -116,7 +85,7 @@ namespace LinqPadless
                 return client;
             });
 
-            async Task Download(Uri fileUrl, string targetFilePath)
+            async Task DownloadAsync(Uri fileUrl, string targetFilePath)
             {
                 log?.WriteLine($"Downloading {fileUrl}...");
 
@@ -140,7 +109,7 @@ namespace LinqPadless
                 {
                     zipPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
                     disposables.Add(new TempFile(zipPath, LogTempFileDeletionError));
-                    await Download(url, zipPath);
+                    DownloadAsync(url, zipPath).GetAwaiter().GetResult();
                 }
                 else
                 {
@@ -225,7 +194,7 @@ namespace LinqPadless
 
                         var tempPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
                         disposables.Add(new TempFile(tempPath, LogTempFileDeletionError));
-                        await Download(nupkgUrl, tempPath);
+                        DownloadAsync(nupkgUrl, tempPath).GetAwaiter().GetResult();
 
                         log?.WriteLine("Caching downloaded package at: " + zipPath);
 
@@ -283,7 +252,7 @@ namespace LinqPadless
             if (!File.Exists(lplessRootFilePath))
                 File.Create(lplessRootFilePath).Close();
 
-            if (example)
+            if (args.OptExample)
             {
                 File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8.BomlessEncoding, contents: new []
                 {

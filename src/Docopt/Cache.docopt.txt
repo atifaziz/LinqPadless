@@ -1,8 +1,8 @@
 $PRODUCT$ ($VERSION$)
 
-Usage:
+Lists cache entries.
 
-    $NAME$ $COMMAND$
+Usage: $NAME$ [options] cache
 
 Lists the entires in the compilation cache in the format (quoted text
 is appears literally):
@@ -14,3 +14,8 @@ where:
   HASH  hash for compilation entry
   #     Count of compilation executions/runs
   TIME  ISO date & time of last run
+
+Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break

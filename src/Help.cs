@@ -20,16 +20,12 @@ namespace LinqPadless
     using System.IO;
     using System.Text.RegularExpressions;
     using Mannex.IO;
-    using MonoOptionSet = Mono.Options.OptionSet;
 
     partial class Program
     {
-        static void Help(string command, IStreamable resource, MonoOptionSet options)
+        internal static void Help(string help, TextWriter output)
         {
-            var opts = Lazy.Create(() => options.WriteOptionDescriptionsReturningWriter(new StringWriter { NewLine = Environment.NewLine }).ToString());
-
-            using var stream = resource.Open();
-            using var reader = new StreamReader(stream);
+            using var reader = new StringReader(help);
             using var e = reader.ReadLines();
             while (e.MoveNext())
             {
@@ -39,17 +35,12 @@ namespace LinqPadless
                                   m => m.Groups[1].Value switch
                                   {
                                       "NAME"    => ThisAssembly.Project.AssemblyName,
-                                      "COMMAND" => command,
                                       "PRODUCT" => ThisAssembly.Info.Product,
                                       "VERSION" => new Version(ThisAssembly.Info.FileVersion).Trim(3).ToString(),
-                                      "OPTIONS" => opts.Value,
                                       _         => string.Empty
                                   });
 
-                if (line.Length > 0 && line[^1] == '\n')
-                    Console.Write(line);
-                else
-                    Console.WriteLine(line);
+                Console.WriteLine(line);
             }
         }
     }

@@ -6,7 +6,7 @@
     <OutputType>Exe</OutputType>
     <VersionPrefix>2.0.0</VersionPrefix>
     <TargetFrameworks>net8.0;net6.0</TargetFrameworks>
-    <LangVersion>8</LangVersion>
+    <LangVersion>9</LangVersion>
     <AssemblyName>lpless</AssemblyName>
     <Summary>LINQPad Queries without LINQPad</Summary>
     <Description>LINQPadless is a tool that compiles and runs LINQPad query files as stand-alone .NET Core programs, without requiring LINQPad.</Description>
@@ -38,7 +38,6 @@
   <ItemGroup>
     <None Remove="dotnet.cmd" />
     <None Remove="dotnet.sh" />
-    <None Remove="Help\*.txt" />
     <None Remove="license.txt" />
   </ItemGroup>
 
@@ -49,13 +48,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Help\*.txt" />
     <EmbeddedResource Include="License.txt" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Choices" Version="1.0.1" />
     <PackageReference Include="CSharpMinifier" Version="1.2.1" />
+    <PackageReference Include="docopt.net" Version="0.8.1" />
     <PackageReference Include="KeyValuePairs" Version="1.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageReference Include="morelinq" Version="4.1.0" />

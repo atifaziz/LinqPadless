@@ -20,7 +20,6 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
 
     #endregion
@@ -44,49 +43,25 @@ namespace LinqPadless
             ActualPackages
         }
 
-        static int InspectCommand(IEnumerable<string> args)
+        static int InspectCommand(IEnumerable<string> args) =>
+            InspectArguments.CreateParser().Run(args, InspectCommand);
+
+        static int InspectCommand(InspectArguments args)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var template = (string) null;
-
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
+            var inspection = args switch
             {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "t|template=", "template", v => template = v },
-            };
-
-            var tail = options.Parse(args);
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(CommandName.Inspect, Streamable.Create(ThisAssembly.Resources.Help.Inspect.GetStream), options);
-                return 0;
-            }
-
-            if (tail.Count == 0)
-                throw new Exception("Missing inspection query.");
-
-            var inspection = tail[0] switch
-            {
-                "hash"               => Inspection.Hash,
-                "hash-source"        => Inspection.HashSource,
-                "meta"               => Inspection.Meta,
-                "code"               => Inspection.Code,
-                "kind"               => Inspection.Kind,
-                "loads"              => Inspection.Loads,
-                "default-namespaces" => Inspection.DefaultNamespaces,
-                "removed-namespaces" => Inspection.RemovedNamespaces,
-                "namespaces"         => Inspection.Namespaces,
-                "actual-namespaces"  => Inspection.ActualNamespaces,
-                "packages"           => Inspection.Packages,
-                "actual-packages"    => Inspection.ActualPackages,
+                { CmdHash             : true } => Inspection.Hash,
+                { CmdHashSource       : true } => Inspection.HashSource,
+                { CmdMeta             : true } => Inspection.Meta,
+                { CmdCode             : true } => Inspection.Code,
+                { CmdKind             : true } => Inspection.Kind,
+                { CmdLoads            : true } => Inspection.Loads,
+                { CmdDefaultNamespaces: true } => Inspection.DefaultNamespaces,
+                { CmdRemovedNamespaces: true } => Inspection.RemovedNamespaces,
+                { CmdNamespaces       : true } => Inspection.Namespaces,
+                { CmdActualNamespaces : true } => Inspection.ActualNamespaces,
+                { CmdPackages         : true } => Inspection.Packages,
+                { CmdActualPackages   : true } => Inspection.ActualPackages,
                 _ => throw new Exception("Unknown inspection query.")
             };
 
@@ -97,14 +72,9 @@ namespace LinqPadless
                 return 0;
             }
 
-            if (tail.Count == 1)
-                throw new Exception("Missing LINQPad query file path.");
-
-            var queryPath = tail[1];
-
-            return DefaultCommand(queryPath,
+            return DefaultCommand(args.ArgFile,
                                   args: Enumerable.Empty<string>(),
-                                  template: template,
+                                  template: args.OptTemplate,
                                   outDirPath: null,
                                   inspection: inspection,
                                   uncached: false,
@@ -112,7 +82,7 @@ namespace LinqPadless
                                   force: true,
                                   publishIdleTimeout: TimeSpan.Zero,
                                   publishTimeout: TimeSpan.Zero,
-                                  log);
+                                  args.OptVerbose ? Console.Error : null);
         }
     }
 }

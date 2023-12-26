@@ -1,11 +1,17 @@
 $PRODUCT$ ($VERSION$)
 
-Usage:
+Shows various diagnostics information.
 
-    $NAME$ inspect QUERY FILE
+Usage: $NAME$ inspect [options]
+         ( hash | hash-source
+         | meta | code | kind
+         | loads
+         | default-namespaces | removed-namespaces | namespaces | actual-namespaces
+         | packages | actual-packages )
+         FILE
 
 and where FILE is the path to the LINQPad Query file (.linq extension)
-and QUERY is one of:
+and the type of inspection is one of:
 
   hash                 Hash for compilation cache
   hash-source          Source used to compute hash
@@ -22,3 +28,9 @@ and QUERY is one of:
   packages             Packages listed in query file
   actual-packages      Computed packages from query file and its
                          references
+
+Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break
+  -t, --template=NAME        Use template named NAME

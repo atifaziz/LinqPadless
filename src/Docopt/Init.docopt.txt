@@ -1,0 +1,21 @@
+$PRODUCT$ ($VERSION$)
+
+Initializes a directory with templates and cache.
+
+Usage: $NAME$ init [options] [FILE | URL | ID]
+
+where FILE is the path to a ZIP file, URL is a URL to a ZIP
+file/resource and ID is a NuGet package Id. All of these
+identify a source used to initialize the templates.
+
+Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break
+  -f, --force                Force re-fresh/build
+  -o, --output=DIRECTORY     Output DIRECTORY
+      --example              Add a simple example
+      --version=VERSION      Use package VERSION
+      --feed=PATH            Use PATH as package feed
+      --prerelease           Include pre-releases in searches
+  -g, --global               Set-up globally/user-wide

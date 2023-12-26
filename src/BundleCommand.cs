@@ -26,47 +26,22 @@ namespace LinqPadless
     using System.IO.Compression;
     using System.Linq;
     using MoreLinq;
-    using Optuple.Collections;
-    using static OptionTag;
     using static DeferDisposable;
 
     #endregion
 
     partial class Program
     {
-        static int BundleCommand(IEnumerable<string> args)
+        static int BundleCommand(IEnumerable<string> args) =>
+            BundleArguments.CreateParser().Run(args, BundleCommand);
+
+        static int BundleCommand(BundleArguments args)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var force = false;
-            var bundlePath = (string)null;
+            var bundlePath = args.OptOut;
+            var log = args.OptVerbose ? Console.Error : null;
 
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force", "overwrite bundle if exists", _ => force = true },
-                { "o|out=", "write bundle at {PATH}", v => bundlePath = v },
-            };
-
-            var tail = options.Parse(args);
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(CommandName.Bundle, Streamable.Create(ThisAssembly.Resources.Help.Bundle.GetStream), options);
-                return 0;
-            }
-
-            var queryPath = tail.FirstOrNone() switch
-            {
-                (SomeT, var arg) => arg,
-                _ => throw new Exception("Missing LINQPad query path argument")
-            };
+            var queryPath = args.ArgFile;
+            Debug.Assert(queryPath != null); // per usage
 
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
             if (query.ValidateSupported() is Exception e)
@@ -75,7 +50,7 @@ namespace LinqPadless
             var logbundlePath = bundlePath == null;
             bundlePath ??= Path.ChangeExtension(query.FilePath, ".zip");
 
-            if (!force && File.Exists(bundlePath))
+            if (!args.OptForce && File.Exists(bundlePath))
                 throw new Exception("Target bundle file already exists: " + bundlePath);
 
             File.Delete(bundlePath);
