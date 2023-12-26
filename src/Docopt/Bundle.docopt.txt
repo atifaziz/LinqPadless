@@ -1,0 +1,13 @@
+$PRODUCT$ ($VERSION$)
+
+Usage: $NAME$ bundle [options] FILE
+
+where FILE is the path to the LINQPad Query file (.linq extension) that
+is bundled into a ZIP along with any referenced (#load) files.
+
+Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break
+  -f, --force                Overwrite bundle if exists
+  -o, --out=PATH             Write bundle at PATH

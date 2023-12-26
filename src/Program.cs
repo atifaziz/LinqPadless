@@ -52,7 +52,6 @@ namespace LinqPadless
     using static OptionTag;
     using static Optuple.OptionModule;
     using MoreEnumerable = MoreLinq.MoreEnumerable;
-    using OptionSetArgumentParser = System.Func<System.Func<string, Mono.Options.OptionContext, bool>, string, Mono.Options.OptionContext, bool>;
 
     #endregion
 
@@ -79,53 +78,12 @@ namespace LinqPadless
             searchPaths.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
             ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
 
-        static int Wain(IEnumerable<string> args)
+        static int Wain(string[] args)
         {
-            var verbose = Ref.Create(false);
-            var help = Ref.Create(false);
-            var force = false;
-            var dontExecute = false;
-            var outDirPath = (string) null;
-            var uncached = false;
-            var template = (string) null;
-            var publishTimeout = TimeSpan.FromMinutes(15);
-            var publishIdleTimeout = TimeSpan.FromMinutes(3);
-
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force"       , "force re-fresh/build", _ => force = true },
-                { "x"             , "do not execute", _ => dontExecute = true },
-                { "b|build"       , "build entirely to output directory; implies -f", _ => uncached = true },
-                { "o|out|output=" , "output directory; implies -b and -f", v => outDirPath = v },
-                { "t|template="   , "template", v => template = v },
-                { "timeout="      , $"timeout for publishing; default is {publishTimeout.FormatHms()}",
-                                    v => publishTimeout = TimeSpanHms.Parse(v) },
-                { "idle-timeout=" , $"idle timeout for publishing; default is {publishIdleTimeout.FormatHms()}",
-                                    v => publishIdleTimeout = TimeSpanHms.Parse(v) },
-            };
-
-            var tail = options.Parse(args);
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help || tail.Count == 0)
-            {
-                Help(string.Empty, Streamable.Create(ThisAssembly.Resources.Help.Main.GetStream), options);
-                return 0;
-            }
-
-            var command = tail.First();
-            args = tail.Skip(1).TakeWhile(arg => arg != "--");
-
-            switch (command)
+            switch (args.FirstOrDefault() ?? string.Empty)
             {
                 case CommandName.Cache  : return CacheCommand(args);
-                case CommandName.Init   : return InitCommand(args).GetAwaiter().GetResult();
+                case CommandName.Init   : return InitCommand(args);
                 case CommandName.Bundle : return BundleCommand(args);
                 case CommandName.Inspect: return InspectCommand(args);
                 case CommandName.Help   : return HelpCommand(args);
@@ -133,11 +91,16 @@ namespace LinqPadless
                     Console.WriteLine(ThisAssembly.Resources.License.Text);
                     return 0;
                 default:
-                    return DefaultCommand(command, args, template, outDirPath,
-                                          uncached: uncached || outDirPath != null,
-                                          inspection: Inspection.None, dontExecute: dontExecute,
-                                          force: force, publishIdleTimeout: publishIdleTimeout,
-                                          publishTimeout: publishTimeout, log: log);
+                    var parser = ExecuteArguments.CreateParser();
+                    return parser.Run(string.Empty, args,
+                                      static args =>
+                                          DefaultCommand(args.ArgFile, args.ArgArgs, args.OptTemplate, args.OptOutput,
+                                                         uncached: args.OptBuild || args.OptOutput != null,
+                                                         inspection: Inspection.None,
+                                                         dontExecute: args.OptX, force: args.OptForce,
+                                                         publishIdleTimeout: TimeSpanHms.Parse(args.OptIdleTimeout),
+                                                         publishTimeout: TimeSpanHms.Parse(args.OptTimeout),
+                                                         log: args.OptVerbose ? Console.Error : null));
             }
         }
 
@@ -154,30 +117,29 @@ namespace LinqPadless
                 ImmutableArray.Create(Cache, Init, Bundle, Inspect, Help, License);
         }
 
-        static int HelpCommand(IEnumerable<string> args)
+        static int HelpCommand(IEnumerable<string> args) =>
+            HelpArguments.CreateParser().Run(CommandName.Help, args, HelpCommand);
+
+        static int HelpCommand(HelpArguments args)
         {
-            using var arg = args.GetEnumerator();
-            if (!arg.MoveNext())
+            if (args.ArgCommand is { } command)
             {
-                Help();
-            }
-            else
-            {
-                var command = arg.Current;
                 if (CommandName.All.IndexOf(command) < 0)
                     throw new Exception($"\"{command}\" is an invalid command. Must be one of: {CommandName.All.ToDelimitedString(", ")}");
-
-                if (arg.MoveNext())
-                    throw new Exception("Invalid argument: " + arg.Current);
 
                 if (command == CommandName.Help)
                     Help();
                 else
                     Wain(new[] { command, "--help" });
             }
+            else
+            {
+                Help();
+            }
+
             return 0;
 
-            static void Help() => Program.Help(CommandName.Help, Streamable.Create(ThisAssembly.Resources.Help._Help.GetStream), new Mono.Options.OptionSet());
+            static void Help() => Program.Help(CommandName.Help, HelpArguments.Help, Console.Out);
         }
 
         static int DefaultCommand(
@@ -557,18 +519,6 @@ namespace LinqPadless
 
                 return process.ExitCode;
             }
-        }
-
-        static class Options
-        {
-            public static Mono.Options.Option Help(Ref<bool> value) =>
-                new ActionOption("?|help|h", "prints out the options", _ => value.Value = true);
-
-            public static Mono.Options.Option Verbose(Ref<bool> value) =>
-                new ActionOption("verbose|v", "enable additional output", _ => value.Value = true);
-
-            public static readonly Mono.Options.Option Debug =
-                new ActionOption("d|debug", "debug break", vs => Debugger.Launch());
         }
 
         static readonly ValueTuple Unit = default;
@@ -1353,26 +1303,6 @@ namespace LinqPadless
             var exitCode = process.ExitCode;
             if (exitCode != 0)
                 throw errorSelector(exitCode);
-        }
-
-        static OptionSetArgumentParser CreateStrictOptionSetArgumentParser()
-        {
-            var hasTailStarted = false;
-            return (impl, arg, context) =>
-            {
-                if (hasTailStarted) // once a tail, always a tail
-                    return false;
-
-                var isOption = impl(arg, context);
-                if (!isOption)
-                {
-                    if (arg.Length > 0 && arg[0] == '-' && !hasTailStarted)
-                        throw new Exception("Invalid argument: " + arg);
-                    hasTailStarted = true;
-                }
-
-                return isOption;
-            };
         }
     }
 

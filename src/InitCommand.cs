@@ -20,7 +20,6 @@ namespace LinqPadless
 
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.IO;
     using System.IO.Compression;
     using System.Linq;
@@ -33,7 +32,6 @@ namespace LinqPadless
     using System.Xml.Linq;
     using MoreLinq;
     using NuGet.Versioning;
-    using Optuple;
     using Optuple.Collections;
     using Optuple.Linq;
     using static Optuple.OptionModule;
@@ -44,48 +42,24 @@ namespace LinqPadless
 
     partial class Program
     {
-        static async Task<int> InitCommand(IEnumerable<string> args)
+        static int InitCommand(IEnumerable<string> args) =>
+            InitArguments.CreateParser().Run(CommandName.Init, args, InitCommand);
+
+        static int InitCommand(InitArguments args)
         {
-            var help = Ref.Create(false);
-            var verbose = Ref.Create(false);
-            var force = false;
-            var outputDirectoryPath = (string)null;
-            var example = false;
-            var specificVersion = (NuGetVersion)null;
-            var feedDirPath = (string)null;
-            var searchPrereleases = false;
-            var isGlobalSetup = false;
+            var force = args.OptForce;
+            var outputDirectoryPath = args.OptOutput;
+            var example = args.OptExample;
+            var specificVersion = args.OptVersion is { } someVersion
+                                ? NuGetVersion.Parse(someVersion)
+                                : null;
+            var feedDirPath = args.OptFeed;
+            var searchPrereleases = args.OptPrerelease;
+            var isGlobalSetup = args.OptGlobal;
 
-            var options = new OptionSet(CreateStrictOptionSetArgumentParser())
-            {
-                Options.Help(help),
-                Options.Verbose(verbose),
-                Options.Debug,
-                { "f|force", "force re-fresh/build", _ => force = true },
-                { "o|output=", "output {DIRECTORY}", v => outputDirectoryPath = v },
-                { "example", "add a simple example", _ => example = true },
-                { "version=", "use package {VERSION}", v => specificVersion = NuGetVersion.Parse(v) },
-                { "feed=", "use {PATH} as package feed", v => feedDirPath = v },
-                { "pre|prerelease", "include pre-releases in searches", _ => searchPrereleases = true },
-                { "g|global", "set-up globally/user-wide", _ => isGlobalSetup = true },
-            };
+            var source = args.ArgFile ?? "LinqPadless.Templates.Template";
 
-            var tail = options.Parse(args);
-
-            if (tail.Count > 1)
-                throw new Exception("Invalid argument: " + tail[1]);
-
-            var source = tail.FirstOrNone().Or("LinqPadless.Templates.Template");
-
-            var log = verbose ? Console.Error : null;
-            if (log != null)
-                Trace.Listeners.Add(new TextWriterTraceListener(log));
-
-            if (help)
-            {
-                Help(CommandName.Init, Streamable.Create(ThisAssembly.Resources.Help.Init.GetStream), options);
-                return 0;
-            }
+            var log = args.OptVerbose ? Console.Error : null;
 
             if (isGlobalSetup)
             {
@@ -116,7 +90,7 @@ namespace LinqPadless
                 return client;
             });
 
-            async Task Download(Uri fileUrl, string targetFilePath)
+            async Task DownloadAsync(Uri fileUrl, string targetFilePath)
             {
                 log?.WriteLine($"Downloading {fileUrl}...");
 
@@ -140,7 +114,7 @@ namespace LinqPadless
                 {
                     zipPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
                     disposables.Add(new TempFile(zipPath, LogTempFileDeletionError));
-                    await Download(url, zipPath);
+                    DownloadAsync(url, zipPath).GetAwaiter().GetResult();
                 }
                 else
                 {
@@ -225,7 +199,7 @@ namespace LinqPadless
 
                         var tempPath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
                         disposables.Add(new TempFile(tempPath, LogTempFileDeletionError));
-                        await Download(nupkgUrl, tempPath);
+                        DownloadAsync(nupkgUrl, tempPath).GetAwaiter().GetResult();
 
                         log?.WriteLine("Caching downloaded package at: " + zipPath);
 

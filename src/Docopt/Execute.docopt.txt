@@ -1,17 +1,24 @@
 $PRODUCT$ ($VERSION$)
 
-Main Usage:
-
-    $NAME$ [OPTIONS...] FILE ARGS...
+Usage: $NAME$ [options] FILE [ARGS...]
 
 where FILE is the path to the LINQPad Query file (.linq extension) to
 run and ARGS is one or more arguments passed to the query.
 
 Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break
+  -f, --force                Force re-fresh/build
+  -x                         Do not execute
+  -b, --build                Build entirely to output DIRECTORY;
+                               implies -f
+  -o, --output=DIRECTORY     Output directory; implies -b and -f
+  -t, --template=NAME        Use template named NAME
+  --timeout=TIMEOUT          Timeout for publishing [default: 15m00s]
+  --idle-timeout=TIMEOUT     Idle timeout for publishing [default: 3m00s]
 
-$OPTIONS$
-
-Secondary Usage:
+Secondary usage is:
 
     $NAME$ COMMAND ...
 

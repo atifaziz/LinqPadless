@@ -1,8 +1,6 @@
 $PRODUCT$ ($VERSION$)
 
-Usage:
-
-    $NAME$ inspect QUERY FILE
+Usage: $NAME$ inspect [options] QUERY FILE
 
 and where FILE is the path to the LINQPad Query file (.linq extension)
 and QUERY is one of:
@@ -22,3 +20,9 @@ and QUERY is one of:
   packages             Packages listed in query file
   actual-packages      Computed packages from query file and its
                          references
+
+Options:
+  -h, --help                 Prints out the options
+  -v, --verbose              Enable additional output
+  -d, --debug                Debug break
+  -t, --template=NAME        Use template named NAME

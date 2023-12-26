@@ -1,8 +1,6 @@
 $PRODUCT$ ($VERSION$)
 
-Usage:
-
-    $NAME$ $COMMAND$ [COMMAND]
+Usage: $NAME$ help [options] [COMMAND]
 
 where COMMAND is one of:
 
@@ -12,3 +10,8 @@ where COMMAND is one of:
   inspect   Show various diagnostics information
   license   Show the full license
   help      Show this help
+
+Options:
+  -h, --help     Prints out the options
+  -v, --verbose  Enable additional output
+  -d, --debug    Debug break
