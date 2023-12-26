@@ -53,9 +53,7 @@ namespace LinqPadless
                                 : null;
             var feedDirPath = args.OptFeed;
             var searchPrereleases = args.OptPrerelease;
-
             var source = args.ArgFile ?? "LinqPadless.Templates.Template";
-
             var log = args.OptVerbose ? Console.Error : null;
 
             if (args.OptGlobal)
