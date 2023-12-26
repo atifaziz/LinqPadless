@@ -78,7 +78,7 @@ namespace LinqPadless
             searchPaths.Select(d => Path.Combine(d, "cache")).FirstOrDefault(Directory.Exists)
             ?? Path.Combine(Path.GetTempPath(), "lpless", "cache");
 
-        static int Wain(string[] args)
+        static int Wain(IReadOnlyList<string> args)
         {
             switch (args.FirstOrDefault() ?? string.Empty)
             {
