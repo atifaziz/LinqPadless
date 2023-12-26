@@ -42,7 +42,7 @@ namespace LinqPadless
             var log = args.OptVerbose ? Console.Error : null;
 
             var queryPath = args.ArgFile;
-            Debug.Assert(queryPath != null);
+            Debug.Assert(queryPath != null); // per usage
 
             var query = LinqPadQuery.Load(Path.GetFullPath(queryPath));
             if (query.ValidateSupported() is Exception e)
