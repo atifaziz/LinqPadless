@@ -227,14 +227,14 @@ namespace LinqPadless
                         .If(log, (ss, log) => ss.Do(() => log.WriteLine("Template searches:"))
                                                 .Do(s => log.WriteLine("- " + s)))
                         .FirstOrNone(Directory.Exists)
+                select new DirectoryInfo(templateProjectPath) into dir
                 select
-                    Directory
-                        .GetFiles(templateProjectPath)
-                        .Where(f => f.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
-                                 || f.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                                 || "global.json".Equals(Path.GetFileName(f), StringComparison.OrdinalIgnoreCase))
-                        .Select(f => (Path.GetFileName(f), Streamable.Create(() => File.OpenRead(f))))
-                        .ToArray())
+                    dir.EnumerateFiles("*", new EnumerationOptions())
+                       .Where(f => ".cs".Equals(f.Extension, StringComparison.OrdinalIgnoreCase)
+                                || ".csproj".Equals(f.Extension, StringComparison.OrdinalIgnoreCase)
+                                || "global.json".Equals(f.Name, StringComparison.OrdinalIgnoreCase))
+                       .Select(f => (f.Name, Streamable.ReadFile(f.FullName)))
+                       .ToArray())
                 switch
                 {
                     (SomeT, var tfs) when tfs.Length > 0 => tfs,
