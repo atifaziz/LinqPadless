@@ -1,0 +1,13 @@
+<Project>
+  <!--
+  https://learn.microsoft.com/en-us/visualstudio/msbuild/customize-by-directory?view=vs-2022#search-scope
+
+  > When searching for a "Directory.Build.props" file, MSBuild walks the
+  > directory structure upwards from your project location
+  > ("$(MSBuildProjectFullPath)"), stopping after it locates a
+  > "Directory.Build.props" file.
+
+  This file will prevent MSBuild from searching for a "Directory.Build.props"
+  file in parent directories.
+  -->
+</Project>
