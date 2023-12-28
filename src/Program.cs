@@ -114,7 +114,9 @@ namespace LinqPadless
             public const string License = "license";
 
             public static readonly ImmutableArray<string> All =
+#pragma warning disable IDE0303 // Simplify collection initialization
                 ImmutableArray.Create(Cache, Init, Bundle, Inspect, Help, License);
+#pragma warning restore IDE0303 // Simplify collection initialization
         }
 
         static int HelpCommand(IEnumerable<string> args) =>
@@ -267,7 +269,7 @@ namespace LinqPadless
 
             var hashSource =
                 MoreEnumerable
-                    .From(() => new MemoryStream(Encoding.ASCII.GetBytes("3")))
+                    .From(() => new MemoryStream("3"u8.ToArray()))
                     .Concat(from rn in templateFiles.OrderBy(rn => rn.Name, StringComparer.OrdinalIgnoreCase)
                             select minifierByExtension.TryGetValue(Path.GetExtension(rn.Name), out var minifier)
                                  ? rn.Content.MapText(minifier)
@@ -927,7 +929,7 @@ namespace LinqPadless
                     }
                     else if (!errored)
                     {
-                        pendingNonErrors ??= new List<string>();
+                        pendingNonErrors ??= [];
                         pendingNonErrors.Add(line);
                     }
                 }
@@ -936,12 +938,10 @@ namespace LinqPadless
             }
         }
 
-        static readonly (string Name, Func<ProgramQuery, MethodDeclarationSyntax> Getter)[] Hooks =
-        {
-            ("init"  , ld => ld.OnInit  ),
-            ("start" , ld => ld.OnStart ),
-            ("finish", ld => ld.OnFinish),
-        };
+        static readonly (string Name, Func<ProgramQuery, MethodDeclarationSyntax> Getter)[]
+            Hooks = [("init"  , ld => ld.OnInit  ),
+                     ("start" , ld => ld.OnStart ),
+                     ("finish", ld => ld.OnFinish)];
 
         static string GenerateExpressionProgram(LinqPadQuery query, string template)
         {

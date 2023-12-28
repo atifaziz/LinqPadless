@@ -18,18 +18,11 @@ namespace LinqPadless
 {
     using NuGet.Versioning;
 
-    sealed class PackageReference
+    sealed class PackageReference(string id, NuGetVersion version, bool isPrereleaseAllowed)
     {
-        public string Id { get; }
-        public NuGetVersion Version { get; }
+        public string Id { get; } = id;
+        public NuGetVersion Version { get; } = version;
         public bool HasVersion => Version != null;
-        public bool IsPrereleaseAllowed { get; }
-
-        public PackageReference(string id, NuGetVersion version, bool isPrereleaseAllowed)
-        {
-            Id = id;
-            Version = version;
-            IsPrereleaseAllowed = isPrereleaseAllowed;
-        }
+        public bool IsPrereleaseAllowed { get; } = isPrereleaseAllowed;
     }
 }

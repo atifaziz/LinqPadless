@@ -254,12 +254,10 @@ namespace LinqPadless
 
             if (args.OptExample)
             {
-                File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8.BomlessEncoding, contents: new []
-                {
-                    @"<Query Kind=""Expression"" />",
-                    string.Empty,
-                    @"""Hello, World!""",
-                });
+                File.WriteAllLines(Path.Join(outputDirectoryPath, "Example.linq"), encoding: Utf8.BomlessEncoding,
+                                   contents: [@"<Query Kind=""Expression"" />",
+                                              string.Empty,
+                                              @"""Hello, World!"""]);
             }
 
             _ = Directory.CreateDirectory(Path.Join(outputDirectoryPath, ".lpless", "cache"));

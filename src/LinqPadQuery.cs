@@ -150,9 +150,12 @@ namespace LinqPadless
                            _ => throw new Exception("Invalid load directive: " + t.Text)
                        }
                        into d
-                       select (d.Line, Path: Path.DirectorySeparatorChar == '\\'
-                                           ? d.Path
-                                           : d.Path.Replace('\\', Path.DirectorySeparatorChar))
+                       select d with
+                       {
+                           Path = Path.DirectorySeparatorChar == '\\'
+                                ? d.Path
+                                : d.Path.Replace('\\', Path.DirectorySeparatorChar)
+                       }
                        into d
                        select new LinqPadQueryReference(resolveLoads ? ResolvePath(d.Path) : null, d.Path, d.Line))),
                 _ => null,
@@ -198,22 +201,13 @@ namespace LinqPadless
         public override string ToString() => Source;
     }
 
-    sealed class LinqPadQueryReference
+    sealed class LinqPadQueryReference(string path, string loadPath, int lineNumber)
     {
-        readonly Lazy<LinqPadQuery> query;
-        readonly string path;
+        readonly Lazy<LinqPadQuery> query = Lazy.Create(() => LinqPadQuery.LoadReferencedQuery(path));
 
-        public LinqPadQueryReference(string path, string loadPath, int lineNumber)
-        {
-            this.path = path;
-            LoadPath = loadPath;
-            LineNumber = lineNumber;
-            this.query = Lazy.Create(() => LinqPadQuery.LoadReferencedQuery(path));
-        }
-
-        public int LineNumber { get; }
-        public string Path => this.path ?? throw new InvalidOperationException();
-        public string LoadPath { get; }
+        public int LineNumber { get; } = lineNumber;
+        public string Path => path ?? throw new InvalidOperationException();
+        public string LoadPath { get; } = loadPath;
 
         public LinqPadQuery GetQuery() => this.query.Value;
 

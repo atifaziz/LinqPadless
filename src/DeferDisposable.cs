@@ -10,13 +10,8 @@ namespace LinqPadless
         public static DeferDisposable<T> Defer<T>(T arg, Action<T> action) => new(arg, action);
     }
 
-    readonly struct DeferDisposable<T> : IDisposable
+    readonly struct DeferDisposable<T>(T arg, Action<T> action) : IDisposable
     {
-        readonly Action<T> action;
-        readonly T arg;
-
-        public DeferDisposable(T arg, Action<T> action) =>
-            (this.action, this.arg) = (action, arg);
-        public void Dispose() => this.action.Invoke(this.arg);
+        public void Dispose() => action.Invoke(arg);
     }
 }

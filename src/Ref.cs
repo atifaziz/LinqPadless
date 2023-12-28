@@ -29,10 +29,10 @@ static partial class Ref
 }
 
 [DebuggerDisplay("{" + nameof(Value) + "}")]
-sealed partial class Ref<T> : IFormattable
+sealed partial class Ref<T>(T value) : IFormattable
 {
-    public T Value { get; set; }
-    public Ref(T value) => Value = value;
+    public T Value { get; set; } = value;
+
     public override string ToString() => $"{Value}";
 
     static readonly bool IsFormattable = typeof(IFormattable).IsAssignableFrom(typeof(T));

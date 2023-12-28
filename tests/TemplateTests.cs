@@ -8,7 +8,7 @@ using Xunit;
 using Xunit.Abstractions;
 using static Process;
 
-public class TemplateTests
+public class TemplateTests(ITestOutputHelper output)
 {
     public static readonly string TestDirectoryPath =
         Path.GetDirectoryName(typeof(TemplateTests).Assembly.Location);
@@ -35,13 +35,8 @@ public class TemplateTests
             .First(File.Exists);
     });
 
-    readonly ITestOutputHelper testOutput;
-
-    public TemplateTests(ITestOutputHelper output) =>
-        this.testOutput = output;
-
     void WriteLine(string s) =>
-        this.testOutput.WriteLine(s);
+        output.WriteLine(s);
 
     void WriteLines(IEnumerable<string> source)
     {
@@ -72,7 +67,7 @@ public class TemplateTests
         var program = LplessPath.Value;
 
         var (buildExitCode, result) =
-            Spawn(program, new[] { "-x", path },
+            Spawn(program, ["-x", path],
                   s => "STDOUT: " + s,
                   s => "STDERR: " + s);
 

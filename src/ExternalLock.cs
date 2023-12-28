@@ -66,12 +66,9 @@ namespace LinqPadless
             }
         }
 
-        sealed class Lock : IDisposable
+        sealed class Lock(Mutex mutex) : IDisposable
         {
-            Mutex mutex;
-
-            public Lock(Mutex mutex) =>
-                this.mutex = mutex ?? throw new ArgumentNullException(nameof(mutex));
+            Mutex mutex = mutex ?? throw new ArgumentNullException(nameof(mutex));
 
             public void Dispose()
             {

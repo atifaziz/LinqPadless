@@ -76,24 +76,24 @@ namespace LinqPadless
             }
         }
 
-        public static readonly ICollection<string> DefaultNamespaces = Array.AsReadOnly(new[]
-        {
-            "System",
-            "System.Collections",
-            "System.Collections.Generic",
-            "System.Data",
-            "System.Diagnostics",
-            "System.IO",
-            "System.Linq",
-            "System.Linq.Expressions",
-            "System.Reflection",
-            "System.Text",
-            "System.Text.RegularExpressions",
-            "System.Threading",
-            "System.Transactions",
-            "System.Xml",
-            "System.Xml.Linq",
-            "System.Xml.XPath",
-        });
+        public static readonly ICollection<string>
+            DefaultNamespaces = Array.AsReadOnly([
+                "System",
+                "System.Collections",
+                "System.Collections.Generic",
+                "System.Data",
+                "System.Diagnostics",
+                "System.IO",
+                "System.Linq",
+                "System.Linq.Expressions",
+                "System.Reflection",
+                "System.Text",
+                "System.Text.RegularExpressions",
+                "System.Threading",
+                "System.Transactions",
+                "System.Xml",
+                "System.Xml.Linq",
+                "System.Xml.XPath",
+            ]);
     }
 }

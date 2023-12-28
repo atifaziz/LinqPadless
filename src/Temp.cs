@@ -40,45 +40,35 @@ namespace LinqPadless
         protected abstract void OnDispose();
     }
 
-    class Temp<T> : Disposable
+    class Temp<T>(T resource, Action<T> onDispose, Action<T, Exception> onError) :
+        Disposable
     {
-        T resource;
-        Action<T> onDispose;
-        Action<T, Exception> onError;
+        Action<T> onDispose = onDispose ?? throw new ArgumentNullException(nameof(onDispose));
 
-        public Temp(T resource, Action<T> onDispose,
-                                Action<T, Exception> onError)
-        {
-            this.resource = resource;
-            this.onDispose = onDispose ?? throw new ArgumentNullException(nameof(onDispose));
-            this.onError = onError;
-        }
-
-        protected T Resource => this.resource;
+        protected T Resource => resource;
 
         protected override void OnDispose()
         {
-            var resource  = Reset(ref this.resource);
-            var onDispose = Reset(ref this.onDispose);
-            var onError   = Reset(ref this.onError);
+            Dispose(Reset(ref resource), Reset(ref this.onDispose), Reset(ref onError));
 
-            try
+            static void Dispose(T resource, Action<T> onDispose, Action<T, Exception> onError)
             {
-                onDispose(resource);
-            }
-            catch (Exception e)
-            {
-                onError?.Invoke(resource, e);
+                try
+                {
+                    onDispose(resource);
+                }
+                catch (Exception e)
+                {
+                    onError?.Invoke(resource, e);
+                }
             }
         }
     }
 
-    sealed class TempFile : Temp<string>
+    sealed class TempFile(string path, Action<string, Exception> onError) :
+        Temp<string>(path, File.Delete, onError)
     {
         public TempFile(string path) : this(path, null) { }
-
-        public TempFile(string path, Action<string, Exception> onError) :
-            base(path, File.Delete, onError) { }
 
         public string Path => Resource;
 

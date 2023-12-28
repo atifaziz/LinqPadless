@@ -35,12 +35,9 @@ namespace LinqPadless
         public static IStreamable ReadFile(string path) =>
             Create(() => File.OpenRead(path));
 
-        sealed class DelegatingStreamable : IStreamable
+        sealed class DelegatingStreamable(Func<Stream> opener) : IStreamable
         {
-            readonly Func<Stream> opener;
-
-            public DelegatingStreamable(Func<Stream> opener) =>
-                this.opener = opener ?? throw new ArgumentNullException(nameof(opener));
+            readonly Func<Stream> opener = opener ?? throw new ArgumentNullException(nameof(opener));
 
             public Stream Open() => this.opener();
         }
@@ -73,13 +70,10 @@ namespace LinqPadless
             return Streamable.Create(() => new CompositeStream(source.GetEnumerator()));
         }
 
-        sealed class CompositeStream : Stream
+        sealed class CompositeStream(IEnumerator<Stream> source) : Stream
         {
-            IEnumerator<Stream> streams;
+            IEnumerator<Stream> streams = source ?? throw new ArgumentNullException(nameof(source));
             Stream stream;
-
-            public CompositeStream(IEnumerator<Stream> source) =>
-                this.streams = source ?? throw new ArgumentNullException(nameof(source));
 
             public override void Flush() => throw new NotSupportedException();
 
