@@ -443,9 +443,7 @@ namespace LinqPadless
             }
 
             {
-                return Run() is { } exitCode
-                     ? exitCode
-                     : throw new Exception("Internal error executing compilation.");
+                return Run() ?? throw new Exception("Internal error executing compilation.");
             }
 
             int? Run()
