@@ -442,9 +442,7 @@ namespace LinqPadless
                 buildMutex.Dispose();
             }
 
-            {
-                return Run() ?? throw new Exception("Internal error executing compilation.");
-            }
+            return Run() ?? throw new Exception("Internal error executing compilation.");
 
             int? Run()
             {
