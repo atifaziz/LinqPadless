@@ -40,7 +40,7 @@ namespace LinqPadless
                                       _         => string.Empty
                                   });
 
-                Console.WriteLine(line);
+                output.WriteLine(line);
             }
         }
     }
