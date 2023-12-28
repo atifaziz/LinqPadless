@@ -45,7 +45,7 @@ namespace LinqPadless
             return _(); IEnumerable<string> _()
             {
                 using var reader = new StringReader(input);
-                while (reader.ReadLine() is {} line)
+                while (reader.ReadLine() is { } line)
                     yield return line;
             }
         }
@@ -60,7 +60,7 @@ namespace LinqPadless
         public static Version Trim(this Version version, int minFieldCount = 2)
         {
             if (version == null) throw new ArgumentNullException(nameof(version));
-            if (minFieldCount < 2 || minFieldCount > 4) throw new ArgumentOutOfRangeException(nameof(minFieldCount), minFieldCount, null);
+            if (minFieldCount is < 2 or > 4) throw new ArgumentOutOfRangeException(nameof(minFieldCount), minFieldCount, null);
 
             if (version.Revision < 0 || version.Build < 0)
             {

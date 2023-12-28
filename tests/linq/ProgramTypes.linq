@@ -22,46 +22,46 @@ static void Print(Action a) =>
 
 struct NestedStruct
 {
-    public static void StaticMethod() {}
+    public static void StaticMethod() { }
 }
 
 class NestedClass
 {
-    public static void StaticMethod() {}
+    public static void StaticMethod() { }
 }
 
 static class NestedStaticClass
 {
-    public static void StaticMethod() {}
+    public static void StaticMethod() { }
 }
 
 static class Extensions
 {
-    public static void StaticMethod() {}
-    public static void Extension<T>(this T _) {}
+    public static void StaticMethod() { }
+    public static void Extension<T>(this T _) { }
 }
 
 namespace Namespace
 {
     struct Struct
     {
-        public static void StaticMethod() {}
+        public static void StaticMethod() { }
     }
 
     class Class
     {
-        public static void StaticMethod() {}
+        public static void StaticMethod() { }
     }
 
     static class StaticClass
     {
-        public static void StaticMethod() {}
+        public static void StaticMethod() { }
     }
 
     static class Extensions
     {
-        public static void StaticMethod() {}
-        public static void Extension2<T>(this T _) {}
+        public static void StaticMethod() { }
+        public static void Extension2<T>(this T _) { }
     }
 }
 

@@ -23,12 +23,12 @@ namespace LinqPadless
 
     abstract class Disposable : IDisposable
     {
-        int _disposed;
+        int disposed;
 
         public void Dispose()
         {
-            var disposed = _disposed;
-            if (disposed != 0 || Interlocked.CompareExchange(ref _disposed, 1, disposed) != disposed)
+            var disposed = this.disposed;
+            if (disposed != 0 || Interlocked.CompareExchange(ref this.disposed, 1, disposed) != disposed)
                 return;
             OnDispose();
         }
@@ -42,25 +42,25 @@ namespace LinqPadless
 
     class Temp<T> : Disposable
     {
-        T _resource;
-        Action<T> _onDispose;
-        Action<T, Exception> _onError;
+        T resource;
+        Action<T> onDispose;
+        Action<T, Exception> onError;
 
         public Temp(T resource, Action<T> onDispose,
                                 Action<T, Exception> onError)
         {
-            _resource = resource;
-            _onDispose = onDispose ?? throw new ArgumentNullException(nameof(onDispose));
-            _onError = onError;
+            this.resource = resource;
+            this.onDispose = onDispose ?? throw new ArgumentNullException(nameof(onDispose));
+            this.onError = onError;
         }
 
-        protected T Resource => _resource;
+        protected T Resource => this.resource;
 
         protected override void OnDispose()
         {
-            var resource  = Reset(ref _resource);
-            var onDispose = Reset(ref _onDispose);
-            var onError   = Reset(ref _onError);
+            var resource  = Reset(ref this.resource);
+            var onDispose = Reset(ref this.onDispose);
+            var onError   = Reset(ref this.onError);
 
             try
             {
@@ -75,10 +75,10 @@ namespace LinqPadless
 
     sealed class TempFile : Temp<string>
     {
-        public TempFile(string path) : this(path, null) {}
+        public TempFile(string path) : this(path, null) { }
 
         public TempFile(string path, Action<string, Exception> onError) :
-            base(path, File.Delete, onError) {}
+            base(path, File.Delete, onError) { }
 
         public string Path => Resource;
 

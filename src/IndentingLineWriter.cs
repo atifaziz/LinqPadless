@@ -23,11 +23,11 @@ namespace LinqPadless
 
     sealed class IndentingLineWriter
     {
-        readonly TextWriter _writer;
-        readonly string _indent;
-        readonly string _margin;
+        readonly TextWriter writer;
+        readonly string indent;
+        readonly string margin;
 
-        static readonly string DefaultIndent = new string('\x20', 2);
+        static readonly string DefaultIndent = new('\x20', 2);
 
         public static IndentingLineWriter CreateUnlessNull(TextWriter writer) =>
             writer switch { null => null, var w => Create(w) };
@@ -40,9 +40,9 @@ namespace LinqPadless
 
         IndentingLineWriter(string margin, string indent, TextWriter writer)
         {
-            _indent = indent;
-            _margin = margin;
-            _writer = writer;
+            this.indent = indent;
+            this.margin = margin;
+            this.writer = writer;
         }
 
         public void Write(object value) =>
@@ -71,14 +71,16 @@ namespace LinqPadless
         public void WriteLines(IEnumerator<string> line)
         {
             using (line)
+            {
                 while (line.MoveNext())
                     WriteLine(line.Current);
+            }
         }
 
         public void WriteLine(string value) =>
-            _writer.WriteLine(_margin + value);
+            this.writer.WriteLine(this.margin + value);
 
-        public IndentingLineWriter Indent(string prefix = null) =>
-            new IndentingLineWriter(_margin + _indent, _indent, _writer);
+        public IndentingLineWriter Indent() =>
+            new(this.margin + this.indent, this.indent, this.writer);
     }
 }

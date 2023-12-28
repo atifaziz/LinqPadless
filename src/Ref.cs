@@ -25,7 +25,7 @@ using System.Diagnostics;
 
 static partial class Ref
 {
-    public static Ref<T> Create<T>(T value) => new Ref<T>(value);
+    public static Ref<T> Create<T>(T value) => new(value);
 }
 
 [DebuggerDisplay("{" + nameof(Value) + "}")]

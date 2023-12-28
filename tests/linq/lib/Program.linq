@@ -28,11 +28,11 @@ static class Extensions
     public static T Extension<T>(this T _) => _;
 }
 
-sealed class Nested {}
+sealed class Nested { }
 
 namespace Namespace
 {
-    class UserQuery{}
+    class UserQuery{ }
 }
 
 void OnInit()   => System.Console.WriteLine(MethodBase.GetCurrentMethod().Name);

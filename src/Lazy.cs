@@ -21,6 +21,6 @@ namespace LinqPadless
     static class Lazy
     {
         public static Lazy<T> Value<T>(T value) => Create(() => value);
-        public static Lazy<T> Create<T>(Func<T> factory) => new Lazy<T>(factory);
+        public static Lazy<T> Create<T>(Func<T> factory) => new(factory);
     }
 }

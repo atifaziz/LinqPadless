@@ -58,16 +58,16 @@ namespace LinqPadless
 
             if (args.OptGlobal)
             {
-                if (!(outputDirectoryPath is null))
+                if (outputDirectoryPath is not null)
                     throw new Exception(@"The ""global"" and ""output"" options are mutually exclusive.");
                 outputDirectoryPath = GlobalPath;
             }
-            else if (outputDirectoryPath is null)
+            else
             {
-                outputDirectoryPath = Environment.CurrentDirectory;
+                outputDirectoryPath ??= Environment.CurrentDirectory;
             }
 
-            Directory.CreateDirectory(outputDirectoryPath);
+            _ = Directory.CreateDirectory(outputDirectoryPath);
 
             if (!args.OptForce && Directory.EnumerateFileSystemEntries(outputDirectoryPath).Any())
             {
@@ -198,7 +198,7 @@ namespace LinqPadless
 
                         log?.WriteLine("Caching downloaded package at: " + zipPath);
 
-                        Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
+                        _ = Directory.CreateDirectory(Path.GetDirectoryName(zipPath));
                         File.Move(tempPath, zipPath);
                         shouldDeleteNonTemplateZip = true;
                     }
@@ -234,7 +234,7 @@ namespace LinqPadless
 
                     var dir = Path.GetDirectoryName(e.TargetPath);
                     if (createdDirectories.Add(dir))
-                        Directory.CreateDirectory(dir);
+                        _ = Directory.CreateDirectory(dir);
 
                     e.ArchiveEntry.ExtractToFile(e.TargetPath, true);
                     count++;
@@ -262,7 +262,7 @@ namespace LinqPadless
                 });
             }
 
-            Directory.CreateDirectory(Path.Join(outputDirectoryPath, ".lpless", "cache"));
+            _ = Directory.CreateDirectory(Path.Join(outputDirectoryPath, ".lpless", "cache"));
 
             return 0;
 
@@ -276,7 +276,7 @@ namespace LinqPadless
             }
 
             static HttpClient CreateHttpClient() =>
-                new HttpClient(new HttpClientHandler
+                new(new HttpClientHandler
                 {
                     AutomaticDecompression = DecompressionMethods.Deflate
                                            | DecompressionMethods.GZip
@@ -327,7 +327,7 @@ namespace LinqPadless
                 int length;
                 using (var stream = File.OpenRead(path))
                     length = stream.Read(buffer);
-                return buffer.Slice(0, length).SequenceEqual(Signature);
+                return buffer[..length].SequenceEqual(Signature);
             }
         }
     }

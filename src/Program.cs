@@ -130,7 +130,7 @@ namespace LinqPadless
                 if (command == CommandName.Help)
                     Help();
                 else
-                    Wain(new[] { command, "--help" });
+                    _ = Wain(new[] { command, "--help" });
             }
             else
             {
@@ -157,7 +157,9 @@ namespace LinqPadless
             if (query.ValidateSupported() is Exception e)
                 throw e;
 
+#pragma warning disable IDE0010 // Add missing cases
             switch (inspection)
+#pragma warning restore IDE0010 // Add missing cases
             {
                 case Inspection.Meta:
                     Console.WriteLine(query.MetaElement);
@@ -184,7 +186,7 @@ namespace LinqPadless
                     foreach (var pr in
                         from pr in query.PackageReferences
                         select pr.Id
-                             + (pr.Version is {} v ? "=" + v : null)
+                             + (pr.Version is { } v ? "=" + v : null)
                              + (pr.IsPrereleaseAllowed ? "!" : null))
                     {
                         Console.WriteLine(pr);
@@ -315,10 +317,10 @@ namespace LinqPadless
                         if (span[si] == nul)
                             throw new NotSupportedException("Binary data is not yet supported.");
 
-                        sha.AppendData(span.Slice(0, si));
-                        stdout?.Write(span.Slice(0, si));
+                        sha.AppendData(span[..si]);
+                        stdout?.Write(span[..si]);
 
-                        span = span.Slice(si + 1);
+                        span = span[(si + 1)..];
                     }
                     while (span.Length > 0);
                 }
@@ -379,7 +381,7 @@ namespace LinqPadless
                     .FirstOrNone(File.Exists).Or("dotnet");
 
             {
-                if (!force && Run() is {} exitCode)
+                if (!force && Run() is { } exitCode)
                     return exitCode;
             }
 
@@ -409,7 +411,7 @@ namespace LinqPadless
 
                 if (Compile(query, srcDirPath, tmpDirPath, templateFiles,
                             dotnetPath, publishIdleTimeout, publishTimeout,
-                            inspection, log) is {} exitCode)
+                            inspection, log) is { } exitCode)
                 {
                     return exitCode;
                 }
@@ -439,7 +441,7 @@ namespace LinqPadless
             }
 
             {
-                return Run() is {} exitCode
+                return Run() is { } exitCode
                      ? exitCode
                      : throw new Exception("Internal error executing compilation.");
             }
@@ -598,8 +600,8 @@ namespace LinqPadless
 
                 var allQueries =
                     query.Loads
-                         .Where(q => q.Language == LinqPadQueryLanguage.Statements
-                                  || q.Language == LinqPadQueryLanguage.Expression)
+                         .Where(q => q.Language is LinqPadQueryLanguage.Statements
+                                                or LinqPadQueryLanguage.Expression)
                          .Select(q => new
                          {
                              q.GetQuery().Namespaces,
@@ -716,7 +718,7 @@ namespace LinqPadless
                 }
             }
 
-            Directory.CreateDirectory(workingDirPath);
+            _ = Directory.CreateDirectory(workingDirPath);
 
             var ps = packages.ToArray();
 
@@ -802,7 +804,7 @@ namespace LinqPadless
                 Detemplate(p, $"hook-{h.Name}",
                            Lazy.Create(() =>
                                loads.MapValue(h.Getter)
-                                    .Choose(e => e.Value is {} md
+                                    .Choose(e => e.Value is { } md
                                                ? Some(FormattableString.Invariant($"q => q.{md.Identifier}{e.Key}"))
                                                : default)
                                     .ToDelimitedString(", "))));
@@ -816,22 +818,29 @@ namespace LinqPadless
                 ? GenerateProgram(query, program)
                 : (Detemplate(program, "statements", "#line 1" + eol + query.GetMergedCode()), noSymbols);
 
-            var baseCompilationSymbol = "LINQPAD_" +
-                ( query.Language == LinqPadQueryLanguage.Expression ? "EXPRESSION"
-                : query.Language == LinqPadQueryLanguage.Program    ? "PROGRAM"
-                : query.Language == LinqPadQueryLanguage.Statements ? "STATEMENTS"
-                : throw new NotSupportedException()
-                );
+            var baseCompilationSymbol
+                = "LINQPAD_"
+#pragma warning disable IDE0072 // Add missing cases
+                + query.Language switch
+#pragma warning restore IDE0072 // Add missing cases
+                  {
+                      LinqPadQueryLanguage.Expression => "EXPRESSION",
+                      LinqPadQueryLanguage.Program    => "PROGRAM",
+                      LinqPadQueryLanguage.Statements => "STATEMENTS",
+                      _ => throw new NotSupportedException()
+                  };
 
-            if (body != null)
+            if (body is { } someBody)
+            {
                 File.WriteAllLines(csFilePath,
                     Seq.Return("#define LPLESS",
                                "#define LPLESS_TEMPLATE_V2",
                                "#define " + baseCompilationSymbol)
                        .Concat(from s in symbols
                                select $"#define {baseCompilationSymbol}_{s}")
-                       .Append(body)
+                       .Append(someBody)
                        .Append(string.Empty));
+            }
 
             foreach (var (name, content) in
                 from f in resourceNames
@@ -857,7 +866,7 @@ namespace LinqPadless
                                 "partial class UserQuery",
                                 "{",
                                 FullSourceWithLineDirective(
-                                    pq.Others.Where(sn => !(sn is MethodDeclarationSyntax md) || md != pq.Main),
+                                    pq.Others.Where(sn => sn is not MethodDeclarationSyntax md || md != pq.Main),
                                     e => e is MethodDeclarationSyntax md && (   md == pq.OnInit
                                                                              || md == pq.OnStart
                                                                              || md == pq.OnFinish
@@ -902,13 +911,13 @@ namespace LinqPadless
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
-                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is {} ms
+                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is { } ms
                     && ms.Length > 0)
                 {
                     if (ms == "error")
                     {
                         errored = true;
-                        if (pendingNonErrors is {} nonErrors)
+                        if (pendingNonErrors is { } nonErrors)
                         {
                             pendingNonErrors = null;
                             foreach (var nonError in nonErrors)
@@ -984,7 +993,7 @@ namespace LinqPadless
                                Lazy.Create(() =>
                                    loads.Select(h.Getter)
                                         .Index(1)
-                                        .Choose(e => e.Value is {} md
+                                        .Choose(e => e.Value is { } md
                                                    ? Some(FormattableString.Invariant($"{md.Identifier}{e.Key}();"))
                                                    : default)
                                         .ToDelimitedString(eol))));
@@ -1027,9 +1036,9 @@ namespace LinqPadless
                                        .ToDelimitedString(Environment.NewLine))).Statements);
 
             var newMain =
-                query.Loads.Any(q => q.Language == LinqPadQueryLanguage.Expression
-                                  || q.Language == LinqPadQueryLanguage.Statements)
-                ? main.ExpressionBody is {} arrow
+                query.Loads.Any(q => q.Language is LinqPadQueryLanguage.Expression
+                                                or LinqPadQueryLanguage.Statements)
+                ? main.ExpressionBody is { } arrow
                   ? main.WithExpressionBody(null).WithSemicolonToken(default)
                         .WithBody(SyntaxFactory.Block(loadedStatements.Value.Add(SyntaxFactory.ExpressionStatement(arrow.Expression))))
                   : main.WithBody(SyntaxFactory.Block(loadedStatements.Value.AddRange(
@@ -1074,7 +1083,7 @@ namespace LinqPadless
 
             /*
 
-            [ static ] ( void | int | Task | Task<int> ) Main([ string[] args ]) {}
+            [ static ] ( void | int | Task | Task<int> ) Main([ string[] args ]) { }
 
             static void Main()                     | STATIC, VOID
             static int Main()                      | STATIC,
@@ -1201,8 +1210,8 @@ namespace LinqPadless
             var tcsStdOut = new TaskCompletionSource<DateTime>();
             var tcsStdErr = new TaskCompletionSource<DateTime>();
 
-            Task.WhenAll(tcsStdOut.Task, tcsStdErr.Task)
-                .ContinueWith(_ => output.CompleteAdding());
+            _ = Task.WhenAll(tcsStdOut.Task, tcsStdErr.Task)
+                    .ContinueWith(_ => output.CompleteAdding());
 
             process.OutputDataReceived += OnStdDataReceived(outputTag, tcsStdOut);
             process.ErrorDataReceived  += OnStdDataReceived(errorTag , tcsStdErr);

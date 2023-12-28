@@ -2,10 +2,10 @@
   <Namespace>System.Globalization</Namespace>
 </Query>
 
-void Main() {}
+void Main() { }
 
 [AttributeUsage(AttributeTargets.Method)]
-sealed class QueryExpressionPrinterAttribute : Attribute {}
+sealed class QueryExpressionPrinterAttribute : Attribute { }
 
 [QueryExpressionPrinterAttribute]
 void Print(object value)

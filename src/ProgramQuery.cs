@@ -79,7 +79,7 @@ namespace LinqPadless
                                                 .Any(mds => mds.ParameterList.Parameters.Count > 0
                                                          && mds.ParameterList.Parameters.First().Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))) =>
                                 QueryPartKind.Type,
-                            NamespaceDeclarationSyntax _ => QueryPartKind.Namespace,
+                            NamespaceDeclarationSyntax => QueryPartKind.Namespace,
                             _ => QueryPartKind.Other
                         })
                     .Partition(QueryPartKind.Type, QueryPartKind.Namespace, QueryPartKind.Other,

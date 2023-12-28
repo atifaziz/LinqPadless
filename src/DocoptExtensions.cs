@@ -43,10 +43,10 @@ namespace LinqPadless
                   .Match(args =>
                          {
                              if (args.OptVerbose)
-                                 Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
+                                 _ = Trace.Listeners.Add(new TextWriterTraceListener(Console.Error));
 
                              if (args.OptDebug)
-                                 Debugger.Launch();
+                                 _ = Debugger.Launch();
 
                              return handler(args);
                          },

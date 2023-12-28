@@ -24,7 +24,7 @@ public class TemplateTests
 #endif
         ;
 
-    public static readonly Lazy<string> LplessPath = new Lazy<string>(() =>
+    public static readonly Lazy<string> LplessPath = new(() =>
     {
         var isWindows =    Environment.GetEnvironmentVariable("WINDIR") != null
                         && Environment.GetEnvironmentVariable("COMSPEC") != null;
@@ -32,17 +32,16 @@ public class TemplateTests
         return new DirectoryInfo(TestDirectoryPath)
             .AncestorsAndSelf()
             .Select(dir => Path.Combine(dir.FullName, "bin", BuildConfiguration, "net8.0", isWindows ? "lpless.exe" : "lpless"))
-            .Where(File.Exists)
-            .First();
+            .First(File.Exists);
     });
 
-    readonly ITestOutputHelper _testOutput;
+    readonly ITestOutputHelper testOutput;
 
     public TemplateTests(ITestOutputHelper output) =>
-        _testOutput = output;
+        this.testOutput = output;
 
     void WriteLine(string s) =>
-        _testOutput.WriteLine(s);
+        this.testOutput.WriteLine(s);
 
     void WriteLines(IEnumerable<string> source)
     {
@@ -62,7 +61,7 @@ public class TemplateTests
         var content = File.ReadAllText(path);
 
         var expectedExitCode
-            = Regex.Match(content, @"(?<=^//<\s*)[0-9]+(?=\s*$)", RegexOptions.Multiline).Value is {} s && s.Length > 0
+            = Regex.Match(content, @"(?<=^//<\s*)[0-9]+(?=\s*$)", RegexOptions.Multiline).Value is { } s && s.Length > 0
             ? int.Parse(s, NumberStyles.None, CultureInfo.InvariantCulture)
             : throw new FormatException("Missing expected exit code specification.");
 

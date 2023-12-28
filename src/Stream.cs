@@ -37,12 +37,12 @@ namespace LinqPadless
 
         sealed class DelegatingStreamable : IStreamable
         {
-            readonly Func<Stream> _opener;
+            readonly Func<Stream> opener;
 
             public DelegatingStreamable(Func<Stream> opener) =>
-                _opener = opener ?? throw new ArgumentNullException(nameof(opener));
+                this.opener = opener ?? throw new ArgumentNullException(nameof(opener));
 
-            public Stream Open() => _opener();
+            public Stream Open() => this.opener();
         }
     }
 
@@ -75,48 +75,46 @@ namespace LinqPadless
 
         sealed class CompositeStream : Stream
         {
-            IEnumerator<Stream> _streams;
-            Stream _stream;
+            IEnumerator<Stream> streams;
+            Stream stream;
 
             public CompositeStream(IEnumerator<Stream> source) =>
-                _streams = source ?? throw new ArgumentNullException(nameof(source));
+                this.streams = source ?? throw new ArgumentNullException(nameof(source));
 
             public override void Flush() => throw new NotSupportedException();
 
             public override void Close()
             {
-                switch (Assignment.Reset(ref _streams))
-                {
-                    case null: break;
-                    case var streams: streams.Dispose(); break;
-                }
+                if (Assignment.Reset(ref this.streams) is { } streams)
+                    streams.Dispose();
+
                 base.Close();
             }
 
             Stream GetSubStream()
             {
-                var stream = _stream;
+                var stream = this.stream;
 
                 if (stream != null)
                     return stream;
 
-                var streams = _streams;
+                var streams = this.streams;
                 if (streams == null)
                     return null;
 
                 if (!streams.MoveNext())
                 {
                     streams.Dispose();
-                    _streams = null;
+                    this.streams = null;
                     return null;
                 }
 
-                return _stream = streams.Current;
+                return this.stream = streams.Current;
             }
 
             void OnEndOfStream()
             {
-                var stream = Assignment.Reset(ref _stream);
+                var stream = Assignment.Reset(ref this.stream);
                 Debug.Assert(stream != null);
                 stream.Close();
             }
