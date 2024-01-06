@@ -302,7 +302,7 @@ namespace LinqPadless
                     continue;
 
                 var (haveResult, result) =
-                    from nuspec in Try(file, f => f.Open(), XDocument.Load, (XmlException e) => true)
+                    from nuspec in Try(file, f => f.Open(), XDocument.Load, (XmlException _) => true)
                     from p      in nuspec.Elements().SingleOrNone(e => e.Name.LocalName == "package")
                     from md     in p     .Elements().SingleOrNone(e => e.Name.LocalName == "metadata")
                     from id     in md    .Elements().SingleOrNone(e => e.Name.LocalName == "id")
