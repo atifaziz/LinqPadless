@@ -42,9 +42,8 @@ namespace LinqPadless
                 return 0;
 
             foreach (var dir in
-                from dir in binDir.EnumerateDirectories("*")
-                where 0 == (dir.Attributes & (FileAttributes.Hidden | FileAttributes.System))
-                   && dir.Name is { Length: 40 } and [not '.', ..]
+                from dir in binDir.EnumerateDirectories("*", new EnumerationOptions())
+                where dir.Name is { Length: 40 } and [not '.', ..]
                    && Regex.IsMatch(dir.Name, @"^[a-zA-Z0-9]{40}$")
                 select dir)
             {
