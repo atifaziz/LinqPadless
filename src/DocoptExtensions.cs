@@ -27,12 +27,12 @@ namespace LinqPadless
         bool OptDebug { get; }
     }
 
-    partial class CacheArguments : ICommonOptions { }
-    partial class BundleArguments : ICommonOptions { }
-    partial class InitArguments : ICommonOptions { }
-    partial class InspectArguments : ICommonOptions { }
-    partial class ExecuteArguments : ICommonOptions { }
-    partial class HelpArguments : ICommonOptions { }
+    partial class CacheArguments : ICommonOptions;
+    partial class BundleArguments : ICommonOptions;
+    partial class InitArguments : ICommonOptions;
+    partial class InspectArguments : ICommonOptions;
+    partial class ExecuteArguments : ICommonOptions;
+    partial class HelpArguments : ICommonOptions;
 
     static class DocoptExtensions
     {
