@@ -198,7 +198,7 @@ namespace LinqPadless
 
             if (query.Loads.FirstOrNone(r => r.LoadPath.Length == 0
                                           || !Path.IsPathRooted(r.LoadPath)
-                                          && r.LoadPath[0] != '.') is (true, var r))
+                                          && !r.LoadPath.StartsWith('.')) is (SomeT, var r))
             {
                 throw new NotSupportedException($"Unsupported path \"{r.LoadPath}\" in load directive on line {r.LineNumber}.");
             }
@@ -241,7 +241,7 @@ namespace LinqPadless
                        .ToArray())
                 switch
                 {
-                    (SomeT, var tfs) when tfs.Length > 0 => tfs,
+                    (SomeT, { Length: > 0 } tfs) => tfs,
                     _ => throw new Exception("No template for running query.")
                 };
 
@@ -909,8 +909,7 @@ namespace LinqPadless
                       exitCode => new ApplicationException($"dotnet publish ended with a non-zero exit code of {exitCode}.")))
             {
                 if (quiet
-                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is { } ms
-                    && ms.Length > 0)
+                    && Regex.Match(line, @"(?<=:\s*)(error|warning|info)(?=\s+(\w{1,2}[0-9]+)\s*:)").Value is { Length: > 0 } ms)
                 {
                     if (ms == "error")
                     {
@@ -972,10 +971,10 @@ namespace LinqPadless
                     into g
                     select (Method: g.Key, Attribute: g.First()));
 
-            switch (printers.Length)
+            switch (printers)
             {
-                case 0: break;
-                case 1: program = Detemplate(program, "expression-printer", printers[0].Method); break;
+                case []: break;
+                case [{ Method: var method }]: program = Detemplate(program, "expression-printer", method); break;
                 default: throw new Exception("Ambiguous expression printers: " +
                                              string.Join(", ",
                                                  from p in printers
@@ -1062,9 +1061,9 @@ namespace LinqPadless
 
             var t = main.ReturnType switch
             {
-                IdentifierNameSyntax ins when "Task".Equals(ins.Identifier.Value) =>
+                IdentifierNameSyntax { Identifier.Value: nameof(Task) } =>
                     MainReturnTypeTraits.Task,
-                GenericNameSyntax gns when "Task".Equals(gns.Identifier.Value) =>
+                GenericNameSyntax { Identifier.Value: nameof(Task) } =>
                     MainReturnTypeTraits.TaskOfInt,
                 PredefinedTypeSyntax pdts when pdts.Keyword.IsKind(SyntaxKind.VoidKeyword) =>
                     MainReturnTypeTraits.Void,

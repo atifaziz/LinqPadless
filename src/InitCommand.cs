@@ -116,7 +116,7 @@ namespace LinqPadless
                     throw new NotSupportedException("Unsupported URI scheme: " + url.Scheme);
                 }
             }
-            else if (Path.IsPathFullyQualified(source) || source.StartsWith(".", StringComparison.Ordinal))
+            else if (Path.IsPathFullyQualified(source) || source.StartsWith('.'))
             {
                 zipPath = source;
             }
@@ -131,8 +131,8 @@ namespace LinqPadless
                     ? NuGetVersion.Parse(versionString)
                     : specificVersion;
 
-                if (specificVersion != null && version != specificVersion)
-                    throw new Exception($"Version specifications conflict ({version} <> {specificVersion}).");
+                if (specificVersion is { } someSpecificVersion && version != someSpecificVersion)
+                    throw new Exception($"Version specifications conflict ({version} <> {someSpecificVersion}).");
 
                 string localPackagePath = null;
 

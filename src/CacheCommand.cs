@@ -44,8 +44,7 @@ namespace LinqPadless
             foreach (var dir in
                 from dir in binDir.EnumerateDirectories("*")
                 where 0 == (dir.Attributes & (FileAttributes.Hidden | FileAttributes.System))
-                   && dir.Name.Length == 40
-                   && dir.Name[0] != '.'
+                   && dir.Name is { Length: 40 } and [not '.', ..]
                    && Regex.IsMatch(dir.Name, @"^[a-zA-Z0-9]{40}$")
                 select dir)
             {
@@ -87,8 +86,8 @@ namespace LinqPadless
                     select line.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                     into tokens
                     where tokens.Length >= 3
-                    select Choice.If(tokens[0] == ">", () => tokens.Skip(1).Take(2), () =>
-                           Choice.If(tokens[0] == "<", () => tokens.Skip(1).Take(3), () =>
+                    select Choice.If(tokens[0] is ">", () => tokens.Skip(1).Take(2), () =>
+                           Choice.If(tokens[0] is "<", () => tokens.Skip(1).Take(3), () =>
                                      Unit)) into e
                     where e.Match(_ => true, _ => true, _ => false)
                     select e.Forbid3()

@@ -143,16 +143,16 @@ namespace LinqPadless
                        where t.Kind == TokenKind.PreprocessorDirective
                        select (t.Start.Line, Text: t.Substring(Code)) into t
                        select (t.Line, t.Text, Parts: t.Text.Split2(' ', StringSplitOptions.RemoveEmptyEntries)) into t
-                       where t.Parts.Item1 == "#load"
-                       select t.Parts.Item2 switch
+                       where t.Parts is ("#load", _)
+                       select t.Parts switch
                        {
-                           var p when p.Length > 2 && p[0] == '"' && p[^1] == '"' => (t.Line, Path: p[1..^1]),
+                           (_, { Length: > 2 } and ['"', ..var path, '"']) => (t.Line, Path: path),
                            _ => throw new Exception("Invalid load directive: " + t.Text)
                        }
                        into d
                        select d with
                        {
-                           Path = Path.DirectorySeparatorChar == '\\'
+                           Path = Path.DirectorySeparatorChar is '\\'
                                 ? d.Path
                                 : d.Path.Replace('\\', Path.DirectorySeparatorChar)
                        }
