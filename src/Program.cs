@@ -254,7 +254,7 @@ namespace LinqPadless
                         .Partition(e => e.Key <= eomLineNumber, (xml, cs) => Seq.Return(xml, cs))
                         .Select(s => s.Values().ToDelimitedString(Environment.NewLine))
                         .Fold((xml, cs) => MinifyXml(xml) + "\n" + MinifyCSharp(cs));
-            };
+            }
 
             var minifierTable = new (Func<string, string> Function, IEnumerable<string> Extension)[]
             {
