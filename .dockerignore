@@ -3,6 +3,7 @@
 !*.sln
 !*.sh
 !global.json
+!*.props
 !etc/sourceless-nuget.config
 !COPYING.txt
 !COPYING
