@@ -306,7 +306,7 @@ namespace LinqPadless
 
                     do
                     {
-                        const byte nul = 0, cr  = (byte)'\r';
+                        const byte nul = 0, cr = (byte)'\r';
                         var si = span.IndexOfAny(cr, nul);
 
                         if (si < 0)
@@ -552,32 +552,31 @@ namespace LinqPadless
                 var nrs =
                     from nr in
                         query.PackageReferences
-                            .Select(r => new
-                            {
-                                r.Id,
-                                Version = Option.From(r.HasVersion, r.Version),
-                                r.IsPrereleaseAllowed,
-                                Source = None<string>(),
-                                Priority = 0,
-                            })
-                            .Concat(from lq in query.Loads
-                                    from r in lq.PackageReferences
-                                    select new
-                                    {
-                                        r.Id,
-                                        Version = Option.From(r.HasVersion, r.Version),
-                                        r.IsPrereleaseAllowed,
-                                        Source = Some(lq.LoadPath),
-                                        Priority = -1,
-                                    })
+                             .Select(r => new
+                             {
+                                 r.Id,
+                                 Version = Option.From(r.HasVersion, r.Version),
+                                 r.IsPrereleaseAllowed,
+                                 Source = None<string>(),
+                                 Priority = 0,
+                             })
+                             .Concat(from lq in query.Loads
+                                     from r in lq.PackageReferences
+                                     select new
+                                     {
+                                         r.Id,
+                                         Version = Option.From(r.HasVersion, r.Version),
+                                         r.IsPrereleaseAllowed,
+                                         Source = Some(lq.LoadPath),
+                                         Priority = -1,
+                                     })
                     select new
                     {
                         nr.Id,
                         nr.Version,
                         ActualVersion =
-                            nr.Version.Match(
-                                some: Lazy.Value,
-                                none: () => Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed))),
+                            nr.Version.Match(some: Lazy.Value,
+                                             none: () => Lazy.Create(() => GetLatestPackageVersion(nr.Id, nr.IsPrereleaseAllowed))),
                         nr.IsPrereleaseAllowed,
                         nr.Priority,
                         nr.Source,
@@ -644,8 +643,8 @@ namespace LinqPadless
                     foreach (var ns in namespaces)
                     {
                         Console.WriteLine(ns.Name
-                                        + (ns.IsDefaulted ? "*" : null)
-                                        + ns.QueryPath.Map(p => $" <{p}>").OrDefault());
+                                          + (ns.IsDefaulted ? "*" : null)
+                                          + ns.QueryPath.Map(p => $" <{p}>").OrDefault());
                     }
 
                     return 0;
